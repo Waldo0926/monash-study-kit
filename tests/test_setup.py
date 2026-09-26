@@ -24,14 +24,27 @@ def test_desktop_config_created_when_missing(tmp_path):
 
 
 def test_current_courses_picks_this_semester():
+    """真实数据的样子：开课日期乱填、下学期的课提前挂出来、分类里才有学期。"""
+    now = time.mktime((2026, 9, 26, 12, 0, 0, 0, 0, -1))
+    day = 86400
+    courses = [
+        {"id": 1, "fullname": "FIT3199 Industry Work Experience - Summer MUM 2026", "startdate": now + 23 * day},
+        {"id": 2, "fullname": "FIT3162 - FIT3164 PROJECT 2 - MUM S2", "coursecategory": "S2 2026", "startdate": now - 60 * day},
+        {"id": 3, "fullname": "FIT2102 Programming paradigms - S2 2026", "startdate": now - 140 * day, "enddate": now + 180 * day},
+        {"id": 4, "fullname": "FIT2109 Computer science workshop - S2 2026", "startdate": now - 205 * day, "enddate": now + 180 * day},
+        {"id": 5, "fullname": "MUM School of IT - General Student Hub", "startdate": now - 200 * day},
+        {"id": 6, "fullname": "FIT3155 Advanced data structures - MUM S1 2026", "startdate": now - 237 * day},
+    ]
+    assert [c["id"] for c in jobs.current_courses(courses, now)] == [2, 3, 4]
+
+
+def test_current_courses_without_term_labels_falls_back_to_dates():
     now = time.time()
     courses = [
-        {"id": 1, "fullname": "FIT2102 Programming paradigms - S2 2026", "startdate": now - 60 * 86400, "enddate": now + 60 * 86400},
-        {"id": 2, "fullname": "FIT1045 Intro - S1 2025", "startdate": now - 500 * 86400, "enddate": now - 300 * 86400},
-        {"id": 3, "fullname": "Monash Malaysia Student Hub", "startdate": now - 30 * 86400, "enddate": 0},
-        {"id": 4, "fullname": "FIT2109 Workshop - S2 2026", "startdate": now - 60 * 86400, "enddate": 0},
+        {"id": 1, "fullname": "FIT2102 Programming paradigms", "startdate": now - 60 * 86400, "enddate": now + 60 * 86400},
+        {"id": 2, "fullname": "FIT1045 Intro", "startdate": now - 500 * 86400, "enddate": now - 300 * 86400},
     ]
-    assert [c["id"] for c in jobs.current_courses(courses, now)] == [1, 4]
+    assert [c["id"] for c in jobs.current_courses(courses, now)] == [1]
 
 
 def test_sync_lock_is_exclusive_and_stale_lock_is_cleared(tmp_path, monkeypatch):

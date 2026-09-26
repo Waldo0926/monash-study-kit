@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,10 +35,36 @@ def load_courses(client: MoodleClient, con) -> list[dict]:
     return courses
 
 
+TERM_RE = re.compile(r"\b(S1|S2|Summer|Winter)\b(?:\s+MUM)?\s*(20\d\d)?", re.I)
+TERM_ORDER = {"s1": 1, "winter": 2, "s2": 3, "summer": 4}
+
+
+def course_term(course: dict) -> tuple[int, int] | None:
+    """课名或分类里的学期标签 → (年, 学期序号)。"FIT2102 … - S2 2026" → (2026, 3)。"""
+    text = f"{clean(course.get('fullname', ''))} {course.get('coursecategory') or ''}"
+    best = None
+    for m in TERM_RE.finditer(text):
+        year = m.group(2) or (re.search(r"20\d\d", text) or [None])[0]
+        if year:
+            t = (int(year), TERM_ORDER[m.group(1).lower()])
+            best = max(best, t) if best else t
+    return best
+
+
 def current_courses(courses: list[dict], now: float | None = None) -> list[dict]:
-    """本学期的课：有课号、还没结束、开课不到 200 天（排除以前学期没归档的课）。"""
+    """本学期的课。
+
+    Moodle 上的开课/结课日期不可靠（有的课 3 月就“开课”、下学期的课也已经挂出来），所以主要看
+    课名/分类里的学期标签：已经开课的课里，最新的那个学期就是本学期。没有学期标签的课退回按日期判断。
+    """
     now = now or time.time()
-    return [c for c in courses if course_code(c) and (c.get("enddate") or now + 1) > now
+    coded = [c for c in courses if course_code(c)]
+    started = [c for c in coded if (c.get("startdate") or 0) <= now + 7 * 86400]
+    terms = [t for c in started if (t := course_term(c))]
+    if terms:
+        cur = max(terms)
+        return [c for c in started if course_term(c) == cur]
+    return [c for c in started if (c.get("enddate") or now + 1) > now
             and (c.get("startdate") or 0) > now - 200 * 86400]
 
 
