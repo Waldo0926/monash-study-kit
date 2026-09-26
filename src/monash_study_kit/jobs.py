@@ -15,7 +15,7 @@ from pathlib import Path
 from . import content_index, edlib, edsync, lessons
 from .edlib import EdAuthError
 from .moodlelib import MoodleAuthError, MoodleClient, db_connect, now_iso, set_state
-from .paths import HOME
+from .paths import HOME, load_settings
 from .syncer import CourseSync, clean, course_code, course_folder, write_links_md
 
 STATUS_FILE = HOME / "status.json"
@@ -138,6 +138,14 @@ def sync_all(log=print) -> dict:
             status["errors"]["moodle"] = str(e)
         except Exception as e:  # noqa: BLE001
             status["errors"]["moodle"] = f"{type(e).__name__}: {e}"
+        if load_settings().get("web_notes", True):
+            try:
+                from . import webnotes
+                con = db_connect()
+                status["web_notes"] = webnotes.sync(con, log)
+                con.close()
+            except Exception as e:  # noqa: BLE001 —— 讲义站抓不到不影响别的
+                status["errors"]["web_notes"] = f"{type(e).__name__}: {e}"
         try:
             status["index"] = content_index.index(db_connect())
         except Exception as e:  # noqa: BLE001

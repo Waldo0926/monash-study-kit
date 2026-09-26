@@ -99,7 +99,19 @@ def fetch_lesson_files(client: EdClient, lesson_id: int, slides: list[dict] | No
         elif s.get("type") == "webpage" and s.get("url"):
             out.append({"id": s["id"], "type": "webpage", "title": s.get("title") or "",
                         "file_url": None, "url": s["url"]})
+        elif s.get("type") in ("document", "code") and (text := slide_text(s)):
+            # 正文直接写在 Ed 里的页：存成 .md，全文索引就能搜到
+            out.append({"id": s["id"], "type": s["type"], "title": s.get("title") or "",
+                        "file_url": None, "url": None, "text": text})
     return out
+
+
+def slide_text(slide: dict) -> str:
+    """document / code 页的正文（字段位置不固定：content、passage，或者包在 data 里）。"""
+    data = slide.get("data") if isinstance(slide.get("data"), dict) else {}
+    raw = slide.get("content") or slide.get("passage") or data.get("content") or data.get("passage") or ""
+    text = doc_to_text(raw) if isinstance(raw, str) else ""
+    return text if len(text.strip()) >= 40 else ""      # 只有一个链接的页没什么可搜的
 
 
 def sync_quizzes(conn: sqlite3.Connection, client: EdClient, course_id: int, lesson_id: int,
@@ -169,6 +181,14 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
                 rel = f"{course_id}/{l['id']}/{fname}"
                 if download_pdf(f["file_url"], FILES_DIR / rel, log):
                     local_path = rel
+            elif f.get("text"):
+                rel = f"{course_id}/{l['id']}/{f['id']}_{_safe_name(f['title'] or f['type'])}.md"
+                dest = FILES_DIR / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                body = f"# {l.get('title')} · {f['title']}\n\n{f['text']}\n"
+                if not dest.exists() or dest.read_text(encoding="utf-8") != body:
+                    dest.write_text(body, encoding="utf-8")
+                local_path = rel
             conn.execute(
                 "INSERT OR REPLACE INTO lesson_files "
                 "(id, lesson_id, course_id, type, title, file_url, url, local_path) "
