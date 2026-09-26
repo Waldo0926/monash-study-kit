@@ -35,6 +35,10 @@ class MoodleAuthError(RuntimeError):
     """会话失效或 cookie 不对。调用方应退出码 2，提示运行 `monash login`。"""
 
 
+class MoodleError(RuntimeError):
+    """Moodle 返回了意料之外的东西：HTTP 错误、跳转太多、AJAX 接口报错。命令行退出码 3。"""
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -182,7 +186,7 @@ class MoodleClient:
                 return r
             _check_login_url(r.location)
             url = r.location
-        raise RuntimeError(f"跳转太多：{url}")
+        raise MoodleError(f"跳转太多：{url}")
 
     def post(self, url: str, fields: list[tuple[str, str]] | None = None, *, body: bytes | None = None,
              content_type: str | None = None, max_hops: int = 8) -> Response:
@@ -201,12 +205,12 @@ class MoodleClient:
                 return r
             _check_login_url(r.location)
             r = self._request(r.location)
-        raise RuntimeError(f"跳转太多：{url}")
+        raise MoodleError(f"跳转太多：{url}")
 
     def html(self, url: str) -> str:
         r = self.get(url)
         if r.status != 200:
-            raise RuntimeError(f"GET {url} -> {r.status}")
+            raise MoodleError(f"GET {url} -> {r.status}")
         return r.text()
 
     @staticmethod
@@ -241,9 +245,9 @@ class MoodleClient:
             code = exc.get("errorcode", "")
             if code in ("servicerequireslogin", "invalidsesskey", "requireloginerror"):
                 raise MoodleAuthError(f"{method}: {code}")
-            raise RuntimeError(f"{method}: {exc.get('message') or first}")
+            raise MoodleError(f"{method}: {exc.get('message') or first}")
         if isinstance(first, dict) and "exception" in first:
-            raise RuntimeError(f"{method}: {first.get('message')}")
+            raise MoodleError(f"{method}: {first.get('message')}")
         return first.get("data") if isinstance(first, dict) else first
 
     def time_remaining(self) -> int | None:
@@ -283,7 +287,7 @@ class MoodleClient:
             if urllib.parse.urlsplit(r.location).hostname != HOST:
                 return url, r.location, r
             url = r.location
-        raise RuntimeError(f"跳转太多：{url}")
+        raise MoodleError(f"跳转太多：{url}")
 
     def download(self, url: str, dest: Path, max_hops: int = 8) -> Response:
         """下载到 dest。站外那一跳（CloudFront 签名链接）不带 cookie。"""
@@ -292,11 +296,11 @@ class MoodleClient:
             r = self._request(url, stream_to=dest)
             if not _is_redirect(r):
                 if r.status != 200:
-                    raise RuntimeError(f"下载失败 {url} -> {r.status}")
+                    raise MoodleError(f"下载失败 {url} -> {r.status}")
                 return r
             _check_login_url(r.location)
             url = r.location
-        raise RuntimeError(f"跳转太多：{url}")
+        raise MoodleError(f"跳转太多：{url}")
 
 
 def _is_redirect(r: Response) -> bool:

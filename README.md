@@ -241,7 +241,10 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | `monash config` | 看/改设置（改完重启 Claude Desktop） |
 | `monash update` | 更新到最新版 |
 
-加 `--json` 输出 JSON。每个命令都有 `--help`。
+加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
+
+退出码（写脚本时用）：0 成功，1 参数不对，2 需要登录（`monash login` / `monash login ed`），
+3 连不上 Moodle/Ed 或对方出错，4 找不到课程或帖子，130 被 Ctrl-C 中断。
 
 ## 录播字幕（可选）
 

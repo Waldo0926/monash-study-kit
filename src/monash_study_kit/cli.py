@@ -19,8 +19,8 @@
     monash update                # 更新到最新版
     monash uninstall             # 从 Claude 里移除（可选删除数据）
 
-大部分查询加 --json 输出 JSON（输出被管道接走时自动是 JSON）。
-退出码：0 成功，1 其他错误，2 需要登录，4 找不到课程/帖子。
+大部分查询加 --json 输出 JSON（输出被管道接走时自动是 JSON，--text 强制文本）。
+退出码：0 成功，1 参数不对，2 需要登录，3 连不上 Moodle/Ed 或对方出错，4 找不到课程/帖子，130 被中断。
 """
 from __future__ import annotations
 
@@ -29,12 +29,13 @@ import getpass
 import os
 import subprocess
 import sys
+import urllib.error
 import webbrowser
 
 from . import __version__, edlib, jobs
 from . import features as F
 from .edlib import EdAuthError
-from .moodlelib import FILES_DIR, MoodleAuthError, MoodleClient, db_connect
+from .moodlelib import FILES_DIR, MoodleAuthError, MoodleClient, MoodleError, db_connect
 from .output import emit_json, local_time, relative, table, want_json
 from .paths import HOME, ensure_private_dir, load_settings, save_settings
 from .syncer import course_code, course_folder
@@ -599,16 +600,38 @@ def cmd_m_ls(args):
 
 # ---------------------------------------------------------------- 参数
 
+# 退出码。argparse 默认参数错误退 2，会和"需要登录"撞车，所以 _Parser 改成退 1。
+EXIT_OK, EXIT_USAGE, EXIT_AUTH, EXIT_NETWORK, EXIT_NOT_FOUND, EXIT_INTERRUPTED = 0, 1, 2, 3, 4, 130
+EXIT_CODES = {
+    EXIT_OK: "成功",
+    EXIT_USAGE: "参数不对（看 stderr 的提示）",
+    EXIT_AUTH: "需要登录：monash login（Moodle）或 monash login ed",
+    EXIT_NETWORK: "连不上 Moodle/Ed，或对方返回了错误（稍后再试）",
+    EXIT_NOT_FOUND: "找不到课程或帖子",
+    EXIT_INTERRUPTED: "被 Ctrl-C 中断",
+}
+
+
+class _Parser(argparse.ArgumentParser):
+    """参数错误退 EXIT_USAGE（argparse 默认退 2）。子命令的解析器也会用这个类。"""
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_USAGE, f"{self.prog}: 错误: {message}\n")
+
+
 def build_parser() -> argparse.ArgumentParser:
     from . import cli_ed
-    ap = argparse.ArgumentParser(prog="monash", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = _Parser(prog="monash", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"monash-study-kit {__version__}")
     sub = ap.add_subparsers(dest="cmd")
 
     def cmd(parent, name, fn, json_flag=False, **kw):
         p = parent.add_parser(name, **kw)
         if json_flag:
-            p.add_argument("--json", action="store_true", help="输出 JSON")
+            g = p.add_mutually_exclusive_group()
+            g.add_argument("--json", action="store_true", help="输出 JSON（管道里默认就是）")
+            g.add_argument("--text", action="store_true", help="输出文本（终端里默认就是）")
         p.set_defaults(fn=fn)
         return p
 
@@ -683,19 +706,23 @@ def main(argv: list[str] | None = None) -> int:
     ensure_private_dir(HOME)      # 库里有同学的名字和私密帖，只给自己读
     if not getattr(args, "fn", None):
         ap.print_help()
-        return 0
+        return EXIT_OK
     try:
-        return args.fn(args) or 0
-    except MoodleAuthError as e:
+        return args.fn(args) or EXIT_OK
+    except (MoodleAuthError, EdAuthError) as e:
         print(f"{e}", file=sys.stderr)
-        return 2
-    except EdAuthError as e:
-        print(f"{e}", file=sys.stderr)
-        return 2
-    except (LookupError, ValueError) as e:
+        return EXIT_AUTH
+    except LookupError as e:                   # 包括 edquery.NotFound
         print(e, file=sys.stderr)
-        return 4
+        return EXIT_NOT_FOUND
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return EXIT_USAGE
+    except (MoodleError, urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        # HTTPError 也是 URLError：Ed 的 401 已经变成 EdAuthError，走到这里的是 5xx 重试完之类
+        print(f"连不上 Moodle/Ed，或对方出错：{e}", file=sys.stderr)
+        return EXIT_NETWORK
     except KeyboardInterrupt:
-        return 130
+        return EXIT_INTERRUPTED
     except BrokenPipeError:
-        return 0
+        return EXIT_OK
