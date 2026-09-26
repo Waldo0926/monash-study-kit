@@ -167,6 +167,10 @@ def _background():
 # ---------------------------------------------------------------- 管理工具
 
 def t_status(args):
+    if args.get("full"):
+        from . import doctor
+        # Claude Code 那项要起一个 claude 子进程，最多 20 秒，在这里没必要
+        return doctor.run(skip=("check_claude_code",))
     st = jobs.read_status()
     moodle = {"logged_in": False}
     try:
@@ -455,7 +459,8 @@ TOOLS = {
                            "问“这周要做什么/有什么要交”先用这个。notes 里会说明哪部分因为没登录而缺失。",
                    {"days": (I, False)}),
     "monash_status": (t_status, "登录状态（Moodle 会话还剩多久、Ed 令牌有没有设置）、上次同步时间和错误、课件存放位置。"
-                                "工具报错或用户问“连上了吗”时先看这个。", {}),
+                                "工具报错或用户问“连上了吗”时先看这个。用户说“用不了/出问题了”时传 full=true 做完整体检"
+                                "（每项有 fix 字段说明怎么修，照着告诉用户）。", {"full": ("boolean", False)}),
     "monash_login": (t_login, "在用户电脑上打开 Moodle 专用登录窗口（先试后台自动登录）。只在用户同意后调用；"
                               "调用后立即返回，用户在窗口里登录完成后窗口自动关闭并开始同步。", {}, False),
     "monash_sync": (t_sync, "立刻在后台同步 Ed 和 Moodle（平时每小时自动一次）。用户说“刷新一下/同步一下”时用。", {}, False),

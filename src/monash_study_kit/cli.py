@@ -4,6 +4,7 @@
     monash login                 # Moodle 登录过期了：打开专用登录窗口
     monash login ed              # 换 Ed 令牌
     monash status                # 登录状态、上次同步
+    monash doctor                # 出问题时：一项项检查并告诉你怎么修
     monash sync                  # 立刻同步 Ed + Moodle（Claude 开着时每小时自动一次）
     monash courses               # 选要跟踪的课
 
@@ -218,6 +219,14 @@ def cmd_status(args):
     print(f"上次同步：{local_time(out['last_sync'], '%Y-%m-%d %H:%M') if out['last_sync'] else '还没同步过'}")
     for k, v in out["errors"].items():
         print(f"  ! {k}：{v}")
+
+
+def cmd_doctor(args):
+    from . import doctor
+    report = doctor.run()
+    if want_json(args):
+        return emit_json(report)
+    print(doctor.render(report))
 
 
 def cmd_sync(args):
@@ -641,6 +650,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("what", nargs="?", choices=["moodle", "ed"], default="moodle")
     p.add_argument("--window", action="store_true", help="直接开窗口，不先试后台自动登录")
     cmd(sub, "status", cmd_status, json_flag=True, help="登录状态、上次同步")
+    cmd(sub, "doctor", cmd_doctor, json_flag=True, help="体检：一项项查哪里不对，告诉你怎么修")
     p = cmd(sub, "sync", cmd_sync, help="同步 Ed + Moodle + 全文索引")
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
     p.add_argument("--dry-run", action="store_true", help="只列出 Moodle 会下载什么")

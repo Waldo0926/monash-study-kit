@@ -226,6 +226,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | 命令 | 作用 |
 |---|---|
 | `monash status` | 登录状态、上次同步时间 |
+| `monash doctor` | 出问题时的体检：一项项查，告诉你怎么修；需要帮忙时把输出整段发给别人 |
 | `monash todo` | 本周待办：截止、可能漏交、Ed 没做完的 lesson、公告、未读回复 |
 | `monash due [FIT2102]` | 截止日期 |
 | `monash grep "monad" [FIT2102]` | 全文搜课件、录播字幕稿（带页码/时间戳） |
@@ -297,7 +298,8 @@ Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`study_
 （做到第几周，就列到下一周为止没完成的）。
 
 **出问题了**
-运行 `monash status` 看登录和同步状态；MCP 的后台日志在数据目录的 `mcp.log`。
+运行 `monash doctor`，照着每项后面的 → 去修。需要别人帮忙时把整段输出发过去，里面不含令牌、cookie 之类的东西。
+在 Claude 里也可以直接说“monash 用不了了”，它会跑同一套检查。MCP 的后台日志在数据目录的 `mcp.log`。
 
 ## 开发
 
