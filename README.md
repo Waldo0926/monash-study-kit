@@ -14,6 +14,26 @@
 
 ---
 
+## 它由两部分组成
+
+同一套底层代码（登录、同步、查询），给两种“用户”用：
+
+**MCP：给 Claude 用的接口。** Moodle 和 Ed 都要 Okta + MFA 登录，Claude 自己进不去。
+MCP 让 Claude 在聊天中途自己去查（`study_todo`、`ed_search`、`moodle_read_file` 等工具）：
+
+- **答案来自真实数据**：截止时间、公告、成绩都是当下查到的，还能给出处，比如“Workshop 5 Slides 第 25 页”。
+- **两边合起来看**：一句“这周要做什么”，同时查 Moodle 截止、Ed 没做完的 lesson、两边的公告。
+- **不用手动搬资料**：不用下载 PDF 再上传。Claude 按需找到那份课件、只读需要的几页，省事也省额度。
+- **可以接着追问**：“A2 spec 要求什么？”“那周讲的 functor 结合讲义解释一下”。
+
+**CLI（`monash` 命令）：给人用的接口。**
+
+1. **只有人能做的事**：安装配置、在登录窗口里过 MFA、粘贴 Ed 令牌（令牌不该经过聊天，所以只在终端输入）。
+2. **不依赖 AI**：没额度或只想快速看一眼时，`monash todo` 一秒出结果（见[没额度了也能用](#claude-没额度了也能用)）。
+3. **排错和维护**：`status`、`sync`、`update`、`uninstall`。
+
+简单说：MCP 让 Claude 变成懂你课程的助教，CLI 负责装好、登录和兜底。平时在 Claude 里问，偶尔用终端。
+
 ## 需要什么
 
 - **Claude Desktop**（[下载](https://claude.ai/download)）或 **Claude Code**
