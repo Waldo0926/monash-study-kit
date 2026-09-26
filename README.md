@@ -97,6 +97,23 @@ monash login
 
 登录过期期间，**截止日期照样能查**（用的是 Moodle 的日历订阅链接，不需要登录）；Ed 的功能完全不受影响。
 
+### Claude 没额度了也能用
+
+命令行工具不需要 AI，不耗任何额度。先 `monash sync` 同步一下，然后：
+
+| 想知道 | 命令 |
+|---|---|
+| 这周要做什么 | `monash todo` |
+| 截止日期 | `monash due`（或 `monash due FIT2102`） |
+| 某个知识点在哪份课件/哪一页 | `monash grep "git rebase"` |
+| Ed 上的新帖和新回复 | `monash ed new` |
+| 我的帖子有没有人回 | `monash ed following` |
+| 读某个帖子全文 | `monash ed show FIT2102#42` |
+| 成绩 / 可能漏交的作业 | `monash moodle grades FIT2102` / `monash moodle assignments --missing` |
+
+区别是没人帮你总结，只列出原始信息。另外，后台同步和 Moodle 续期是跟着 Claude Desktop 跑的：
+Claude 开着时，就算额度用完也照常进行；Claude 关掉的话，查之前先 `monash sync`，Moodle 过期了 `monash login`。
+
 ## 隐私和安全
 
 - **数据存在哪**：
