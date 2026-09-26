@@ -2,7 +2,7 @@
 
     monash media [--limit N] [--model small.en] [--dry-run]
 
-每个视频旁边生成 <原名>.transcript.md，并登记进 files 表，moodle_list_files、moodle_read_file、
+每个视频旁边生成 <原名>.transcript.md，并登记进 files 表，list_files、read_file、
 全文搜索都能看到——Claude 读字幕稿就知道老师讲了什么。
 
 用 faster-whisper（CTranslate2，CPU int8），要装 [media]。普通笔记本上 small.en 大约几倍实时，
