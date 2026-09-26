@@ -35,6 +35,7 @@ DEFAULTS = {
     "tz_offset": 8,               # Moodle 账号的时区（页面上的时间按它显示）：马来西亚 8，澳洲 10（夏令时 11）
     "files_dir": "",              # 课件放哪；空 = 数据目录下的 files。Windows 路径太长时改成 C:\\Monash 之类
     "browser": "",                # 登录窗口用哪个浏览器程序；空 = 自动找 Chrome / Edge / Brave
+    "web_notes": True,            # 抓 Moodle / Ed 链接到的课程笔记网页（老师的 github.io 讲义站之类）进全文搜索
 }
 
 

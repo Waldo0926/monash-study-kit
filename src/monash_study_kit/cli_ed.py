@@ -164,7 +164,9 @@ def _render_lessons(rows: list[dict]) -> str:
         due = f"  截止 {_when(x['due_at'])}" if x["due_at"] else ""
         out.append(f"{mark.get(x['status'], '·')} {x['title']}  [{x['type']}]{due}")
         for f in x["files"]:
-            out.append(f"     {'📄' if f['type'] == 'pdf' else '🔗'} {f['title'] or f['type']}  {f['file_url'] or f['url']}")
+            where = f["file_url"] or f["url"] or "（正文已存到本地，monash grep 能搜到）"
+            out.append(f"     {'📄' if f['type'] == 'pdf' else '🔗' if f['type'] == 'webpage' else '📝'} "
+                       f"{f['title'] or f['type']}  {where}")
     return "\n".join(out)
 
 
