@@ -1,0 +1,213 @@
+# Monash 学习助手（monash-study-kit）
+
+把 Monash 的 **Moodle** 和 **Ed** 接进 Claude，在 Claude 里直接问：
+
+- “这周我有什么要交的？” —— Moodle 截止日期、可能漏交的作业、Ed 上还没做的 lesson、最新公告
+- “Ed 上有什么新消息？我上次问的问题有人回了吗？”
+- “FIT2102 哪一周讲了 monad？在哪份讲义第几页？”
+- “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
+
+所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。
+工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。
+
+适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
+
+---
+
+## 需要什么
+
+- **Claude Desktop**（[下载](https://claude.ai/download)）或 **Claude Code**
+- **Chrome、Edge 或 Brave** 其中一个（Windows 自带 Edge 就行），用来登录 Moodle
+- Monash 账号
+
+## 安装
+
+### macOS
+
+打开“终端”（启动台里搜 Terminal），一行一行粘贴运行：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+装完**关掉终端再重新打开**，然后：
+
+```bash
+uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+```
+
+```bash
+monash setup
+```
+
+### Windows
+
+打开 PowerShell（开始菜单里搜 PowerShell），一行一行粘贴运行：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+装完**关掉 PowerShell 再重新打开**，然后：
+
+```powershell
+uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+```
+
+```powershell
+monash setup
+```
+
+> `uv` 是一个 Python 工具管理器，会自动准备好 Python，不用自己装 Python。
+
+## 第一次设置（`monash setup`）
+
+跟着提示走，一共四步：
+
+1. **Ed**：会帮你打开 Ed 的 [API 令牌页面](https://edstem.org/au/settings/api-tokens)。点 **Create Token**，
+   名字随便写，把生成的令牌复制，粘贴回终端（粘贴时不显示，正常）。这个令牌不会过期，不想用了在同一个页面删掉就作废。
+2. **Moodle**：会打开一个**单独的浏览器窗口**，在里面照常登录 Monash（Okta + MFA）。登录成功后窗口自动关闭。
+   这个窗口有自己独立的配置，和你平时用的浏览器互不影响——工具只从这个窗口里拿 Moodle 的登录状态，
+   不会去读你日常浏览器里的任何东西。
+3. **选课**：默认跟踪本学期的课，也可以自己挑。
+4. **接进 Claude**：自动把 `monash` 加进 Claude Desktop 和 Claude Code。
+   - macOS 上会先帮你退出 Claude Desktop（开着的时候改配置会被它覆盖），改完再打开。
+   - Windows 上会请你先**完全退出** Claude Desktop：右下角托盘里的 Claude 图标 → 右键 → Quit。
+
+最后可以选择马上同步一次。第一次同步会下载所有课件，要几分钟到十几分钟。
+
+完成后打开 Claude Desktop，在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行。
+
+## 平时怎么用
+
+直接在 Claude 里问就行。Claude 开着的时候，工具会在后台：
+
+- 每小时同步一次 Ed 和 Moodle（新帖、新回复、新课件），并更新全文索引；
+- 每 20 分钟给 Moodle 续一次期（Moodle 空闲 4 小时就会把你登出）。
+
+### Moodle 登录过期了怎么办
+
+电脑关机、睡眠久了，Moodle 会话会过期。这时 Claude 会告诉你，并问要不要登录——
+同意的话它会在你电脑上打开登录窗口；如果 Okta 还记得你，会在后台自动登录，连窗口都不用弹。
+也可以自己在终端运行：
+
+```bash
+monash login
+```
+
+登录过期期间，**截止日期照样能查**（用的是 Moodle 的日历订阅链接，不需要登录）；Ed 的功能完全不受影响。
+
+## 隐私和安全
+
+- **数据存在哪**：
+  - macOS：`~/Library/Application Support/monash-study-kit`
+  - Windows：`%LOCALAPPDATA%\monash-study-kit`
+
+  里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）。
+  运行 `monash open` 可以打开课件文件夹。
+- **存了哪些凭据**：Moodle 的会话 cookie、Ed 的 API 令牌、Moodle 日历订阅链接。都只在你电脑上，只用来访问 Moodle / Ed 本身。
+  **别把 `secrets` 文件夹发给别人。**
+- **Claude 能看到什么**：只有你提问时 Claude 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字）。
+  令牌和 cookie 永远不会发给 Claude。**也不要把 Ed 令牌贴进聊天里**——令牌只在终端里输入。
+- **会对 Moodle / Ed 做什么**：只读。请求之间有间隔，不会像爬虫一样猛打学校的系统。
+- **彻底删除**：
+
+  ```bash
+  monash uninstall
+  uv tool uninstall monash-study-kit
+  ```
+
+  `monash uninstall` 会把它从 Claude 里移除，并询问要不要删掉所有数据。最后记得去 Ed 设置页删掉令牌。
+
+## 命令速查
+
+不用 Claude 也可以直接在终端里查：
+
+| 命令 | 作用 |
+|---|---|
+| `monash status` | 登录状态、上次同步时间 |
+| `monash todo` | 本周待办：截止、可能漏交、Ed 没做完的 lesson、公告、未读回复 |
+| `monash due [FIT2102]` | 截止日期 |
+| `monash grep "monad" [FIT2102]` | 全文搜课件、录播字幕稿（带页码/时间戳） |
+| `monash sync` | 立刻同步 |
+| `monash login` / `monash login ed` | 登录 Moodle / 换 Ed 令牌 |
+| `monash courses` | 重新选要跟踪的课 |
+| `monash open` | 打开课件文件夹 |
+| `monash moodle grades [FIT2102]` | 成绩和反馈 |
+| `monash moodle assignments --missing` | 可能漏交的作业 |
+| `monash moodle news` / `find` / `get` / `messages` / `calendar` | 公告 / 找活动 / 下载单个文件 / 站内信 / 日历订阅链接 |
+| `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed 新动态 / 我的帖子有没有新回复 / 搜索 / 读帖子 |
+| `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
+| `monash config` | 看/改设置（改完重启 Claude Desktop） |
+| `monash update` | 更新到最新版 |
+
+加 `--json` 输出 JSON。每个命令都有 `--help`。
+
+## 录播字幕（可选）
+
+想让 Claude 知道“老师上课讲了什么”，可以把录播转成带时间戳的字幕稿：
+
+- Ed 上 “Week N … Recording” 帖子里的 **YouTube** 链接：直接取 YouTube 字幕，很快；
+- **Zoom** 录像：用帖子里的 Passcode 下载，再在你电脑上用 Whisper 转写（普通笔记本上一节两小时的课要二三十分钟）。
+
+这部分依赖比较大（约 1 GB），默认不装。想要的话重新安装时加上 `[media]`：
+
+```bash
+uv tool install --reinstall "monash-study-kit[media] @ https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip"
+```
+
+然后需要的时候手动运行（不会在后台自动跑，免得拖慢电脑）：
+
+```bash
+monash media
+```
+
+Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成链接。想下载：`monash config download_videos true`。
+
+## 更新
+
+```bash
+monash update
+```
+
+更新后重启一下 Claude Desktop。Windows 上它会告诉你先退出 Claude、再运行哪条命令（正在运行的程序没法被覆盖）。
+
+## 常见问题
+
+**Claude 里看不到 monash**
+运行 `monash setup claude` 重新接一次。Windows 上一定要先从托盘**完全退出** Claude 再运行。
+还不行的话看 Claude Desktop → Settings → Developer 里有没有报错。
+
+**登录窗口打不开 / 提示没找到浏览器**
+装一个 Chrome 或 Edge。浏览器装在不常见的位置的话，指定一下：
+`monash config browser "C:\Program Files\...\chrome.exe"`。如果之前的专用窗口还开着，先把它关掉。
+
+**Windows 上课件同步报“路径太长”**
+Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + 文件名叠起来可能超。把课件放到短一点的地方：
+`monash config files_dir C:\Monash`，然后 `monash sync`。
+
+**澳洲校区**
+Moodle 页面上的时间按账号时区显示，默认按马来西亚（UTC+8）。澳洲校区：`monash config tz_offset 10`（夏令时 11）。
+
+**Ed 的“作业截止时间”在哪**
+Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`study_todo` 里 Ed lesson 部分是按你自己的进度列的
+（做到第几周，就列到下一周为止没完成的）。
+
+**出问题了**
+运行 `monash status` 看登录和同步状态；MCP 的后台日志在数据目录的 `mcp.log`。
+
+## 开发
+
+```bash
+uv sync
+uv run pytest
+uv run monash --help
+```
+
+代码结构：`moodlelib`（Moodle 客户端）、`syncer`（课件同步）、`features`（截止/成绩/公告等查询）、
+`edlib` / `edsync` / `edquery` / `lessons`（Ed）、`content_index`（全文索引）、`browser_login` + `cdp`（专用登录窗口）、
+`jobs`（同步和续期）、`mcp_server`、`cli`。只依赖 `pypdf`。
+
+## 许可
+
+MIT。这是学生自己做的工具，和 Monash University、Ed 或 Anthropic 没有关系。
