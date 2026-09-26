@@ -19,7 +19,7 @@
 同一套底层代码（登录、同步、查询），给两种“用户”用：
 
 **MCP：给 Claude 用的接口。** Moodle 和 Ed 都要 Okta + MFA 登录，Claude 自己进不去。
-MCP 让 Claude 在聊天中途自己去查（`study_todo`、`ed_search`、`moodle_read_file` 等工具）：
+MCP 让 Claude 在聊天中途自己去查（`study_todo`、`search_content`、`ed_updates` 等工具）：
 
 - **答案来自真实数据**：截止时间、公告、成绩都是当下查到的，还能给出处，比如“Workshop 5 Slides 第 25 页”。
 - **两边合起来看**：一句“这周要做什么”，同时查 Moodle 截止、Ed 没做完的 lesson、两边的公告。
