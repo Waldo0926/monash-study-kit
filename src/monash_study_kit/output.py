@@ -9,7 +9,11 @@ from datetime import datetime, timezone
 
 
 def want_json(args) -> bool:
-    return getattr(args, "json", False) or not sys.stdout.isatty()
+    if getattr(args, "json", False):
+        return True
+    if getattr(args, "text", False):
+        return False
+    return not sys.stdout.isatty()
 
 
 def emit_json(data) -> None:
