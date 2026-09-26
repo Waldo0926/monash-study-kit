@@ -134,6 +134,69 @@ monash login
 区别是没人帮你总结，只列出原始信息。另外，后台同步和 Moodle 续期是跟着 Claude Desktop 跑的：
 Claude 开着时，就算额度用完也照常进行；Claude 关掉的话，查之前先 `monash sync`，Moodle 过期了 `monash login`。
 
+## 接入其他 AI 客户端
+
+MCP 是开放协议，`monash mcp` 是标准的本地（stdio）MCP 服务器，所以支持本地 MCP 的客户端理论上都能接。
+`monash setup` 只会自动配置 Claude Desktop 和 Claude Code，下面这些要手动配置。
+
+> ⚠️ **下面这些客户端都没有实际测试过**，配置格式照各家官方文档写（2026-09），以官方文档为准。
+> 测试过的只有 **Claude Desktop** 和 **Claude Code**。
+
+**第 1 步：找到 `monash` 程序的完整路径**（很多客户端启动时读不到终端的 PATH，所以最好写完整路径）
+
+- macOS：终端里运行 `which monash`，一般是 `/Users/你的用户名/.local/bin/monash`
+- Windows：PowerShell 里运行 `(Get-Command monash).Source`，一般是 `C:\Users\你的用户名\.local\bin\monash.exe`
+
+下面的例子里把 `/完整路径/monash` 换成你的路径。**Windows 路径写进 JSON 时，反斜杠要写两遍**
+（`C:\\Users\\...`）；写进 TOML 时用单引号（`'C:\Users\...'`）。
+
+**第 2 步：按客户端配置**
+
+| 客户端 | 配置位置 | 状态 |
+|---|---|---|
+| Codex CLI / ChatGPT 桌面 App 里的 Codex / Codex IDE 插件 | `~/.codex/config.toml`（三者共用） | 未测试 |
+| Cursor | `~/.cursor/mcp.json` | 未测试 |
+| VS Code（Copilot） | 命令面板 → `MCP: Open User Configuration` | 未测试 |
+| Gemini CLI | `~/.gemini/settings.json` | 未测试 |
+| ChatGPT 网页版 / 手机 App | —— | **不支持**：只能接远程服务器，连不上你电脑上的程序 |
+
+Codex（`~/.codex/config.toml`），或者直接运行 `codex mcp add monash -- /完整路径/monash mcp`：
+
+```toml
+[mcp_servers.monash]
+command = "/完整路径/monash"
+args = ["mcp"]
+```
+
+Cursor（`~/.cursor/mcp.json`）和 Gemini CLI（`~/.gemini/settings.json`），格式一样：
+
+```json
+{
+  "mcpServers": {
+    "monash": { "command": "/完整路径/monash", "args": ["mcp"] }
+  }
+}
+```
+
+VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
+
+```json
+{
+  "servers": {
+    "monash": { "command": "/完整路径/monash", "args": ["mcp"] }
+  }
+}
+```
+
+文件里已经有别的服务器的话，把 `monash` 那一项加进去就行，别把整个文件覆盖掉。改完重启客户端。
+
+**注意**：
+
+- 登录、选课还是用 `monash setup` 做。没装 Claude 的话，最后一步会提示“没找到 Claude Desktop”，忽略就行。
+- 后台同步和 Moodle 续期只在客户端开着、MCP 在运行时进行。
+- 工具说明是按 Claude 写的，别的模型一般也能照着用，但效果没验证过。
+- 不想折腾的话，命令行本身跟任何 AI 都无关（见[没额度了也能用](#claude-没额度了也能用)），可以把 `monash todo` 之类的输出直接复制给任何 AI。
+
 ## 隐私和安全
 
 - **数据存在哪**：
