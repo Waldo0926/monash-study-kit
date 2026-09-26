@@ -9,7 +9,7 @@ FIT2109 → yqtian-se.github.io）。只抓被课程直接链接到的那几页�
   * 学校官网、Moodle / Ed 自己、视频、会议、网盘、Google 文档之类一律不抓。
 
 存在 FILES_DIR/<课程文件夹>/Course notes (web)/<标题>.md，开头写来源网址。放在课件目录里，
-moodle_list_files / moodle_read_file / 全文搜索就都能直接用。每页最多每 REFRESH_DAYS 天重抓一次，
+list_files / read_file / search_content 就都能直接用。每页最多每 REFRESH_DAYS 天重抓一次，
 带 ETag / Last-Modified 条件请求；请求之间歇 GAP 秒。
 """
 from __future__ import annotations
