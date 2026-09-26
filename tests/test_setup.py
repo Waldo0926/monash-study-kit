@@ -7,20 +7,20 @@ from monash_study_kit import claude_setup, features, jobs, paths
 
 def test_desktop_config_keeps_other_servers_and_backs_up(tmp_path):
     cfg = tmp_path / "claude_desktop_config.json"
-    cfg.write_text(json.dumps({"mcpServers": {"other": {"command": "x"}}, "globalShortcut": "Alt+Space"}))
+    cfg.write_text(json.dumps({"mcpServers": {"other": {"command": "x"}}, "globalShortcut": "Alt+Space"}), encoding="utf-8")
     backup = claude_setup.write_desktop_config(cfg, ["/bin/monash", "mcp"])
-    data = json.loads(cfg.read_text())
+    data = json.loads(cfg.read_text(encoding="utf-8"))
     assert data["mcpServers"]["monash"] == {"command": "/bin/monash", "args": ["mcp"]}
     assert data["mcpServers"]["other"] == {"command": "x"} and data["globalShortcut"] == "Alt+Space"
-    assert json.loads(backup.read_text())["mcpServers"] == {"other": {"command": "x"}}
+    assert json.loads(backup.read_text(encoding="utf-8"))["mcpServers"] == {"other": {"command": "x"}}
     assert claude_setup.remove_from_desktop_config(cfg)
-    assert "monash" not in json.loads(cfg.read_text())["mcpServers"]
+    assert "monash" not in json.loads(cfg.read_text(encoding="utf-8"))["mcpServers"]
 
 
 def test_desktop_config_created_when_missing(tmp_path):
     cfg = tmp_path / "Claude" / "claude_desktop_config.json"
     assert claude_setup.write_desktop_config(cfg, ["monash", "mcp"]) is None
-    assert json.loads(cfg.read_text())["mcpServers"]["monash"]["command"] == "monash"
+    assert json.loads(cfg.read_text(encoding="utf-8"))["mcpServers"]["monash"]["command"] == "monash"
 
 
 def test_current_courses_picks_this_semester():

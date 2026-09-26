@@ -41,9 +41,9 @@ def test_paragraphs_break_on_sentence_after_45s():
 def test_silent_video_says_so(tmp_path):
     p = tmp_path / "x.transcript.md"
     R.write_transcript(p, "Screensaver demo", ["视频：screensaver-example.mp4"], [(0, "music")])
-    assert "没有识别到讲话" in p.read_text()
+    assert "没有识别到讲话" in p.read_text(encoding="utf-8")
     R.write_transcript(p, "Week 8", [], [(0, "word " * 30 + ".")])
-    text = p.read_text()
+    text = p.read_text(encoding="utf-8")
     assert "**[00:00]**" in text and "没有识别到讲话" not in text
 
 

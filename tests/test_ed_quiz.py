@@ -45,3 +45,4 @@ def test_quiz_sync_store_and_render():
 
         L.sync_quizzes(conn, client, 39026, 7, [])                      # quiz 页被删了
         assert conn.execute("SELECT COUNT(*) FROM quiz_questions").fetchone()[0] == 0
+        conn.close()                                                      # Windows 上开着的库删不掉

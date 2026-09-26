@@ -49,7 +49,7 @@ def test_auth_errors_tell_claude_what_to_do(monkeypatch):
 def test_read_file_stays_inside_files_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "FILES_DIR", tmp_path)
     (tmp_path / "U").mkdir()
-    (tmp_path / "U" / "a.py").write_text("x" * 50)
+    (tmp_path / "U" / "a.py").write_text("x" * 50, encoding="utf-8")
     r = call("tools/call", {"name": "moodle_read_file", "arguments": {"path": "U/a.py", "max_chars": 10}})["result"]
     assert r["content"][0]["text"].startswith("x" * 10) and "offset=10" in r["content"][0]["text"]
     r = call("tools/call", {"name": "moodle_read_file", "arguments": {"path": "U\\a.py"}})["result"]
@@ -69,9 +69,9 @@ def test_client_is_rebuilt_after_relogin(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "COOKIE_FILE", cookie)
     monkeypatch.setattr(moodlelib, "COOKIE_FILE", cookie)
     monkeypatch.setattr(M, "_client", None)
-    cookie.write_text(json.dumps({"MoodleSession": "old"}))
+    cookie.write_text(json.dumps({"MoodleSession": "old"}), encoding="utf-8")
     assert M.client().jar["MoodleSession"] == "old"
     import os
-    cookie.write_text(json.dumps({"MoodleSession": "new"}))
+    cookie.write_text(json.dumps({"MoodleSession": "new"}), encoding="utf-8")
     os.utime(cookie, (1, 1))                 # mtime 变了 → 换新客户端
     assert M.client().jar["MoodleSession"] == "new"

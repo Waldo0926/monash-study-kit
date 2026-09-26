@@ -78,7 +78,7 @@ class Browser:
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             if port_file.exists():
-                lines = port_file.read_text().split()
+                lines = port_file.read_text(encoding="utf-8").split()
                 if len(lines) >= 2:
                     self.cdp = CDP(f"ws://127.0.0.1:{lines[0]}{lines[1]}")
                     return

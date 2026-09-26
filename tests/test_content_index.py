@@ -27,9 +27,9 @@ def test_index_and_search(tmp_path, monkeypatch):
     files = tmp_path / "files"
     week = files / "FIT2109 Computer science workshop (S2 2026)" / "Week 05 - Git"
     week.mkdir(parents=True)
-    (week / "Week 05 online seminar.transcript.md").write_text(TRANSCRIPT)
+    (week / "Week 05 online seminar.transcript.md").write_text(TRANSCRIPT, encoding="utf-8")
     (week / "Week 05 online seminar.mp4").write_bytes(b"")
-    (week / "notes.md").write_text("Monads are burritos.\n\nNothing about git here.")
+    (week / "notes.md").write_text("Monads are burritos.\n\nNothing about git here.", encoding="utf-8")
     monkeypatch.setattr(CI, "FILES_DIR", files)
     monkeypatch.setattr(CI, "ED_FILES_DIR", tmp_path / "no-ed")
     monkeypatch.setattr(CI, "ED_DB", tmp_path / "no-ed" / "ed.db")

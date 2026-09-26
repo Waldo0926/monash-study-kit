@@ -305,7 +305,7 @@ def _cursor_file():
 
 def read_cursor(name: str) -> str | None:
     try:
-        return json.loads(_cursor_file().read_text()).get(name)
+        return json.loads(_cursor_file().read_text(encoding="utf-8")).get(name)
     except (OSError, ValueError):
         return None
 
@@ -313,13 +313,13 @@ def read_cursor(name: str) -> str | None:
 def write_cursor(name: str, value: str) -> None:
     path = _cursor_file()
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = {}
     data[name] = value
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
