@@ -197,6 +197,18 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 - 工具说明是按 Claude 写的，别的模型一般也能照着用，但效果没验证过。
 - 不想折腾的话，命令行本身跟任何 AI 都无关（见[没额度了也能用](#claude-没额度了也能用)），可以把 `monash todo` 之类的输出直接复制给任何 AI。
 
+### 搜得到哪些内容
+
+`monash grep` 和 Claude 里的课件搜索覆盖：
+
+- Moodle 上的课件（PDF、Word、PowerPoint、文本和代码）
+- Ed Lessons 里的 PDF，以及直接写在 Ed 里的正文页
+- **课程笔记网页**：很多课的讲义在老师的公开网站上，比如 FIT2102 的 tgdwyer.github.io、FIT2109 的
+  yqtian-se.github.io。Moodle 和 Ed 里链接到的这类页面会被抓下来转成文字，存在课件文件夹的
+  `Course notes (web)` 里。只抓课程直接链接的页面，不会顺着链接整站爬；每页最多一周重抓一次。
+  学校官网、视频、Google 文档之类不抓。不想要的话：`monash config web_notes false`
+- 录播字幕稿（装了 `[media]` 才有）
+
 ## 隐私和安全
 
 - **数据存在哪**：
@@ -229,7 +241,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | `monash doctor` | 出问题时的体检：一项项查，告诉你怎么修；需要帮忙时把输出整段发给别人 |
 | `monash todo` | 本周待办：截止、可能漏交、Ed 没做完的 lesson、公告、未读回复 |
 | `monash due [FIT2102]` | 截止日期 |
-| `monash grep "monad" [FIT2102]` | 全文搜课件、录播字幕稿（带页码/时间戳） |
+| `monash grep "monad" [FIT2102]` | 全文搜课件、课程笔记网页、Ed Lessons 正文、录播字幕稿（带页码/时间戳） |
 | `monash sync` | 立刻同步 |
 | `monash login` / `monash login ed` | 登录 Moodle / 换 Ed 令牌 |
 | `monash courses` | 重新选要跟踪的课 |
