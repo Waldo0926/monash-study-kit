@@ -312,6 +312,8 @@ def cmd_update(args):
         return 0
     r = subprocess.run(cmd)
     if r.returncode == 0:
+        from . import update_check
+        update_check.clear()
         print("\n已更新。重启 Claude Desktop 后生效。")
     return r.returncode
 
@@ -702,6 +704,14 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _print_update_notice() -> None:
+    """有新版本就在 stderr 提一行（只在终端里，别混进脚本和 agent 读的输出）。"""
+    from . import update_check
+    msg = update_check.notice()
+    if msg and sys.stderr.isatty():
+        print(f"\n↑ {msg}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -714,11 +724,18 @@ def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     ensure_private_dir(HOME)      # 库里有同学的名字和私密帖，只给自己读
+    quiet = args.cmd in ("mcp", "update", "doctor")   # mcp 的 stdout/stderr 归 Claude；另两个自己会说版本
+    if not quiet:
+        from . import update_check
+        update_check.refresh_in_background()
     if not getattr(args, "fn", None):
         ap.print_help()
         return EXIT_OK
     try:
-        return args.fn(args) or EXIT_OK
+        code = args.fn(args) or EXIT_OK
+        if not quiet:
+            _print_update_notice()
+        return code
     except (MoodleAuthError, EdAuthError) as e:
         print(f"{e}", file=sys.stderr)
         return EXIT_AUTH

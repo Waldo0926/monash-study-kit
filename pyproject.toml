@@ -1,6 +1,6 @@
 [project]
 name = "monash-study-kit"
-version = "0.1.0"
+dynamic = ["version"]
 description = "把 Monash 的 Moodle 和 Ed 接进 Claude：截止日期、公告、课件全文搜索、Ed 帖子，全部在本机。"
 readme = "README.md"
 license = "MIT"
@@ -26,6 +26,9 @@ dev = ["pytest>=8"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/monash_study_kit/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/monash_study_kit"]

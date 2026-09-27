@@ -140,6 +140,12 @@ def _safe_sync():
         log("同步出错：\n" + traceback.format_exc())
 
 
+def _update_hint() -> str:
+    from . import update_check
+    msg = update_check.notice()
+    return f"（{msg}，合适的时候提醒用户一次。）" if msg else ""
+
+
 def _background():
     """Claude 开着的时候：按设置定时同步、给 Moodle 续期。"""
     settings = load_settings()
@@ -148,6 +154,9 @@ def _background():
     time.sleep(5)       # 先让 Claude 把握手做完
     last_touch = 0.0
     while True:
+        from . import update_check
+        if update_check.enabled():
+            update_check.refresh()          # 自己控制频率：一天最多真查一次
         if jobs.hours_since_sync() * 3600 >= every_sync:
             start_sync()
         if time.time() - last_touch >= every_touch:
@@ -185,7 +194,9 @@ def t_status(args):
         con.close()
     except Exception:  # noqa: BLE001
         pass
+    from . import update_check
     return {"moodle": moodle, "ed": ed, "last_sync": st.get("last_sync"), "sync_errors": st.get("errors"),
+            "update_available": update_check.available(),
             "syncing": bool(_sync_thread and _sync_thread.is_alive()),
             "login_window": {"running": _login["running"], "last_error": _login["error"]},
             "files_dir": str(FILES_DIR), "version": __version__}
@@ -219,7 +230,11 @@ def t_todo(args):
         courses = _tracked_or_current() if c else []
     except MoodleAuthError:
         courses = []
-    return todo.build(c, courses, int(args.get("days", 7)))
+    from . import update_check
+    out = todo.build(c, courses, int(args.get("days", 7)))
+    if (msg := update_check.notice()):
+        out["notes"].append(msg)
+    return out
 
 
 def t_courses(args):
@@ -543,7 +558,7 @@ def handle(msg: dict) -> dict | None:
             result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
                       "capabilities": {"tools": {}},
                       "serverInfo": {"name": "monash", "version": __version__},
-                      "instructions": INSTRUCTIONS}
+                      "instructions": INSTRUCTIONS + _update_hint()}
         elif method == "ping":
             result = {}
         elif method == "tools/list":

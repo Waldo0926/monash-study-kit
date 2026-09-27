@@ -20,3 +20,23 @@ jobs:
       - run: uv run pytest -q
       - name: CLI 能启动
         run: uv run monash --version
+
+  version-bump:
+    # 朋友那边的更新提示比的是 main 上的 __version__：改了代码却没改版本号，他们就收不到提示
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 改了 src/ 就要改版本号
+        run: |
+          base=origin/${{ github.base_ref }}
+          if git diff --quiet "$base"...HEAD -- src/; then
+            echo "没改 src/，不用改版本号"; exit 0
+          fi
+          old=$(git show "$base":src/monash_study_kit/__init__.py | sed -n 's/^__version__ = "\(.*\)"/\1/p')
+          new=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/monash_study_kit/__init__.py)
+          echo "main: $old  →  这个 PR: $new"
+          python3 -c "import sys; p=lambda v: tuple(int(x) for x in v.split('.')); sys.exit(0 if p('$new') > p('$old') else 1)" \
+            || { echo "::error file=src/monash_study_kit/__init__.py::改了 src/ 就把 __version__ 加一（修 bug 加最后一位，加功能加中间一位），不然朋友收不到更新提示"; exit 1; }
