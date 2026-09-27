@@ -35,12 +35,16 @@ def scrub(text: str) -> str:
 # ---------------------------------------------------------------- 各项检查
 
 def check_install() -> dict:
+    from . import update_check
     exe = shutil.which("monash")
     where = f"monash {__version__} · Python {platform.python_version()} · {platform.system()} {platform.machine()}"
     if not exe:
         return _check("安装", WARN, where + "；命令行里找不到 monash",
                       "关掉终端重新打开；还不行就重新运行 README 里的安装命令")
-    return _check("安装", OK, where)
+    latest = update_check.refresh().get("latest") if update_check.enabled() else None
+    if update_check.is_newer(latest):
+        return _check("安装", WARN, f"{where}；最新版是 {latest}", "monash update，然后重启 Claude Desktop")
+    return _check("安装", OK, where + ("（已是最新）" if latest else ""))
 
 
 def check_data_dir() -> dict:

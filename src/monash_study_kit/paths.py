@@ -36,6 +36,7 @@ DEFAULTS = {
     "files_dir": "",              # 课件放哪；空 = 数据目录下的 files。Windows 路径太长时改成 C:\\Monash 之类
     "browser": "",                # 登录窗口用哪个浏览器程序；空 = 自动找 Chrome / Edge / Brave
     "web_notes": True,            # 抓 Moodle / Ed 链接到的课程笔记网页（老师的 github.io 讲义站之类）进全文搜索
+    "update_check": True,         # 每天查一次 GitHub 上有没有新版本，有就提示
 }
 
 

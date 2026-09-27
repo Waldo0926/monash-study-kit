@@ -4,3 +4,4 @@ import tempfile
 
 os.environ["MONASH_KIT_HOME"] = tempfile.mkdtemp(prefix="monash-kit-test-")
 os.environ.pop("ED_TOKEN", None)
+os.environ["MONASH_KIT_NO_UPDATE_CHECK"] = "1"   # 测试不联网查新版本；update_check 的测试自己打开

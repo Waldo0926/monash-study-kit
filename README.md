@@ -288,6 +288,9 @@ monash update
 
 更新后重启一下 Claude Desktop。Windows 上它会告诉你先退出 Claude、再运行哪条命令（正在运行的程序没法被覆盖）。
 
+有新版本时会提醒你：终端里运行命令后多一行提示，Claude 里问待办时也会顺带说一句。每天最多查一次 GitHub，
+不带任何个人信息；不想要的话 `monash config update_check false`。
+
 ## 常见问题
 
 **Claude 里看不到 monash**
@@ -320,6 +323,9 @@ uv sync
 uv run pytest
 uv run monash --help
 ```
+
+**发新版**：改了 `src/` 就把 `src/monash_study_kit/__init__.py` 里的 `__version__` 加一（修 bug 加最后一位，
+加功能加中间一位），朋友那边的更新提示比的就是 main 上的这个号。CI 的 `version-bump` 检查会拦住忘了改的 PR。
 
 代码结构：`moodlelib`（Moodle 客户端）、`syncer`（课件同步）、`features`（截止/成绩/公告等查询）、
 `edlib` / `edsync` / `edquery` / `lessons`（Ed）、`content_index`（全文索引）、`browser_login` + `cdp`（专用登录窗口）、
