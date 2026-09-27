@@ -26,7 +26,7 @@ from . import __version__, edlib, edquery, help_menu, jobs, textextract
 from . import features as F
 from .edlib import EdAuthError
 from .moodlelib import COOKIE_FILE, FILES_DIR, MoodleAuthError, MoodleClient, db_connect
-from .paths import HOME, LOG_FILE, ensure_private_dir, load_settings
+from .paths import ED_FILES_DIR, HOME, LOG_FILE, ensure_private_dir, load_settings
 from .syncer import course_code, course_folder
 
 PROTOCOL = "2025-06-18"
@@ -343,9 +343,12 @@ def t_list_files(args):
 def t_read_file(args):
     """读一个已同步的课件：文本直接给；PDF 按页抽文字；docx/pptx 抽文字；zip 先列清单。"""
     rel = args["path"].replace("\\", "/").lstrip("/")
-    path = (FILES_DIR / rel).resolve()
-    if FILES_DIR.resolve() not in path.parents or not path.is_file():
-        raise ValueError("只能读 list_files 列出的文件（相对路径）")
+    base = FILES_DIR
+    if rel.startswith("ed:"):                  # search_content 给的 Ed 课件路径
+        base, rel = ED_FILES_DIR, rel[3:].lstrip("/")
+    path = (base / rel).resolve()
+    if base.resolve() not in path.parents or not path.is_file():
+        raise ValueError("只能读 list_files 或 search_content 给出的路径")
     limit = min(int(args.get("max_chars", MAX_TEXT)), 100000)
     offset = int(args.get("offset", 0))
     ext = path.suffix.lower()
@@ -449,6 +452,10 @@ def t_ed_thread(args):
 
 
 def t_ed_lessons(args):
+    clip = lambda text: _clip(text, min(int(args.get("max_chars", 30000)), 100000), int(args.get("offset", 0)))  # noqa: E731
+    if args.get("lesson"):
+        from . import lesson_reader
+        return clip(lesson_reader.lesson_markdown(_ed(), args["course"], args["lesson"])["markdown"])
     if args.get("quiz"):
         rows = edquery.quizzes(_ed(), args["course"], args.get("module"), args.get("status"))
         return _clip(edquery.quiz_markdown(rows), min(int(args.get("max_chars", 30000)), 100000),
@@ -507,9 +514,11 @@ TOOLS = {
                     "limit": (I, False), "offset": (I, False)}),
     "ed_thread": (t_ed_thread, "读一个 Ed 帖子全文和全部回复。thread 写 FIT2102#42、id 或链接；live=true 先从 Ed 重抓。",
                   {"thread": (S, True), "live": (B, False), "offset": (I, False), "max_chars": (I, False)}),
-    "ed_lessons": (t_ed_lessons, "Ed Lessons：按模块列出、完成状态、课件。module 如 'Week 3'。quiz=true 改为返回测验题"
-                                 "（题面和选项；Ed 不公开答案，适合复习）。",
-                   {"course": (S, True), "module": (S, False), "status": (S, False, STATUS), "quiz": (B, False),
+    "ed_lessons": (t_ed_lessons, "Ed Lessons：按模块列出、完成状态、课件。module 如 'Week 3'。lesson（id 或标题如 "
+                                 "'W3 Pre-Class'）返回整节正文，按页序附测验题，适合“带我过一遍这节”。"
+                                 "quiz=true 只要测验题（Ed 不公开答案）。",
+                   {"course": (S, True), "module": (S, False), "lesson": (S, False), "status": (S, False, STATUS),
+                    "quiz": (B, False),
                     "offset": (I, False), "max_chars": (I, False)}),
 }
 

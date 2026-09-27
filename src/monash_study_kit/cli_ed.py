@@ -7,6 +7,7 @@
     monash ed following                  # 有未读新回复的帖子（我发的/关注的排前面）
     monash ed lessons FIT2109 --module "Week 3"
     monash ed quiz FIT2109               # Lessons 里的测验题（复习用；Ed 不公开答案）
+    monash ed read FIT2109 "W3 Pre-Class"  # 整节 lesson 的正文（Markdown，按页序，附测验题）
 """
 from __future__ import annotations
 
@@ -174,6 +175,12 @@ def cmd_lessons(args):
     return _emit(args, edquery.lessons(edlib.db_connect(), args.course, args.module, args.status), _render_lessons)
 
 
+def cmd_read(args):
+    from . import lesson_reader
+    d = lesson_reader.lesson_markdown(edlib.db_connect(), args.course, args.lesson)
+    return _emit(args, d, lambda x: x["markdown"])
+
+
 def cmd_quiz(args):
     return _emit(args, edquery.quizzes(edlib.db_connect(), args.course, args.module, args.status),
                  edquery.quiz_markdown)
@@ -220,6 +227,9 @@ def add_commands(sub) -> None:
     p = out("following", cmd_following, help="有未读新回复的帖子")
     p.add_argument("course", nargs="?")
     p.add_argument("--limit", type=int, default=30)
+    p = out("read", cmd_read, help="整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题")
+    p.add_argument("course")
+    p.add_argument("lesson", help="lesson id 或标题的一部分，如 'W3 Pre-Class'")
     for name, fn, h in (("lessons", cmd_lessons, "课程内容（Lessons）和课件"),
                         ("quiz", cmd_quiz, "Lessons 里的测验题（题面+选项）")):
         p = out(name, fn, help=h)

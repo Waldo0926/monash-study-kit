@@ -216,7 +216,12 @@ def search(con: sqlite3.Connection, query: str, course: str | None = None, limit
     out = []
     for r in con.execute(sql, args):
         path = Path(r[3])
-        rel = path.relative_to(FILES_DIR).as_posix() if FILES_DIR in path.parents else None
+        if FILES_DIR in path.parents:
+            rel = path.relative_to(FILES_DIR).as_posix()
+        elif ED_FILES_DIR in path.parents:
+            rel = "ed:" + path.relative_to(ED_FILES_DIR).as_posix()     # Ed 的文件：read_file 认这个前缀
+        else:
+            rel = None
         out.append({"course": r[0], "source": r[1], "title": r[2], "loc": r[4],
                     "snippet": " ".join(r[5].split()), "path": rel, "abs_path": r[3],
                     "video": _video_for(path) if path.name.endswith(".transcript.md") else None})

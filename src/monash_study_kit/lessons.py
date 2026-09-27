@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS lessons (
 CREATE INDEX IF NOT EXISTS idx_lessons_course ON lessons(course_id, module_id);
 CREATE TABLE IF NOT EXISTS lesson_files (
     id INTEGER PRIMARY KEY, lesson_id INTEGER, course_id INTEGER, type TEXT,
-    title TEXT, file_url TEXT, url TEXT, local_path TEXT
+    title TEXT, file_url TEXT, url TEXT, local_path TEXT, idx INTEGER   -- idx：slide 在 lesson 里的顺序
 );
 CREATE INDEX IF NOT EXISTS idx_lesson_files_lesson ON lesson_files(lesson_id);
 -- lesson 里 quiz 页的题目和选项（Markdown）。Ed 不给学生看答案（release_quiz_solutions 都是 false），
@@ -64,6 +64,9 @@ CREATE INDEX IF NOT EXISTS idx_quiz_lesson ON quiz_questions(lesson_id, slide_id
 
 def ensure_lessons_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(LESSONS_SCHEMA)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(lesson_files)")}
+    if "idx" not in cols:                       # 0.3 以前的库没有页序，下次同步会补上
+        conn.execute("ALTER TABLE lesson_files ADD COLUMN idx INTEGER")
 
 
 def fetch_lessons(client: EdClient, course_id: int) -> tuple[list[dict], list[dict]]:
@@ -92,17 +95,18 @@ def fetch_lesson_files(client: EdClient, lesson_id: int, slides: list[dict] | No
     if slides is None:
         slides = fetch_slides(client, lesson_id)
     out = []
-    for s in slides:
+    for pos, s in enumerate(slides):
+        idx = s.get("index") if isinstance(s.get("index"), int) else pos
         if s.get("type") == "pdf" and s.get("file_url"):
             out.append({"id": s["id"], "type": "pdf", "title": s.get("title") or "",
-                        "file_url": s["file_url"], "url": None})
+                        "file_url": s["file_url"], "url": None, "idx": idx})
         elif s.get("type") == "webpage" and s.get("url"):
             out.append({"id": s["id"], "type": "webpage", "title": s.get("title") or "",
-                        "file_url": None, "url": s["url"]})
+                        "file_url": None, "url": s["url"], "idx": idx})
         elif s.get("type") in ("document", "code") and (text := slide_text(s)):
             # 正文直接写在 Ed 里的页：存成 .md，全文索引就能搜到
             out.append({"id": s["id"], "type": s["type"], "title": s.get("title") or "",
-                        "file_url": None, "url": None, "text": text})
+                        "file_url": None, "url": None, "text": text, "idx": idx})
     return out
 
 
@@ -191,9 +195,10 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
                 local_path = rel
             conn.execute(
                 "INSERT OR REPLACE INTO lesson_files "
-                "(id, lesson_id, course_id, type, title, file_url, url, local_path) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (f["id"], l["id"], course_id, f["type"], f["title"], f["file_url"], f["url"], local_path),
+                "(id, lesson_id, course_id, type, title, file_url, url, local_path, idx) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (f["id"], l["id"], course_id, f["type"], f["title"], f["file_url"], f["url"], local_path,
+                 f.get("idx")),
             )
     conn.commit()
     return len(modules), len(lessons)

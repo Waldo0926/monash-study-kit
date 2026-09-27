@@ -25,6 +25,8 @@ FEATURES = [
         ("上次看过之后的新帖和新回复", "Ed 上有什么新消息？", "monash ed new"),
         ("我发的/关注的帖子有没有人回", "我上次问的问题有人回了吗？", "monash ed following"),
         ("搜帖子、读全文", "有没有人问过 A1 能不能用 lodash？", "monash ed search FIT2102 lodash"),
+        ("整节读 Ed lesson：正文、阅读网页、PDF 按页序拼好，附测验题", "带我过一遍 FIT2109 第 3 周的 pre-class",
+         "monash ed read FIT2109 'W3 Pre-Class'"),
         ("Ed Lessons 进度和测验题（复习用）", "用第 3 周的测验题帮我复习", "monash ed quiz FIT2109 --module 'Week 3'"),
     ]),
     ("成绩和通知", [

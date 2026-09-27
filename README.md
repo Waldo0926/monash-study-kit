@@ -261,6 +261,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | `monash moodle news` / `find` / `get` / `messages` / `calendar` | 公告 / 找活动 / 下载单个文件 / 站内信 / 日历订阅链接 |
 | `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed 新动态 / 我的帖子有没有新回复 / 搜索 / 读帖子 |
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
+| `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
 | `monash config` | 看/改设置（改完重启 Claude Desktop） |
 | `monash update` | 更新到最新版 |
 
