@@ -5,6 +5,7 @@
     monash login ed              # 换 Ed 令牌
     monash status                # 登录状态、上次同步
     monash doctor                # 出问题时：一项项检查并告诉你怎么修
+    monash help                  # 能做的事，每条附示例问法
     monash sync                  # 立刻同步 Ed + Moodle（Claude 开着时每小时自动一次）
     monash courses               # 选要跟踪的课
 
@@ -227,6 +228,11 @@ def cmd_doctor(args):
     if want_json(args):
         return emit_json(report)
     print(doctor.render(report))
+
+
+def cmd_help(args):
+    from . import help_menu
+    print(help_menu.render(cli=True))
 
 
 def cmd_sync(args):
@@ -652,6 +658,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("what", nargs="?", choices=["moodle", "ed"], default="moodle")
     p.add_argument("--window", action="store_true", help="直接开窗口，不先试后台自动登录")
     cmd(sub, "status", cmd_status, json_flag=True, help="登录状态、上次同步")
+    cmd(sub, "help", cmd_help, help="能做的事和示例问法（Claude 里怎么问、对应哪条命令）")
     cmd(sub, "doctor", cmd_doctor, json_flag=True, help="体检：一项项查哪里不对，告诉你怎么修")
     p = cmd(sub, "sync", cmd_sync, help="同步 Ed + Moodle + 全文索引")
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
@@ -730,6 +737,7 @@ def main(argv: list[str] | None = None) -> int:
         update_check.refresh_in_background()
     if not getattr(args, "fn", None):
         ap.print_help()
+        print("\n不知道能做什么？运行 monash help 看功能大全和示例问法。")
         return EXIT_OK
     try:
         code = args.fn(args) or EXIT_OK

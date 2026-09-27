@@ -22,7 +22,7 @@ import time
 import traceback
 import zipfile
 
-from . import __version__, edlib, edquery, jobs, textextract
+from . import __version__, edlib, edquery, help_menu, jobs, textextract
 from . import features as F
 from .edlib import EdAuthError
 from .moodlelib import COOKIE_FILE, FILES_DIR, MoodleAuthError, MoodleClient, db_connect
@@ -40,7 +40,8 @@ INSTRUCTIONS = (
     "Monash 学习助手（Moodle + Ed，只读，不能交作业、做测验、发帖）。“这周要做什么”先用 study_todo；"
     "知识点在哪份资料用 search_content 再 read_file；Ed 新消息用 ed_updates。数据每小时后台同步。"
     "报“Moodle 登录已过期”时问用户要不要登录，同意就调 monash_login；Ed 令牌失效请用户在终端运行 "
-    "monash login ed（令牌别贴进聊天）。")
+    "monash login ed（令牌别贴进聊天）。用户问“你能做什么/help”时，按类别列出功能并各给一句示例问法，"
+    "并告诉他输入框“+”菜单里有 monash 的预设提示。")
 
 
 # ---------------------------------------------------------------- 日志
@@ -556,13 +557,23 @@ def handle(msg: dict) -> dict | None:
     try:
         if method == "initialize":
             result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
-                      "capabilities": {"tools": {}},
+                      "capabilities": {"tools": {}, "prompts": {}},
                       "serverInfo": {"name": "monash", "version": __version__},
                       "instructions": INSTRUCTIONS + _update_hint()}
         elif method == "ping":
             result = {}
         elif method == "tools/list":
             result = {"tools": tool_list()}
+        elif method == "prompts/list":
+            result = {"prompts": help_menu.prompt_list()}
+        elif method == "prompts/get":
+            p = msg.get("params") or {}
+            try:
+                result = help_menu.get_prompt(p.get("name"), p.get("arguments"))
+            except KeyError:
+                return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"没有提示 {p.get('name')}"}}
+            except ValueError as e:
+                return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": str(e)}}
         elif method == "tools/call":
             p = msg.get("params") or {}
             name = p.get("name")
