@@ -79,6 +79,26 @@ def save_config(cfg: dict) -> None:
 # API 客户端
 # --------------------------------------------------------------------------
 
+RETRY_AFTER_CAP = 120
+
+
+def retry_delay(retry_after: str | None, attempt: int) -> float:
+    """限流/临时故障后等多久：Ed 给了 Retry-After（秒数或 HTTP 日期）就按它来，
+    比指数退避长也听它的（最多等 RETRY_AFTER_CAP 秒）；没给就 1.5s、3s、6s……"""
+    backoff = 2 ** attempt * 1.5
+    if not retry_after:
+        return backoff
+    try:
+        wait = float(retry_after)
+    except ValueError:
+        try:
+            from email.utils import parsedate_to_datetime
+            wait = (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds()
+        except (TypeError, ValueError):
+            return backoff
+    return min(max(wait, backoff), RETRY_AFTER_CAP)
+
+
 class EdClient:
     def __init__(self, token: str | None = None, delay: float = 0.25):
         self.token = token or load_token()
@@ -115,7 +135,7 @@ class EdClient:
                 if e.code == 403:
                     raise EdForbidden(f"Ed 返回 403：没有权限看 {path}（被删除、改成私密，或不在这门课里）") from e
                 if e.code in (429, 500, 502, 503, 504) and attempt < retries - 1:
-                    time.sleep(2 ** attempt * 1.5)
+                    time.sleep(retry_delay(e.headers.get("Retry-After") if e.headers else None, attempt))
                     continue
                 raise
             except (urllib.error.URLError, TimeoutError):

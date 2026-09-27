@@ -367,6 +367,8 @@ def new_activity(conn, since=None, course=None, cursor: str | None = "cli",
 # --------------------------------------------------------------------------
 
 def lessons(conn, course, module=None, status=None) -> list[dict]:
+    from .lessons import ensure_lessons_schema
+    ensure_lessons_schema(conn)               # 老库补上 lesson_files.idx（页序）
     try:
         rows = conn.execute("""
             SELECT l.*, m.name AS module FROM lessons l LEFT JOIN modules m ON m.id = l.module_id
@@ -381,7 +383,8 @@ def lessons(conn, course, module=None, status=None) -> list[dict]:
         if status and status != "all" and r["status"] != status:
             continue
         files = [dict(f) for f in conn.execute(
-            "SELECT type, title, file_url, url, local_path FROM lesson_files WHERE lesson_id=? ORDER BY id",
+            "SELECT type, title, file_url, url, local_path FROM lesson_files WHERE lesson_id=?"
+            " ORDER BY COALESCE(idx, 1e9), id",
             (r["id"],))]
         out.append({"id": r["id"], "module": r["module"], "title": r["title"], "type": r["type"],
                     "status": r["status"], "due_at": r["effective_due_at"] or r["due_at"],
