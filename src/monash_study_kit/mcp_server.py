@@ -476,7 +476,7 @@ S, I, B = "string", "integer", "boolean"
 STATUS = ("completed", "attempted", "unattempted")
 
 TOOLS = {
-    "study_todo": (t_todo, "综合待办：截止、漏交、lesson、公告、未读回复；问“这周要做/交什么”用。",
+    "study_todo": (t_todo, "综合待办：截止、漏交、lesson、公告、未读回复；问“这周要做/交什么”用",
                    {"days": (I, False)}),
     "monash_status": (t_status, "查登录、同步和错误；报错或“用不了”时用，full=true 完整体检。",
                       {"full": (B, False)}),
