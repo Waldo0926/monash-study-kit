@@ -470,56 +470,69 @@ def t_ed_lessons(args):
 # ---------------------------------------------------------------- 工具表
 #
 # 工具清单每次对话都要整份发给 Claude（不调用也算额度），所以：能合并的合并，说明写短，
-# 参数的用法写进说明里而不是每个参数一段描述。改完跑 tests/test_mcp.py 里的体积测试。
+# 只给容易误解的参数补短 schema 说明。改完跑 tests/test_mcp.py 里的体积测试。
 
 S, I, B = "string", "integer", "boolean"
 STATUS = ("completed", "attempted", "unattempted")
 
 TOOLS = {
-    "study_todo": (t_todo, "本周待办，Moodle+Ed 合并：N 天内截止（默认 7）、可能漏交、Ed 没做完的 lesson、最近公告、"
-                           "Ed 未读回复。问“这周要做什么/要交什么”先用它；notes 说明哪部分因没登录缺失。",
+    "study_todo": (t_todo, "综合待办：截止、可能漏交、未完成 lesson、公告、未读回复。问“这周要做/交什么”优先用；days 默认7。",
                    {"days": (I, False)}),
-    "monash_status": (t_status, "登录状态、上次同步和错误。工具报错先看它；用户说“用不了了”传 full=true 做体检，"
-                                "照每项的 fix 告诉用户怎么修。", {"full": (B, False)}),
-    "monash_login": (t_login, "在用户电脑上打开 Moodle 登录窗口（先试后台自动登录）。用户同意后才调用；立即返回，"
-                              "登录完窗口自动关闭并开始同步。", {}, False),
-    "monash_sync": (t_sync, "立刻在后台同步（平时每小时自动一次）。", {}, False),
-    "courses": (t_courses, "Moodle 和 Ed 上的课程：id、课号、名称、是否跟踪。", {}),
-    "moodle_due": (t_due, "截止日期和日历事件。course 课号可选；没登录时退回日历订阅链接（source=ical，无提交状态）。",
+    "monash_status": (t_status, "查登录、同步和错误。工具报错先用；“坏了/用不了”时 full=true 体检。",
+                      {"full": (B, False)}),
+    "monash_login": (t_login, "打开本机 Moodle 登录窗口。仅用户同意后调用；完成后自动同步。", {}, False),
+    "monash_sync": (t_sync, "同步 Moodle/Ed 并更新全文索引。用户要求刷新或数据可能过旧时用；平时每小时自动。",
+                    {}, False),
+    "courses": (t_courses, "列 Moodle/Ed 课程。问“我有哪些课”或需确定课程时用；其他需求用专用工具。", {}),
+    "moodle_due": (t_due, "查未来截止/日历事件。days 默认14；作业详情用 moodle_assignments，成绩用 moodle_grades；"
+                              "未登录可用 iCal。",
                    {"course": (S, False), "days": (I, False)}),
-    "moodle_assignments": (t_assignments, "作业的截止、提交状态、成绩。missing=已过截止没交也没分（面试/现场展示类本不用交）。"
-                                          "missing_only 只看这些。", {"course": (S, False), "missing_only": (B, False)}),
-    "moodle_grades": (t_grades, "成绩。不给 course 是各课总分；给了是每项得分、满分、反馈。",
+    "moodle_assignments": (t_assignments, "查作业截止、提交状态和成绩。missing_only 仅可能漏交；近期截止用 moodle_due，"
+                                          "成绩总览用 moodle_grades。",
+                           {"course": (S, False), "missing_only": (B, False)}),
+    "moodle_grades": (t_grades, "查成绩。无 course 看总览；有 course 看评分项/得分/反馈；graded_only 仅已有成绩项。"
+                                "提交状态用 moodle_assignments。",
                       {"course": (S, False), "graded_only": (B, False)}),
-    "moodle_forum": (t_forum, "Moodle 论坛。不给 query 是最近的课程公告（含正文）；给了就搜帖子。讨论大多在 Ed。",
+    "moodle_forum": (t_forum, "Moodle 公告/论坛：无 query 看公告，有 query 搜帖子。Ed 讨论用 ed_threads。",
                      {"query": (S, False), "course": (S, False), "limit": (I, False)}),
-    "moodle_messages": (t_messages, "Moodle 私信。不给 conversation_id 列对话；给了看消息。不会标成已读。",
+    "moodle_messages": (t_messages, "Moodle 私信：无 conversation_id 列对话，有则读消息；不会标已读。",
                         {"conversation_id": (I, False), "limit": (I, False)}),
-    "search_content": (t_search_content, "全文搜课程资料：Moodle 课件、课程笔记网页、Ed Lessons 正文和 PDF、录播字幕稿。"
-                                         "问“哪周讲了 X/X 在哪份讲义”用它。loc 是页码/时间戳/段落；有 path 的交给 read_file 读原文。"
-                                         "词都要出现，\"引号\"短语，词尾 * 前缀。",
+    "search_content": (t_search_content, "全文搜 Moodle/Ed 课件、笔记、PDF、字幕。问“哪周讲 X/在哪份讲义”用；"
+                                         "path 交给 read_file。",
                        {"query": (S, True), "course": (S, False), "limit": (I, False)}),
-    "list_files": (t_list_files, "本地课件清单（按课程/周次/关键词过滤），path 给 read_file。录像的字幕稿是同名 .transcript.md。"
-                                 "links=true 改为列这门课的外部链接（Slides、笔记、视频）。",
+    "list_files": (t_list_files, "列本地课件/外链，可按课程/周/关键词过滤；path 用 read_file。links=true 列外链。",
                    {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False)}),
-    "read_file": (t_read_file, "读一个课件的文字（文本/代码/PDF/docx/pptx；zip 先列清单再用 inner 读）。默认 2 万字符，用 offset 翻页。",
+    "read_file": (t_read_file, "读课件文本/PDF/docx/pptx/代码；zip 先列清单再用 inner。长内容用 offset/max_chars 分页。",
                   {"path": (S, True), "inner": (S, False), "offset": (I, False), "max_chars": (I, False)}),
-    "ed_updates": (t_ed_updates, "Ed 上次看过之后的新帖和新回复，加上我发的/关注的帖子里没看过的回复。"
-                                 "默认推进游标；since（如 2d）看某时间之后且不动游标；peek=true 不推进。",
+    "ed_updates": (t_ed_updates, "查 Ed 新帖/回复和关注、收藏、本人帖的未读回复。默认推进游标；since 指时间，"
+                                 "peek=true 不推进。",
                    {"course": (S, False), "since": (S, False), "peek": (B, False), "limit": (I, False)}),
-    "ed_threads": (t_ed_threads, "列或搜 Ed 帖子（新的在前）。给 query 就搜标题、正文和回复（词都要出现）。"
-                                 "since 如 7d；type、unanswered 过滤；only 只看我收藏/关注/发的/没点开过/有新回复的。",
-                   {"query": (S, False), "course": (S, False), "since": (S, False), "type": (S, False, ("question", "post", "announcement")),
-                    "unanswered": (B, False), "only": (S, False, tuple(edquery.STATE_FILTERS)), "category": (S, False),
-                    "limit": (I, False), "offset": (I, False)}),
-    "ed_thread": (t_ed_thread, "读一个 Ed 帖子全文和全部回复。thread 写 FIT2102#42、id 或链接；live=true 先从 Ed 重抓。",
+    "ed_threads": (t_ed_threads, "列/搜 Ed 帖子；query 搜标题/正文/回复，可按课程/时间/类型/状态过滤。全文用 ed_thread。",
+                   {"query": (S, False), "course": (S, False), "since": (S, False),
+                    "type": (S, False, ("question", "post", "announcement")),
+                    "unanswered": (B, False), "only": (S, False, tuple(edquery.STATE_FILTERS)),
+                    "category": (S, False), "limit": (I, False), "offset": (I, False)}),
+    "ed_thread": (t_ed_thread, "读 Ed 帖子全文/回复。thread 可为 FIT2102#42、ID 或链接；live=true 先刷新；长内容可分页。",
                   {"thread": (S, True), "live": (B, False), "offset": (I, False), "max_chars": (I, False)}),
-    "ed_lessons": (t_ed_lessons, "Ed Lessons：按模块列出、完成状态、课件。module 如 'Week 3'。lesson（id 或标题如 "
-                                 "'W3 Pre-Class'）返回整节正文，按页序附测验题，适合“带我过一遍这节”。"
-                                 "quiz=true 只要测验题（Ed 不公开答案）。",
-                   {"course": (S, True), "module": (S, False), "lesson": (S, False), "status": (S, False, STATUS),
-                    "quiz": (B, False),
+    "ed_lessons": (t_ed_lessons, "查 Ed Lessons。按 module/status 列 lesson，指定 lesson 读全文，quiz=true 仅测验题。"
+                                 "帖子用 ed_threads/ed_thread。",
+                   {"course": (S, True), "module": (S, False), "lesson": (S, False),
+                    "status": (S, False, STATUS), "quiz": (B, False),
                     "offset": (I, False), "max_chars": (I, False)}),
+}
+
+# 只给 TDQS 容易误解的参数加极短 schema 说明，避免 tools/list 超过体积预算。
+PARAM_HELP = {
+    ("moodle_due", "days"): "未来天数，默认14",
+    ("moodle_assignments", "course"): "课程号，如 FIT2102",
+    ("moodle_assignments", "missing_only"): "仅列可能漏交",
+    ("moodle_grades", "graded_only"): "仅列已有成绩项",
+    ("ed_thread", "offset"): "字符偏移",
+    ("ed_thread", "max_chars"): "最大返回字符数",
+    ("ed_lessons", "course"): "课程号，如 FIT2102",
+    ("ed_lessons", "status"): "完成状态",
+    ("ed_lessons", "offset"): "字符偏移",
+    ("ed_lessons", "max_chars"): "最大返回字符数",
 }
 
 
@@ -530,7 +543,10 @@ def tool_list() -> list[dict]:
         read_only = spec[3] if len(spec) > 3 else True
         props = {}
         for k, p in params.items():
-            props[k] = {"type": p[0], **({"enum": list(p[2])} if len(p) > 2 else {})}
+            prop = {"type": p[0], **({"enum": list(p[2])} if len(p) > 2 else {})}
+            if (help_text := PARAM_HELP.get((name, k))):
+                prop["description"] = help_text
+            props[k] = prop
         required = [k for k, p in params.items() if p[1]]
         out.append({"name": name, "description": desc,
                     "inputSchema": {"type": "object", "properties": props, "required": required},
