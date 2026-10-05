@@ -87,6 +87,29 @@ def test_catalog_stays_small():
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}
 
 
+def test_tool_metadata_has_parameter_help_and_routing_guards():
+    """关键 schema/routing 不要在以后重构时悄悄退化。"""
+    tools = {t["name"]: t for t in call("tools/list")["result"]["tools"]}
+
+    for tool in tools.values():
+        for name, prop in tool["inputSchema"]["properties"].items():
+            assert prop.get("description"), (tool["name"], name)
+
+    assert set(tools["ed_threads"]["inputSchema"]["properties"]["type"]["enum"]) == {
+        "question", "post", "announcement"
+    }
+    assert set(tools["ed_lessons"]["inputSchema"]["properties"]["status"]["enum"]) == {
+        "completed", "attempted", "unattempted"
+    }
+
+    assert "list_files" in tools["search_content"]["description"]
+    assert "search_content" in tools["list_files"]["description"]
+    assert "ed_threads" in tools["ed_thread"]["description"]
+    assert "ed_updates" in tools["ed_thread"]["description"]
+    assert "moodle_assignments" in tools["moodle_due"]["description"]
+    assert "moodle_due" in tools["moodle_assignments"]["description"]
+
+
 def _ed_fixture(tmp_path, monkeypatch):
     from monash_study_kit import edlib
     conn = edlib.db_connect(tmp_path / "ed.db")
