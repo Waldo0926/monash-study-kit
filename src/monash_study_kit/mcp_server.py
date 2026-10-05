@@ -470,7 +470,7 @@ def t_ed_lessons(args):
 # ---------------------------------------------------------------- 工具表
 #
 # 工具清单每次对话都要整份发给 Claude（不调用也算额度），所以：能合并的合并，说明写短，
-# 参数的用法写进说明里而不是每个参数一段描述。改完跑 tests/test_mcp.py 里的体积测试。
+# 只给容易误解的参数补短 schema 说明。改完跑 tests/test_mcp.py 里的体积测试。
 
 S, I, B = "string", "integer", "boolean"
 STATUS = ("completed", "attempted", "unattempted")
