@@ -1,7 +1,7 @@
 [project]
 name = "monash-study-kit"
 dynamic = ["version"]
-description = "把 Monash 的 Moodle 和 Ed 接进 Claude：截止日期、公告、课件全文搜索、Ed 帖子，全部在本机。"
+description = "Connect Monash Moodle and Ed to Claude via a local MCP server and CLI: deadlines, announcements, grades, full-text search over course materials and Ed posts, all on your own machine."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
