@@ -483,7 +483,7 @@ TOOLS = {
     "monash_login": (t_login, "用户同意重新登录后，打开本机 Moodle 登录窗口；成功后自动同步。", {}, False),
     "monash_sync": (t_sync, "同步 Moodle/Ed 并更新索引；用户要求刷新或数据过旧时用。",
                     {}, False),
-    "courses": (t_courses, "列 Moodle/Ed 课程和跟踪状态；问有哪些课或需确定课程时用。", {}),
+    "courses": (t_courses, "列 Moodle/Ed 课程；问有哪些课或需确定课程时用。", {}),
     "moodle_due": (t_due, "查未来截止/日历事件；作业详情用 moodle_assignments，成绩用 moodle_grades；未登录可用 iCal。",
                    {"course": (S, False), "days": (I, False)}),
     "moodle_assignments": (t_assignments, "查作业截止/提交/成绩；missing_only 仅漏交。近期截止用 moodle_due，成绩用 moodle_grades。",
