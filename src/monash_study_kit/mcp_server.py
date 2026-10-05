@@ -515,36 +515,30 @@ TOOLS = {
                     "offset": (I, False), "max_chars": (I, False)}),
 }
 
-# 所有参数都给一条很短的 schema 说明：提高 Claude 填参准确率，同时控制 tools/list 体积。
+# 只补 Glama/Claude 容易误解的关键参数；完整覆盖会让每次对话携带的 schema 过大。
 PARAM_HELP = {
-    "days": "未来天数",
-    "full": "true=完整体检",
-    "course": "课程号，如 FIT2102",
-    "missing_only": "仅可能漏交",
-    "graded_only": "仅已有成绩",
-    "query": "搜索词或短语",
-    "limit": "最多返回条数",
-    "conversation_id": "对话 ID",
-    "week": "教学周数字",
-    "links": "true=列外链",
-    "path": "列表/搜索返回路径",
-    "inner": "ZIP 内文件路径",
-    "offset": "结果/字符偏移",
-    "max_chars": "最多返回字符数",
-    "since": "如 7d 或日期",
-    "peek": "true=不推进游标",
-    "type": "帖子类型",
-    "unanswered": "仅未答提问",
-    "only": "帖子状态筛选",
-    "category": "Ed 分类",
-    "thread": "帖子 ref/ID/链接",
-    "live": "true=先刷新",
-    "module": "模块名片段",
-    "lesson": "Lesson ID/标题",
-    "status": "完成状态",
-    "quiz": "true=只看测验",
+    ("moodle_due", "days"): "未来天数，默认14",
+    ("moodle_assignments", "course"): "课程号，如 FIT2102",
+    ("moodle_assignments", "missing_only"): "仅可能漏交",
+    ("moodle_grades", "graded_only"): "仅已有成绩",
+    ("moodle_forum", "course"): "课程号，如 FIT2102",
+    ("moodle_forum", "limit"): "最多返回条数",
+    ("moodle_messages", "limit"): "最多返回消息数",
+    ("search_content", "course"): "课程号，如 FIT2102",
+    ("search_content", "limit"): "最多返回命中数",
+    ("ed_updates", "course"): "课程号，如 FIT2102",
+    ("ed_updates", "limit"): "最多返回条数",
+    ("ed_threads", "course"): "课程号，如 FIT2102",
+    ("ed_threads", "category"): "Ed 分类",
+    ("ed_threads", "limit"): "最多返回条数",
+    ("ed_threads", "offset"): "结果偏移",
+    ("ed_thread", "offset"): "字符偏移",
+    ("ed_thread", "max_chars"): "最大返回字符数",
+    ("ed_lessons", "course"): "课程号，如 FIT2102",
+    ("ed_lessons", "status"): "完成状态",
+    ("ed_lessons", "offset"): "字符偏移",
+    ("ed_lessons", "max_chars"): "最大返回字符数",
 }
-
 
 def tool_list() -> list[dict]:
     out = []
@@ -554,7 +548,7 @@ def tool_list() -> list[dict]:
         props = {}
         for k, p in params.items():
             prop = {"type": p[0], **({"enum": list(p[2])} if len(p) > 2 else {})}
-            if (help_text := PARAM_HELP.get(k)):
+            if (help_text := PARAM_HELP.get((name, k))):
                 prop["description"] = help_text
             props[k] = prop
         required = [k for k, p in params.items() if p[1]]
