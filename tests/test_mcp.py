@@ -87,6 +87,42 @@ def test_catalog_stays_small():
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}
 
 
+def test_tool_metadata_has_parameter_help_and_routing_guards():
+    """关键 schema/routing 不要在以后重构时悄悄退化。"""
+    tools = {t["name"]: t for t in call("tools/list")["result"]["tools"]}
+
+    critical = {
+        "moodle_due": {"days"},
+        "moodle_assignments": {"course", "missing_only"},
+        "moodle_grades": {"graded_only"},
+        "moodle_forum": {"course", "limit"},
+        "moodle_messages": {"limit"},
+        "search_content": {"course", "limit"},
+        "ed_updates": {"course", "limit"},
+        "ed_threads": {"course", "category", "limit", "offset"},
+        "ed_thread": {"offset", "max_chars"},
+        "ed_lessons": {"course", "status", "offset", "max_chars"},
+    }
+    for tool_name, names in critical.items():
+        props = tools[tool_name]["inputSchema"]["properties"]
+        for name in names:
+            assert props[name].get("description"), (tool_name, name)
+
+    assert set(tools["ed_threads"]["inputSchema"]["properties"]["type"]["enum"]) == {
+        "question", "post", "announcement"
+    }
+    assert set(tools["ed_lessons"]["inputSchema"]["properties"]["status"]["enum"]) == {
+        "completed", "attempted", "unattempted"
+    }
+
+    assert "list_files" in tools["search_content"]["description"]
+    assert "search_content" in tools["list_files"]["description"]
+    assert "ed_threads" in tools["ed_thread"]["description"]
+    assert "ed_updates" in tools["ed_thread"]["description"]
+    assert "moodle_assignments" in tools["moodle_due"]["description"]
+    assert "moodle_due" in tools["moodle_assignments"]["description"]
+
+
 def _ed_fixture(tmp_path, monkeypatch):
     from monash_study_kit import edlib
     conn = edlib.db_connect(tmp_path / "ed.db")

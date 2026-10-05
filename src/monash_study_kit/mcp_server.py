@@ -476,57 +476,62 @@ S, I, B = "string", "integer", "boolean"
 STATUS = ("completed", "attempted", "unattempted")
 
 TOOLS = {
-    "study_todo": (t_todo, "综合待办：截止、可能漏交、未完成 lesson、公告、未读回复。问“这周要做/交什么”优先用；days 默认7。",
+    "study_todo": (t_todo, "综合待办：截止、漏交、lesson、公告、未读回复；问“这周要做/交什么”用",
                    {"days": (I, False)}),
-    "monash_status": (t_status, "查登录、同步和错误。工具报错先用；“坏了/用不了”时 full=true 体检。",
+    "monash_status": (t_status, "查登录、同步和错误；报错或“用不了”时用，full=true 完整体检。",
                       {"full": (B, False)}),
-    "monash_login": (t_login, "打开本机 Moodle 登录窗口。仅用户同意后调用；完成后自动同步。", {}, False),
-    "monash_sync": (t_sync, "同步 Moodle/Ed 并更新全文索引。用户要求刷新或数据可能过旧时用；平时每小时自动。",
+    "monash_login": (t_login, "用户同意重新登录后，打开本机 Moodle 登录窗口；成功后自动同步。", {}, False),
+    "monash_sync": (t_sync, "同步 Moodle/Ed 并更新索引；用户要求刷新或数据过旧时用。",
                     {}, False),
-    "courses": (t_courses, "列 Moodle/Ed 课程。问“我有哪些课”或需确定课程时用；其他需求用专用工具。", {}),
-    "moodle_due": (t_due, "查未来截止/日历事件。days 默认14；作业详情用 moodle_assignments，成绩用 moodle_grades；"
-                              "未登录可用 iCal。",
+    "courses": (t_courses, "列 Moodle/Ed 课程；问有哪些课或需确定课程时用。", {}),
+    "moodle_due": (t_due, "查未来截止/日历事件；作业详情用 moodle_assignments，成绩用 moodle_grades；未登录可用 iCal。",
                    {"course": (S, False), "days": (I, False)}),
-    "moodle_assignments": (t_assignments, "查作业截止、提交状态和成绩。missing_only 仅可能漏交；近期截止用 moodle_due，"
-                                          "成绩总览用 moodle_grades。",
+    "moodle_assignments": (t_assignments, "查作业截止/提交/成绩；missing_only 仅漏交。近期截止用 moodle_due，成绩用 moodle_grades。",
                            {"course": (S, False), "missing_only": (B, False)}),
-    "moodle_grades": (t_grades, "查成绩。无 course 看总览；有 course 看评分项/得分/反馈；graded_only 仅已有成绩项。"
-                                "提交状态用 moodle_assignments。",
+    "moodle_grades": (t_grades, "查成绩；无 course 看总览，有则看评分项/得分/反馈。提交状态用 moodle_assignments。",
                       {"course": (S, False), "graded_only": (B, False)}),
-    "moodle_forum": (t_forum, "Moodle 公告/论坛：无 query 看公告，有 query 搜帖子。Ed 讨论用 ed_threads。",
+    "moodle_forum": (t_forum, "Moodle 公告/论坛：无 query 看公告，有则搜索；Ed 讨论用 ed_threads。",
                      {"query": (S, False), "course": (S, False), "limit": (I, False)}),
     "moodle_messages": (t_messages, "Moodle 私信：无 conversation_id 列对话，有则读消息；不会标已读。",
                         {"conversation_id": (I, False), "limit": (I, False)}),
-    "search_content": (t_search_content, "全文搜 Moodle/Ed 课件、笔记、PDF、字幕。问“哪周讲 X/在哪份讲义”用；"
-                                         "path 交给 read_file。",
+    "search_content": (t_search_content, "全文搜课件/PDF/笔记/字幕；只列文件用 list_files，命中 path 用 read_file。",
                        {"query": (S, True), "course": (S, False), "limit": (I, False)}),
-    "list_files": (t_list_files, "列本地课件/外链，可按课程/周/关键词过滤；path 用 read_file。links=true 列外链。",
+    "list_files": (t_list_files, "列本地课件/外链；不搜正文。搜内容用 search_content，path 用 read_file。",
                    {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False)}),
-    "read_file": (t_read_file, "读课件文本/PDF/docx/pptx/代码；zip 先列清单再用 inner。长内容用 offset/max_chars 分页。",
+    "read_file": (t_read_file, "读课件；path 来自 list_files/search_content。ZIP 用 inner，长内容可分页。",
                   {"path": (S, True), "inner": (S, False), "offset": (I, False), "max_chars": (I, False)}),
-    "ed_updates": (t_ed_updates, "查 Ed 新帖/回复和关注、收藏、本人帖的未读回复。默认推进游标；since 指时间，"
-                                 "peek=true 不推进。",
+    "ed_updates": (t_ed_updates, "查 Ed 新帖/回复和本人相关未读回复；浏览/搜索帖子用 ed_threads。",
                    {"course": (S, False), "since": (S, False), "peek": (B, False), "limit": (I, False)}),
-    "ed_threads": (t_ed_threads, "列/搜 Ed 帖子；query 搜标题/正文/回复，可按课程/时间/类型/状态过滤。全文用 ed_thread。",
+    "ed_threads": (t_ed_threads, "浏览/搜索 Ed 帖子；全文用 ed_thread，新动态用 ed_updates。",
                    {"query": (S, False), "course": (S, False), "since": (S, False),
                     "type": (S, False, ("question", "post", "announcement")),
                     "unanswered": (B, False), "only": (S, False, tuple(edquery.STATE_FILTERS)),
                     "category": (S, False), "limit": (I, False), "offset": (I, False)}),
-    "ed_thread": (t_ed_thread, "读 Ed 帖子全文/回复。thread 可为 FIT2102#42、ID 或链接；live=true 先刷新；长内容可分页。",
+    "ed_thread": (t_ed_thread, "读单个 Ed 帖子全文/回复；找帖子用 ed_threads，新动态用 ed_updates；live=true 刷新。",
                   {"thread": (S, True), "live": (B, False), "offset": (I, False), "max_chars": (I, False)}),
-    "ed_lessons": (t_ed_lessons, "查 Ed Lessons。按 module/status 列 lesson，指定 lesson 读全文，quiz=true 仅测验题。"
-                                 "帖子用 ed_threads/ed_thread。",
+    "ed_lessons": (t_ed_lessons, "查 Ed Lessons：列进度、读单节或测验。帖子用 ed_threads；跨课件搜内容用 search_content。",
                    {"course": (S, True), "module": (S, False), "lesson": (S, False),
                     "status": (S, False, STATUS), "quiz": (B, False),
                     "offset": (I, False), "max_chars": (I, False)}),
 }
 
-# 只给 TDQS 容易误解的参数加极短 schema 说明，避免 tools/list 超过体积预算。
+# 只补 Glama/Claude 容易误解的关键参数；完整覆盖会让每次对话携带的 schema 过大。
 PARAM_HELP = {
     ("moodle_due", "days"): "未来天数，默认14",
     ("moodle_assignments", "course"): "课程号，如 FIT2102",
-    ("moodle_assignments", "missing_only"): "仅列可能漏交",
-    ("moodle_grades", "graded_only"): "仅列已有成绩项",
+    ("moodle_assignments", "missing_only"): "仅可能漏交",
+    ("moodle_grades", "graded_only"): "仅已有成绩",
+    ("moodle_forum", "course"): "课程号，如 FIT2102",
+    ("moodle_forum", "limit"): "最多返回条数",
+    ("moodle_messages", "limit"): "最多返回消息数",
+    ("search_content", "course"): "课程号，如 FIT2102",
+    ("search_content", "limit"): "最多返回命中数",
+    ("ed_updates", "course"): "课程号，如 FIT2102",
+    ("ed_updates", "limit"): "最多返回条数",
+    ("ed_threads", "course"): "课程号，如 FIT2102",
+    ("ed_threads", "category"): "Ed 分类",
+    ("ed_threads", "limit"): "最多返回条数",
+    ("ed_threads", "offset"): "结果偏移",
     ("ed_thread", "offset"): "字符偏移",
     ("ed_thread", "max_chars"): "最大返回字符数",
     ("ed_lessons", "course"): "课程号，如 FIT2102",
@@ -534,7 +539,6 @@ PARAM_HELP = {
     ("ed_lessons", "offset"): "字符偏移",
     ("ed_lessons", "max_chars"): "最大返回字符数",
 }
-
 
 def tool_list() -> list[dict]:
     out = []
