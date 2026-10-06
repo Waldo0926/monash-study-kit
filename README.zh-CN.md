@@ -29,7 +29,7 @@
 同一套底层代码（登录、同步、查询），给两种“用户”用：
 
 **MCP：给 Claude 用的接口。** Moodle 和 Ed 都要 Okta + MFA 登录，Claude 自己进不去。
-MCP 让 Claude 在聊天中途自己去查（`study_todo`、`search_content`、`ed_updates` 等工具）：
+MCP 让 Claude 在聊天中途自己去查（`get_study_todo`、`search_content`、`list_ed_updates` 等工具）：
 
 - **答案来自真实数据**：截止时间、公告、成绩都是当下查到的，还能给出处，比如“Workshop 5 Slides 第 25 页”。
 - **两边合起来看**：一句“这周要做什么”，同时查 Moodle 截止、Ed 没做完的 lesson、两边的公告。
@@ -330,7 +330,7 @@ Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + �
 Moodle 页面上的时间按账号时区显示，默认按马来西亚（UTC+8）。澳洲校区：`monash config tz_offset 10`（夏令时 11）。
 
 **Ed 的“作业截止时间”在哪**
-Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`study_todo` 里 Ed lesson 部分是按你自己的进度列的
+Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`get_study_todo` 里 Ed lesson 部分是按你自己的进度列的
 （做到第几周，就列到下一周为止没完成的）。
 
 **出问题了**
