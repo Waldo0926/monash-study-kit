@@ -2,8 +2,8 @@
 
     monash mcp          # 由 Claude 启动，不用自己跑；monash setup 会帮你把它加进 Claude
 
-只读：不交作业、不做测验、不发帖。唯一会“动”的是 monash_login（在你电脑上打开登录窗口）
-和 monash_sync（在后台同步）。
+只读：不交作业、不做测验、不发帖。唯一会“动”的是 start_monash_login（在你电脑上打开登录窗口）
+和 sync_monash_data（在后台同步）。
 
 服务器开着的时候（也就是 Claude 开着的时候）在后台做两件事：
   * 每 20 分钟给 Moodle 会话续一次期——Moodle 空闲 4 小时就把你踢出去；
@@ -37,9 +37,9 @@ TEXT_EXT = {".txt", ".md", ".py", ".hs", ".ts", ".js", ".java", ".c", ".cpp", ".
             ".json", ".mzn", ".dzn", ".r", ".rmd", ".html", ".css", ".yaml", ".yml", ".toml", ".ipynb"}
 
 INSTRUCTIONS = (
-    "Monash 学习助手（Moodle + Ed，只读，不能交作业、做测验、发帖）。“这周要做什么”先用 study_todo；"
-    "知识点在哪份资料用 search_content 再 read_file；Ed 新消息用 ed_updates。数据每小时后台同步。"
-    "报“Moodle 登录已过期”时问用户要不要登录，同意就调 monash_login；Ed 令牌失效请用户在终端运行 "
+    "Monash 学习助手（Moodle + Ed，只读，不能交作业、做测验、发帖）。“这周要做什么”先用 get_study_todo；"
+    "知识点在哪份资料用 search_content 再 read_file；Ed 新消息用 list_ed_updates。数据每小时后台同步。"
+    "报“Moodle 登录已过期”时问用户要不要登录，同意就调 start_monash_login；Ed 令牌失效请用户在终端运行 "
     "monash login ed（令牌别贴进聊天）。用户问“你能做什么/help”时，按类别列出功能并各给一句示例问法，"
     "并告诉他输入框“+”菜单里有 monash 的预设提示。")
 
@@ -84,7 +84,7 @@ def _client_or_none() -> MoodleClient | None:
 
 
 def _courses() -> list[dict]:
-    return client().courses()
+    return client().list_courses()
 
 
 def _course(ref: str) -> dict:
@@ -191,7 +191,7 @@ def t_status(args):
     try:
         con = edlib.db_connect()
         ed["tracked_courses"] = [edquery._short_code(r["code"]) for r in
-                                 con.execute("SELECT code FROM courses WHERE tracked=1")]
+                                 con.execute("SELECT code FROM list_courses WHERE tracked=1")]
         con.close()
     except Exception:  # noqa: BLE001
         pass
@@ -213,13 +213,13 @@ def t_login(args):
     threading.Thread(target=_run_login, name="login", daemon=True).start()
     return ("正在用户电脑上打开 Moodle 登录窗口（如果 Okta 还记得登录，会在后台自动完成、不弹窗）。"
             "请用户在窗口里登录 Monash，完成后窗口会自动关闭，并开始同步。"
-            "告诉用户登录好之后说一声，再调用 monash_status 确认。")
+            "告诉用户登录好之后说一声，再调用 get_monash_status 确认。")
 
 
 def t_sync(args):
     if start_sync():
-        return "已在后台开始同步（第一次可能要几分钟）。之后用 monash_status 看结果。"
-    return "已经在同步了，稍后用 monash_status 看结果。"
+        return "已在后台开始同步（第一次可能要几分钟）。之后用 get_monash_status 看结果。"
+    return "已经在同步了，稍后用 get_monash_status 看结果。"
 
 
 # ---------------------------------------------------------------- Moodle 工具
@@ -228,11 +228,11 @@ def t_todo(args):
     from . import todo
     c = _client_or_none()
     try:
-        courses = _tracked_or_current() if c else []
+        list_courses = _tracked_or_current() if c else []
     except MoodleAuthError:
-        courses = []
+        list_courses = []
     from . import update_check
-    out = todo.build(c, courses, int(args.get("days", 7)))
+    out = todo.build(c, list_courses, int(args.get("days", 7)))
     if (msg := update_check.notice()):
         out["notes"].append(msg)
     return out
@@ -245,8 +245,8 @@ def t_courses(args):
     except MoodleAuthError:
         con = db_connect()
         moodle = [{"id": r["id"], "code": r["code"], "name": r["folder"], "tracked": bool(r["tracked"])}
-                  for r in con.execute("SELECT id, code, folder, tracked FROM courses ORDER BY id DESC")]
-    return {"moodle": moodle, "ed": edquery.courses(_ed())}
+                  for r in con.execute("SELECT id, code, folder, tracked FROM list_courses ORDER BY id DESC")]
+    return {"moodle": moodle, "ed": edquery.list_courses(_ed())}
 
 
 def t_due(args):
@@ -292,9 +292,9 @@ def t_forum(args):
         for r in res:
             r["text"] = r["text"][:800]
         return res
-    courses = [_course(args["course"])] if args.get("course") else _tracked_or_current()
+    list_courses = [_course(args["course"])] if args.get("course") else _tracked_or_current()
     out = []
-    for co in courses:
+    for co in list_courses:
         out += F.news(client(), co, min(limit, 5))
     out.sort(key=lambda x: -(x.get("time_ts") or 0))
     for n in out:
@@ -307,7 +307,7 @@ def _local_course_id(ref: str) -> int:
     """list_files 只读本地库，会话过期时也能用：先按本地课程表找，找不到再问 Moodle。"""
     con = db_connect()
     ref_u = ref.strip().upper()
-    for r in con.execute("SELECT id, code, fullname FROM courses ORDER BY id DESC"):
+    for r in con.execute("SELECT id, code, fullname FROM list_courses ORDER BY id DESC"):
         if str(r["id"]) == ref.strip() or (r["code"] or "") == ref_u or ref.lower() in (r["fullname"] or "").lower():
             return r["id"]
     return _course(ref)["id"]
@@ -336,7 +336,7 @@ def t_list_files(args):
         params += [f"%{args['query']}%"] * 2
     rows = con.execute(q + " ORDER BY f.path LIMIT 200", params).fetchall()
     if not rows and not con.execute("SELECT 1 FROM files LIMIT 1").fetchone():
-        return {"files": [], "note": "还没同步过 Moodle 课件（没登录，或者第一次同步还没跑完；看 monash_status）"}
+        return {"files": [], "note": "还没同步过 Moodle 课件（没登录，或者第一次同步还没跑完；看 get_monash_status）"}
     return [{"path": r["path"], "bytes": r["size"], "activity": r["title"]} for r in rows]
 
 
@@ -415,7 +415,7 @@ ONLY_MATCH = {"starred": lambda r: r.get("is_starred"), "watching": lambda r: r.
               "unread_replies": lambda r: (r.get("new_reply_count") or 0) > 0}
 
 
-def t_ed_threads(args):
+def t_search_read_ed_threads(args):
     only = args.get("only")
     if only and only not in ONLY_MATCH:
         raise ValueError(f"only 只能是 {'/'.join(edquery.STATE_FILTERS)}")
@@ -476,60 +476,77 @@ S, I, B = "string", "integer", "boolean"
 STATUS = ("completed", "attempted", "unattempted")
 
 TOOLS = {
-    "study_todo": (t_todo, "综合待办：截止、漏交、Lesson、公告、未读回复；问“这周要做/交什么”用。返回 due/possibly_missing/ed_lessons/announcements/ed_unread_replies",
-                   {"days": (I, False)}),
-    "monash_status": (t_status, "查登录、同步和错误；报错或“用不了”时用，full=true 完整体检。返回登录、同步、版本和错误状态。",
-                      {"full": (B, False)}),
-    "monash_login": (t_login, "仅在用户同意重新登录后用：打开本机 Moodle 登录窗口；已登录则不重复打开，成功后自动同步。结果/失败用 monash_status 确认。", {}, False),
-    "monash_sync": (t_sync, "后台同步 Moodle/Ed 并更新索引；用户要求刷新或数据过旧时用，已在同步则不重复启动。结果/错误用 monash_status 查看。",
-                    {}, False),
-    "courses": (t_courses, "列 Moodle/Ed 课程；问有哪些课或需确定课程时用。Moodle 未登录时回退本地课程表；返回课程代码、名称和标识。", {}),
-    "moodle_due": (t_due, "查未来截止/日历事件；作业详情用 moodle_assignments，成绩用 moodle_grades；未登录可用 iCal。返回课程、活动、截止时间、逾期状态和链接。",
-                   {"course": (S, False), "days": (I, False)}),
-    "moodle_assignments": (t_assignments, "查作业截止/提交/成绩；missing_only 仅漏交。近期截止用 moodle_due，成绩用 moodle_grades。返回作业、截止、提交和可用成绩状态。",
-                           {"course": (S, False), "missing_only": (B, False)}),
-    "moodle_grades": (t_grades, "查成绩；无 course 看总览，有则看评分项/得分/反馈。提交状态用 moodle_assignments。返回评分项、得分和可用反馈。",
-                      {"course": (S, False), "graded_only": (B, False)}),
-    "moodle_forum": (t_forum, "Moodle 公告/论坛：无 query 看公告，有则搜索；Ed 讨论用 ed_threads。返回公告或匹配帖子摘要、正文片段和链接。",
-                     {"query": (S, False), "course": (S, False), "limit": (I, False)}),
-    "moodle_messages": (t_messages, "Moodle 私信：无 conversation_id 列对话，有则读消息；不会标已读。返回对话列表或指定对话消息。",
-                        {"conversation_id": (I, False), "limit": (I, False)}),
-    "search_content": (t_search_content, "全文搜课件/PDF/笔记/字幕；只列文件用 list_files，命中 path 用 read_file。返回匹配片段、文件路径和定位信息。",
+    "get_study_todo": (t_todo, "综合查看 Moodle/Ed 待办：截止、漏交、Lesson、公告和未读回复；问“这周要做/交什么”用。只查截止用 list_due；查提交状态用 list_assignments。返回分类待办。",
+                       {"days": (I, False)}),
+    "get_monash_status": (t_status, "诊断登录、同步、索引和错误状态；报错或“用不了”时用。只需刷新数据用 sync_monash_data；登录过期且用户同意后用 start_monash_login。返回状态摘要或完整体检。",
+                          {"full": (B, False)}),
+    "start_monash_login": (t_login, "仅在用户明确同意重新登录后使用：打开本机 Moodle 登录窗口；已登录则不重复打开，成功后自动同步。诊断请用 get_monash_status。", {}, False),
+    "sync_monash_data": (t_sync, "刷新 Moodle/Ed 本地数据和全文索引；用户要求刷新或数据过旧时用。诊断错误用 get_monash_status；已在同步时不会重复启动。", {}, False),
+    "list_courses": (t_courses, "列出 Moodle/Ed 课程；问有哪些课或其他工具需要先确定课程时用。Moodle 未登录时回退本地课程表。返回课程代码、名称和标识。", {}),
+    "list_due": (t_due, "列 Moodle 未来截止和日历事件；需要提交状态/作业详情用 list_assignments，需要成绩用 get_grades。未登录可回退 iCal。返回截止事件和时间。",
+                        {"course": (S, False), "days": (I, False)}),
+    "list_assignments": (t_assignments, "列 Moodle 作业及截止、提交和可用成绩状态；仅看日历截止用 list_due，仅看成绩/反馈用 get_grades。missing_only 可只看可能漏交。",
+                                {"course": (S, False), "missing_only": (B, False)}),
+    "get_grades": (t_grades, "读取 Moodle 成绩；无 course 看总览，有 course 看评分项、得分和反馈。提交状态用 list_assignments，不用于截止日历。",
+                          {"course": (S, False), "graded_only": (B, False)}),
+    "search_search_moodle_forum": (t_forum, "查看/搜索 Moodle 公告和论坛：无 query 看公告，有 query 搜索。Ed 讨论请用 search_search_read_ed_threads。返回公告或匹配帖子摘要、正文片段和链接。",
+                            {"query": (S, False), "course": (S, False), "limit": (I, False)}),
+    "get_messages": (t_messages, "读取 Moodle 私信；无 conversation_id 列对话，有值则读该对话，且不会标已读。论坛内容用 search_search_moodle_forum。返回对话或消息。",
+                            {"conversation_id": (I, False), "limit": (I, False)}),
+    "search_content": (t_search_content, "全文搜索已同步课件/PDF/笔记/字幕；只列文件用 list_files，拿到 path 后用 read_file。返回匹配片段、文件路径和定位信息。",
                        {"query": (S, True), "course": (S, False), "limit": (I, False)}),
-    "list_files": (t_list_files, "列本地课件/外链；不搜正文。搜内容用 search_content，path 用 read_file。返回文件/外链及可供 read_file 使用的路径。",
+    "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。返回文件/外链和可供 read_file 使用的路径。",
                    {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False)}),
-    "read_file": (t_read_file, "读课件；path 来自 list_files/search_content。ZIP 用 inner，长内容用 offset/max_chars 分页。返回文件文本或 ZIP 文件清单。",
+    "read_file": (t_read_file, "读取 list_files/search_content 给出的课件路径；ZIP 用 inner，长内容用 offset/max_chars 分页。若要搜索未知文件先用 search_content。返回文本或 ZIP 清单。",
                   {"path": (S, True), "inner": (S, False), "offset": (I, False), "max_chars": (I, False)}),
-    "ed_updates": (t_ed_updates, "查 Ed 新帖/回复和本人相关未读回复；浏览/搜索帖子用 ed_threads。返回 since/last_sync、新帖、新回复和本人相关更新。",
-                   {"course": (S, False), "since": (S, False), "peek": (B, False), "limit": (I, False)}),
-    "ed_threads": (t_ed_threads, "浏览/搜索 Ed 帖子；全文用 ed_thread，新动态用 ed_updates。返回 ref/title/author/time/replies/url 等摘要；浏览模式用 offset 分页。",
-                   {"query": (S, False), "course": (S, False), "since": (S, False),
-                    "type": (S, False, ("question", "post", "announcement")),
-                    "unanswered": (B, False), "only": (S, False, tuple(edquery.STATE_FILTERS)),
-                    "category": (S, False), "limit": (I, False), "offset": (I, False)}),
-    "ed_thread": (t_ed_thread, "读单个 Ed 帖子全文/回复；找帖子用 ed_threads，新动态用 ed_updates；live=true 先刷新。返回帖子 Markdown，长内容用 offset/max_chars 分页。",
-                  {"thread": (S, True), "live": (B, False), "offset": (I, False), "max_chars": (I, False)}),
-    "ed_lessons": (t_ed_lessons, "查 Ed Lessons：列进度、读单节或测验。帖子用 ed_threads；跨课件搜内容用 search_content。返回 Lesson 列表/进度、指定 Lesson 正文或测验内容。",
-                   {"course": (S, True), "module": (S, False), "lesson": (S, False),
-                    "status": (S, False, STATUS), "quiz": (B, False),
-                    "offset": (I, False), "max_chars": (I, False)}),
+    "list_ed_updates": (t_ed_updates, "列 Ed 新帖、新回复和本人相关未读回复；浏览/搜索历史帖子用 search_search_read_ed_threads，读完整帖子用 read_read_ed_thread。返回更新分组和同步时间。",
+                        {"course": (S, False), "since": (S, False), "peek": (B, False), "limit": (I, False)}),
+    "search_search_read_ed_threads": (t_search_read_ed_threads, "浏览或搜索 Ed 帖子；读完整正文/回复用 read_read_ed_thread，只看新动态用 list_ed_updates。返回帖子摘要；浏览模式支持 offset 分页。",
+                          {"query": (S, False), "course": (S, False), "since": (S, False),
+                           "type": (S, False, ("question", "post", "announcement")),
+                           "unanswered": (B, False), "only": (S, False, tuple(edquery.STATE_FILTERS)),
+                           "category": (S, False), "limit": (I, False), "offset": (I, False)}),
+    "read_read_ed_thread": (t_ed_thread, "读取单个 Ed 帖子正文和回复；找帖子用 search_search_read_ed_threads，新动态用 list_ed_updates；live=true 先刷新。返回 Markdown，长内容支持分页。",
+                       {"thread": (S, True), "live": (B, False), "offset": (I, False), "max_chars": (I, False)}),
+    "get_ed_lessons": (t_ed_lessons, "读取 Ed Lessons：列进度、读单节或测验。Ed 讨论用 search_search_read_ed_threads；跨课件全文搜索用 search_content。返回 Lesson 列表/进度、正文或测验内容。",
+                       {"course": (S, True), "module": (S, False), "lesson": (S, False),
+                        "status": (S, False, STATUS), "quiz": (B, False),
+                        "offset": (I, False), "max_chars": (I, False)}),
+}
+
+# 旧名称继续接受 tools/call，但不再由 tools/list 暴露，避免已有客户端升级后立即失效。
+LEGACY_TOOL_ALIASES = {
+    "study_todo": "get_study_todo",
+    "monash_status": "get_monash_status",
+    "monash_login": "start_monash_login",
+    "monash_sync": "sync_monash_data",
+    "courses": "list_courses",
+    "moodle_due": "list_moodle_due",
+    "moodle_assignments": "list_moodle_assignments",
+    "moodle_grades": "get_moodle_grades",
+    "moodle_forum": "search_moodle_forum",
+    "moodle_messages": "get_moodle_messages",
+    "ed_updates": "list_ed_updates",
+    "ed_threads": "search_ed_threads",
+    "ed_thread": "read_ed_thread",
+    "ed_lessons": "get_ed_lessons",
 }
 
 # 每个参数都给短 schema 说明：让 agent 不必猜参数语义，同时控制上下文开销。
 PARAM_HELP = {
-    ("study_todo", "days"): "未来天数，默认7",
-    ("monash_status", "full"): "true=完整诊断；false=简要状态",
-    ("moodle_due", "course"): "课程号，如 FIT2102；省略=全部",
-    ("moodle_due", "days"): "未来天数，默认14",
-    ("moodle_assignments", "course"): "课程号，如 FIT2102；省略=全部",
-    ("moodle_assignments", "missing_only"): "true=仅可能漏交的作业",
-    ("moodle_grades", "course"): "课程号；省略=成绩总览",
-    ("moodle_grades", "graded_only"): "true=仅已有成绩的项目",
-    ("moodle_forum", "query"): "搜索词；省略=最近公告",
-    ("moodle_forum", "course"): "课程号，如 FIT2102；省略=全部",
-    ("moodle_forum", "limit"): "数量参数；默认公告5、搜索10",
-    ("moodle_messages", "conversation_id"): "对话 ID；省略=列对话",
-    ("moodle_messages", "limit"): "数量上限；默认对话20、消息30",
+    ("get_study_todo", "days"): "未来天数，默认7",
+    ("get_monash_status", "full"): "true=完整诊断；false=简要状态",
+    ("list_due", "course"): "课程号，如 FIT2102；省略=全部",
+    ("list_due", "days"): "未来天数，默认14",
+    ("list_assignments", "course"): "课程号，如 FIT2102；省略=全部",
+    ("list_assignments", "missing_only"): "true=仅可能漏交的作业",
+    ("get_grades", "course"): "课程号；省略=成绩总览",
+    ("get_grades", "graded_only"): "true=仅已有成绩的项目",
+    ("search_search_moodle_forum", "query"): "搜索词；省略=最近公告",
+    ("search_search_moodle_forum", "course"): "课程号，如 FIT2102；省略=全部",
+    ("search_search_moodle_forum", "limit"): "数量参数；默认公告5、搜索10",
+    ("get_messages", "conversation_id"): "对话 ID；省略=列对话",
+    ("get_messages", "limit"): "数量上限；默认对话20、消息30",
     ("search_content", "query"): "全文搜索关键词或短语",
     ("search_content", "course"): "课程号，如 FIT2102；省略=全部",
     ("search_content", "limit"): "命中上限，默认15，最高50",
@@ -541,30 +558,30 @@ PARAM_HELP = {
     ("read_file", "inner"): "ZIP 内路径；省略=列 ZIP 清单",
     ("read_file", "offset"): "字符起点，默认0",
     ("read_file", "max_chars"): "最大字符数，默认20000，最高100000",
-    ("ed_updates", "course"): "课程号，如 FIT2102；省略=全部",
-    ("ed_updates", "since"): "起始时间：7d/12h/2w 或 ISO 日期时间",
-    ("ed_updates", "peek"): "true=查看但不推进更新游标",
-    ("ed_updates", "limit"): "活动上限，默认30",
-    ("ed_threads", "query"): "搜索标题/正文；省略=浏览帖子",
-    ("ed_threads", "course"): "课程号，如 FIT2102；省略=全部",
-    ("ed_threads", "since"): "起始时间：7d/12h/2w 或 ISO 日期时间",
-    ("ed_threads", "type"): "帖子类型",
-    ("ed_threads", "unanswered"): "true=仅未回答问题",
-    ("ed_threads", "only"): "状态筛选：收藏/关注/未看/本人/未读回复",
-    ("ed_threads", "category"): "Ed 分类",
-    ("ed_threads", "limit"): "条数上限，默认15，最高50",
-    ("ed_threads", "offset"): "浏览结果偏移；搜索时忽略",
-    ("ed_thread", "thread"): "帖子 ID、FIT2102#42 或 Ed 链接",
-    ("ed_thread", "live"): "true=先从 Ed 实时刷新该帖",
-    ("ed_thread", "offset"): "Markdown 字符起点，默认0",
-    ("ed_thread", "max_chars"): "最大字符数，默认30000，最高100000",
-    ("ed_lessons", "course"): "课程号，如 FIT2102",
-    ("ed_lessons", "module"): "可选模块名称或编号",
-    ("ed_lessons", "lesson"): "Lesson 名称或编号；有值=读正文",
-    ("ed_lessons", "status"): "完成状态筛选",
-    ("ed_lessons", "quiz"): "true=返回测验而非 Lesson 列表",
-    ("ed_lessons", "offset"): "正文字符起点，默认0",
-    ("ed_lessons", "max_chars"): "最大字符数，默认30000，最高100000",
+    ("list_ed_updates", "course"): "课程号，如 FIT2102；省略=全部",
+    ("list_ed_updates", "since"): "起始时间：7d/12h/2w 或 ISO 日期时间",
+    ("list_ed_updates", "peek"): "true=查看但不推进更新游标",
+    ("list_ed_updates", "limit"): "活动上限，默认30",
+    ("search_search_read_ed_threads", "query"): "搜索标题/正文；省略=浏览帖子",
+    ("search_search_read_ed_threads", "course"): "课程号，如 FIT2102；省略=全部",
+    ("search_search_read_ed_threads", "since"): "起始时间：7d/12h/2w 或 ISO 日期时间",
+    ("search_search_read_ed_threads", "type"): "帖子类型",
+    ("search_search_read_ed_threads", "unanswered"): "true=仅未回答问题",
+    ("search_search_read_ed_threads", "only"): "状态筛选：收藏/关注/未看/本人/未读回复",
+    ("search_search_read_ed_threads", "category"): "Ed 分类",
+    ("search_search_read_ed_threads", "limit"): "条数上限，默认15，最高50",
+    ("search_search_read_ed_threads", "offset"): "浏览结果偏移；搜索时忽略",
+    ("read_read_ed_thread", "thread"): "帖子 ID、FIT2102#42 或 Ed 链接",
+    ("read_read_ed_thread", "live"): "true=先从 Ed 实时刷新该帖",
+    ("read_read_ed_thread", "offset"): "Markdown 字符起点，默认0",
+    ("read_read_ed_thread", "max_chars"): "最大字符数，默认30000，最高100000",
+    ("get_ed_lessons", "course"): "课程号，如 FIT2102",
+    ("get_ed_lessons", "module"): "可选模块名称或编号",
+    ("get_ed_lessons", "lesson"): "Lesson 名称或编号；有值=读正文",
+    ("get_ed_lessons", "status"): "完成状态筛选",
+    ("get_ed_lessons", "quiz"): "true=返回测验而非 Lesson 列表",
+    ("get_ed_lessons", "offset"): "正文字符起点，默认0",
+    ("get_ed_lessons", "max_chars"): "最大字符数，默认30000，最高100000",
 }
 
 def tool_list() -> list[dict]:
@@ -591,10 +608,10 @@ def call_tool(name: str, arguments: dict) -> dict:
         text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
         return {"content": [{"type": "text", "text": _clip(text, MAX_OUT)}]}
     except MoodleAuthError as e:
-        hint = "截止日期还能先用 moodle_due 查（走日历订阅链接，不需要登录）。" \
-            if name != "moodle_due" and F.load_calendar_url() else ""
+        hint = "截止日期还能先用 list_moodle_due 查（走日历订阅链接，不需要登录）。" \
+            if name != "list_moodle_due" and F.load_calendar_url() else ""
         return {"isError": True, "content": [{"type": "text", "text":
-                f"Moodle 登录已过期或还没登录（{e}）。问用户要不要现在登录；同意的话调用 monash_login，"
+                f"Moodle 登录已过期或还没登录（{e}）。问用户要不要现在登录；同意的话调用 start_monash_login，"
                 f"会在用户电脑上打开登录窗口。{hint}"}]}
     except EdAuthError as e:
         return {"isError": True, "content": [{"type": "text", "text":
@@ -633,9 +650,10 @@ def handle(msg: dict) -> dict | None:
         elif method == "tools/call":
             p = msg.get("params") or {}
             name = p.get("name")
-            if name not in TOOLS:
+            canonical = LEGACY_TOOL_ALIASES.get(name, name)
+            if canonical not in TOOLS:
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"没有工具 {name}"}}
-            result = call_tool(name, p.get("arguments") or {})
+            result = call_tool(canonical, p.get("arguments") or {})
         else:
             return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"不支持 {method}"}}
         return {"jsonrpc": "2.0", "id": mid, "result": result}
