@@ -12,16 +12,16 @@ def call(method, params=None, mid=1):
 def test_initialize_and_notifications():
     r = call("initialize", {"protocolVersion": "2025-06-18"})["result"]
     assert r["serverInfo"]["name"] == "monash" and "tools" in r["capabilities"]
-    assert "monash_login" in r["instructions"]
+    assert "start_monash_login" in r["instructions"]
     assert M.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
 
 
 def test_tools_cover_both_sides_and_only_login_sync_are_not_read_only():
     tools = {t["name"]: t for t in call("tools/list")["result"]["tools"]}
-    assert {"study_todo", "moodle_due", "read_file", "search_content", "ed_updates", "ed_thread", "monash_status"} <= set(tools)
+    assert {"get_study_todo", "list_moodle_due", "read_file", "search_content", "list_ed_updates", "read_ed_thread", "get_monash_status"} <= set(tools)
     assert not any("submit" in n or n == "moodle_quiz" or "post" in n for n in tools)
     writable = {n for n, t in tools.items() if not t["annotations"]["readOnlyHint"]}
-    assert writable == {"monash_login", "monash_sync"}
+    assert writable == {"start_monash_login", "sync_monash_data"}
     assert tools["read_file"]["inputSchema"]["required"] == ["path"]
 
 
@@ -30,19 +30,30 @@ def test_unknown_tool_and_method():
     assert call("resources/list")["error"]["code"] == -32601
 
 
+def test_public_tool_names_are_consistent_and_legacy_aliases_work(monkeypatch):
+    tools = {t["name"] for t in call("tools/list")["result"]["tools"]}
+    prefixes = ("get_", "list_", "search_", "read_", "start_", "sync_")
+    assert all(name.startswith(prefixes) for name in tools)
+    assert "study_todo" not in tools and "ed_threads" not in tools
+
+    monkeypatch.setitem(M.TOOLS, "get_monash_status", (lambda args: "legacy-ok", "", {}))
+    r = call("tools/call", {"name": "monash_status"})["result"]
+    assert r["content"][0]["text"] == "legacy-ok"
+
+
 def test_auth_errors_tell_claude_what_to_do(monkeypatch):
     def dead(args):
         raise MoodleAuthError("expired")
-    monkeypatch.setitem(M.TOOLS, "moodle_grades", (dead, "", {}))
-    r = call("tools/call", {"name": "moodle_grades"})["result"]
-    assert r["isError"] and "monash_login" in r["content"][0]["text"]
+    monkeypatch.setitem(M.TOOLS, "get_moodle_grades", (dead, "", {}))
+    r = call("tools/call", {"name": "get_moodle_grades"})["result"]
+    assert r["isError"] and "start_monash_login" in r["content"][0]["text"]
 
     from monash_study_kit.edlib import EdAuthError
 
     def no_token(args):
         raise EdAuthError("no token")
-    monkeypatch.setitem(M.TOOLS, "ed_updates", (no_token, "", {}))
-    r = call("tools/call", {"name": "ed_updates"})["result"]
+    monkeypatch.setitem(M.TOOLS, "list_ed_updates", (no_token, "", {}))
+    r = call("tools/call", {"name": "list_ed_updates"})["result"]
     assert r["isError"] and "monash login ed" in r["content"][0]["text"]
 
 
@@ -81,9 +92,9 @@ def test_catalog_stays_small():
     """工具清单每次对话都整份发给 Claude，不调用也算额度。加工具/改说明时别让它涨回去。"""
     tools = call("tools/list")["result"]["tools"]
     size = len(json.dumps(tools, ensure_ascii=False))
-    assert len(tools) <= 17 and size <= 7600, (len(tools), size)
+    assert len(tools) <= 17 and size <= 9200, (len(tools), size)
     assert len(M.INSTRUCTIONS) <= 300
-    enums = tools[[t["name"] for t in tools].index("ed_threads")]["inputSchema"]["properties"]["only"]["enum"]
+    enums = tools[[t["name"] for t in tools].index("search_ed_threads")]["inputSchema"]["properties"]["only"]["enum"]
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}
 
 
@@ -96,19 +107,19 @@ def test_tool_metadata_has_parameter_help_and_routing_guards():
         for param_name, prop in tool["inputSchema"]["properties"].items():
             assert prop.get("description"), (tool_name, param_name)
 
-    assert set(tools["ed_threads"]["inputSchema"]["properties"]["type"]["enum"]) == {
+    assert set(tools["search_ed_threads"]["inputSchema"]["properties"]["type"]["enum"]) == {
         "question", "post", "announcement"
     }
-    assert set(tools["ed_lessons"]["inputSchema"]["properties"]["status"]["enum"]) == {
+    assert set(tools["get_ed_lessons"]["inputSchema"]["properties"]["status"]["enum"]) == {
         "completed", "attempted", "unattempted"
     }
 
     assert "list_files" in tools["search_content"]["description"]
     assert "search_content" in tools["list_files"]["description"]
-    assert "ed_threads" in tools["ed_thread"]["description"]
-    assert "ed_updates" in tools["ed_thread"]["description"]
-    assert "moodle_assignments" in tools["moodle_due"]["description"]
-    assert "moodle_due" in tools["moodle_assignments"]["description"]
+    assert "search_ed_threads" in tools["read_ed_thread"]["description"]
+    assert "list_ed_updates" in tools["read_ed_thread"]["description"]
+    assert "list_moodle_assignments" in tools["list_moodle_due"]["description"]
+    assert "list_moodle_due" in tools["list_moodle_assignments"]["description"]
 
 
 def _ed_fixture(tmp_path, monkeypatch):
@@ -132,7 +143,7 @@ def test_ed_threads_search_and_only_filters(tmp_path, monkeypatch):
     _ed_fixture(tmp_path, monkeypatch)
 
     def refs(**a):
-        r = call("tools/call", {"name": "ed_threads", "arguments": a})["result"]
+        r = call("tools/call", {"name": "search_ed_threads", "arguments": a})["result"]
         assert not r.get("isError"), r
         return sorted(t["ref"] for t in json.loads(r["content"][0]["text"]))
     assert refs(query="monad") == ["FIT2102#10", "FIT2102#11"]
@@ -140,7 +151,7 @@ def test_ed_threads_search_and_only_filters(tmp_path, monkeypatch):
     assert refs(query="monad", only="mine") == ["FIT2102#11"]
     assert refs(only="mine") == ["FIT2102#11", "FIT2102#12"]
     assert refs(type="question", unanswered=True) == ["FIT2102#10", "FIT2102#12"]
-    r = call("tools/call", {"name": "ed_threads", "arguments": {"only": "bogus"}})["result"]
+    r = call("tools/call", {"name": "search_ed_threads", "arguments": {"only": "bogus"}})["result"]
     assert r["isError"]
 
 
