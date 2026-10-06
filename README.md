@@ -29,7 +29,7 @@ Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work
 The same core (login, sync, queries) serves two kinds of "users":
 
 **MCP: the interface for Claude.** Moodle and Ed both sit behind Okta + MFA, so Claude cannot get in by itself.
-The MCP server lets Claude look things up mid-conversation (tools such as `study_todo`, `search_content`, `ed_updates`):
+The MCP server lets Claude look things up mid-conversation (tools such as `get_study_todo`, `search_content`, `list_ed_updates`):
 
 - **Answers come from real data**: deadlines, announcements and grades are fetched live, with sources such as "Workshop 5 Slides, page 25".
 - **Both platforms at once**: one "what do I need to do this week" checks Moodle deadlines, unfinished Ed lessons and announcements from both.
@@ -330,7 +330,7 @@ By default Windows limits full paths to 260 characters, and unit name + week nam
 Moodle shows times in your account's time zone; the default is Malaysia (UTC+8). For Australian campuses: `monash config tz_offset 10` (11 during daylight saving).
 
 **Where are Ed "assignment deadlines"?**
-Most Ed lessons have no due date; Moodle is the source of truth for deadlines. The Ed-lesson part of `study_todo` follows your own progress
+Most Ed lessons have no due date; Moodle is the source of truth for deadlines. The Ed-lesson part of `get_study_todo` follows your own progress
 (it lists unfinished lessons up to the week after the one you've reached).
 
 **Something is broken**
