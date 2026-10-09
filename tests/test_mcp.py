@@ -158,3 +158,8 @@ def test_ed_threads_search_and_only_filters(tmp_path, monkeypatch):
 def test_list_files_links_mode_needs_course():
     r = call("tools/call", {"name": "list_files", "arguments": {"links": True}})["result"]
     assert r["isError"] and "course" in r["content"][0]["text"]
+
+
+def test_non_object_messages_get_an_error_instead_of_crashing():
+    assert M.handle([{"jsonrpc": "2.0", "id": 1, "method": "ping"}])["error"]["code"] == -32600
+    assert M.handle("ping")["error"]["code"] == -32600

@@ -10,7 +10,7 @@ FIT2109 → yqtian-se.github.io）。只抓被课程直接链接到的那几页�
 
 存在 FILES_DIR/<课程文件夹>/Course notes (web)/<标题>.md，开头写来源网址。放在课件目录里，
 list_files / read_file / search_content 就都能直接用。每页最多每 REFRESH_DAYS 天重抓一次，
-带 ETag / Last-Modified 条件请求；请求之间歇 GAP 秒。
+带 ETag / Last-Modified 条件请求；请求之间歇 GAP 秒；robots.txt 不让抓的页面跳过。
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import urllib.robotparser
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -30,6 +31,8 @@ from .moodlelib import FILES_DIR, now_iso
 from .syncer import safe_name
 
 UA = "monash-study-kit (personal study helper; fetches course notes linked from Moodle/Ed)"
+ROBOTS_AGENT = "monash-study-kit"     # robots.txt 里按这个名字匹配 User-agent
+ROBOTS_TTL = 24 * 3600
 STATIC_HOSTS = ("github.io", "gitlab.io", "readthedocs.io", "netlify.app", "pages.dev", "vercel.app")
 BLOCKED_HOSTS = ("monash.edu", "monash.edu.my", "edstem.org", "zoom.us", "youtube.com", "youtu.be",
                  "google.com", "googleusercontent.com", "sharepoint.com", "microsoft.com", "office.com",
@@ -181,8 +184,42 @@ def _texts(n):
 
 # ---------------------------------------------------------------- 抓取
 
+_robots: dict[str, tuple[float, urllib.robotparser.RobotFileParser | None]] = {}
+
+
+def load_robots(site: str) -> urllib.robotparser.RobotFileParser | None:
+    """取 site 的 robots.txt。规则跟 urllib.robotparser.read() 一样：401/403 当全站禁止，
+    别的 4xx 当没有限制；连不上返回 None（说不清，交给后面的正式请求去报错）。"""
+    rp = urllib.robotparser.RobotFileParser(site + "/robots.txt")
+    req = urllib.request.Request(site + "/robots.txt", headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            rp.parse(r.read(512 * 1024).decode("utf-8", "replace").splitlines())
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            rp.disallow_all = True
+        else:
+            rp.allow_all = True
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return None
+    return rp
+
+
+def robots_allowed(url: str, loader=load_robots) -> bool:
+    """robots.txt 允不允许抓这一页。每个站一天最多取一次 robots.txt（MCP 会一直开着）。"""
+    p = urllib.parse.urlsplit(url)
+    site = f"{p.scheme}://{p.netloc}"
+    at, rp = _robots.get(site, (0.0, None))
+    if site not in _robots or time.time() - at > ROBOTS_TTL:
+        rp = loader(site)
+        _robots[site] = (time.time(), rp)
+    return rp is None or rp.can_fetch(ROBOTS_AGENT, url)
+
+
 def fetch(url: str, etag: str | None = None, last_modified: str | None = None) -> dict:
     """{"status": "ok"/"unchanged"/"skipped"/"error", ...}。不带任何登录信息。"""
+    if not robots_allowed(url):
+        return {"status": "skipped", "reason": "robots.txt 不允许"}
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml"})
     if etag:
         req.add_header("If-None-Match", etag)

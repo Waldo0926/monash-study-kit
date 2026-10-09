@@ -16,12 +16,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
-from .paths import DATA_DIR, FILES_DIR, SECRETS_DIR, write_secret
+from .paths import DATA_DIR, FILES_DIR, SECRETS_DIR, write_secret  # noqa: F401  FILES_DIR 给 syncer 等模块用
 
 BASE_URL = os.environ.get("MOODLE_BASE_URL", "https://learning.monash.edu").rstrip("/")
 HOST = urllib.parse.urlsplit(BASE_URL).hostname or ""
@@ -154,9 +154,14 @@ class MoodleClient:
         if stream_to is not None and status == 200:
             tmp = stream_to.with_name(stream_to.name + ".part")
             tmp.parent.mkdir(parents=True, exist_ok=True)
-            with open(tmp, "wb") as f:
-                while chunk := resp.read(1 << 16):
-                    f.write(chunk)
+            try:
+                with open(tmp, "wb") as f:
+                    while chunk := resp.read(1 << 16):
+                        f.write(chunk)
+            except BaseException:
+                tmp.unlink(missing_ok=True)      # 下到一半断了，别在课件目录里留半个文件
+                resp.close()
+                raise
             os.replace(tmp, stream_to)
         else:
             out.body = resp.read()
@@ -192,8 +197,8 @@ class MoodleClient:
              content_type: str | None = None, max_hops: int = 8) -> Response:
         """POST 一个表单（或 multipart），然后像浏览器一样跟着 303 用 GET 走到最终页面。
 
-        返回的 Response.url 是最终落地的地址——Moodle 的写操作靠"落在哪一页"
-        判断成功与否（比如保存作业后回到 view 页）。
+        返回的 Response.url 是最终落地的地址，Moodle 的表单靠"落在哪一页"
+        判断成功与否（比如生成日历链接后停在导出页）。
         """
         url = self.abs(url)
         if body is None:

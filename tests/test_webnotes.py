@@ -94,3 +94,20 @@ def test_ed_document_slides_become_text():
     files = lessons.fetch_lesson_files(None, 1, [{"id": 9, "type": "document", "title": "Pipes", "content": doc},
                                                  {"id": 10, "type": "quiz", "title": "Q"}])
     assert [(f["id"], f["type"]) for f in files] == [(9, "document")] and "pipe" in files[0]["text"]
+
+
+def test_robots_txt_is_respected_and_cached(monkeypatch):
+    import urllib.robotparser
+    monkeypatch.setattr(W, "_robots", {})
+    loads = []
+
+    def loader(site):
+        loads.append(site)
+        rp = urllib.robotparser.RobotFileParser()
+        rp.parse(["User-agent: *", "Disallow: /drafts/"])
+        return rp
+
+    assert W.robots_allowed("https://tgdwyer.github.io/functionaljavascript/", loader)
+    assert not W.robots_allowed("https://tgdwyer.github.io/drafts/a2/", loader)
+    assert loads == ["https://tgdwyer.github.io"]                      # 同一个站只取一次
+    assert W.robots_allowed("https://x.github.io/a", lambda site: None)  # 取不到 robots.txt 就不拦

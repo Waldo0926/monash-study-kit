@@ -149,7 +149,10 @@ def index(con: sqlite3.Connection, verbose: bool = False) -> dict:
     seen, stats = set(), {"indexed": 0, "unchanged": 0, "removed": 0, "chunks": 0}
     for f in candidates():
         p = Path(f["path"])
-        st = p.stat()
+        try:
+            st = p.stat()
+        except OSError:         # 列完目录到这里之间被删了（同步正好在改名）
+            continue
         seen.add(f["path"])
         if st.st_size > MAX_FILE:
             continue
@@ -161,7 +164,7 @@ def index(con: sqlite3.Connection, verbose: bool = False) -> dict:
             continue
         try:
             chunks = extract(p)
-        except OSError as e:
+        except Exception as e:  # noqa: BLE001  一个坏文件（加密的 zip、半截的 docx）不该让整次索引失败
             if verbose:
                 print(f"! {p}: {e}")
             continue

@@ -3,7 +3,7 @@
     monash media [--limit N] [--model small.en] [--dry-run]
 
 每个视频旁边生成 <原名>.transcript.md，并登记进 files 表，list_files、read_file、
-全文搜索都能看到——Claude 读字幕稿就知道老师讲了什么。
+全文搜索都能看到，Claude 读字幕稿就知道老师讲了什么。
 
 用 faster-whisper（CTranslate2，CPU int8），要装 [media]。普通笔记本上 small.en 大约几倍实时，
 一节 2 小时的课要跑二三十分钟，所以只在手动运行 monash media 时做，不放进后台同步。
@@ -92,7 +92,7 @@ def run(con, *, model_name: str = MODEL, limit: int = 0, match: str | None = Non
         title = item["title"] or Path(name).stem
         if h in seen:
             (FILES_DIR / out_rel).write_text(
-                f"# {title} — 字幕稿\n\n这段视频和 `{seen[h]}` 完全相同，字幕稿见那一份。\n", encoding="utf-8")
+                f"# {title} 字幕稿\n\n这段视频和 `{seen[h]}` 完全相同，字幕稿见那一份。\n", encoding="utf-8")
             register(con, item["course_id"], f"transcript:{item['path']}", out_rel, item["section"], f"字幕稿：{title}")
             log(f"  = {name}（和 {seen[h]} 相同）")
             continue

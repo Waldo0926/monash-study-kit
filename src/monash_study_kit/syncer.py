@@ -17,7 +17,6 @@ import html
 import re
 import urllib.parse
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from .moodlelib import (FILES_DIR, HOST, MoodleClient, collect_links, filename_from,
                         is_attachment, now_iso)
@@ -102,7 +101,7 @@ def plan_layout(state: dict) -> Layout:
         if week:
             layout.folders[num] = week
             continue
-        # 非周次的章节：保留层级，但跳过只当容器的上级——自己没有内容的（比如 "Learning"），
+        # 非周次的章节：保留层级，但跳过只当容器的上级：自己没有内容的（比如 "Learning"），
         # 以及第 0 节（Monash 叫 "Unit dashboard"，Assessments 之类都挂在它下面）
         parts = [safe_name(s["title"]) for i, s in enumerate(path)
                  if i == len(path) - 1 or (s.get("cmlist") and s["number"] != 0)]
@@ -148,7 +147,7 @@ class CourseSync:
                 folder = layout.folders.get(cm.get("sectionnumber", num), "General")
                 try:
                     self.handle_cm(cm, folder, layout.titles.get(num, ""))
-                except Exception as e:  # noqa: BLE001 —— 一个坏活动不该拖垮整门课
+                except Exception as e:  # noqa: BLE001  一个坏活动不该拖垮整门课
                     if e.__class__.__name__ == "MoodleAuthError":
                         raise
                     self.stats.errors.append(f"{cm.get('name')} ({cm['id']}): {e}")
@@ -332,7 +331,7 @@ def write_links_md(con, course_id: int, root: str) -> None:
     for r in rows:
         by_folder.setdefault(r["folder"], []).append(r)
     for folder, items in by_folder.items():
-        lines = [f"# {folder} — 链接", ""]
+        lines = [f"# {folder} 的链接", ""]
         last = None
         seen = set()
         for r in items:

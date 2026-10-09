@@ -41,10 +41,10 @@ WEEK_RE = re.compile(r"\bweek\s*0*(\d+)", re.I)
 # ---------------------------------------------------------------- 从 Ed 找录播
 
 def _ed_raw(thread_id: int) -> str | None:
-    """Ed 原始内容（带超链接）。不能带 ?view=1——那会把帖子的 updated_at 顶成现在。"""
+    """Ed 原始内容（带超链接）。不能带 ?view=1，那会把帖子的 updated_at 顶成现在。"""
     try:
         return edlib.EdClient().thread(thread_id)["thread"]["content"]
-    except Exception:  # noqa: BLE001 —— 令牌失效、网络问题：退回库里的正文
+    except Exception:  # noqa: BLE001  令牌失效、网络问题：退回库里的正文
         return None
 
 
@@ -201,11 +201,11 @@ def paragraphs(lines: list[tuple[float, str]], every: float = 45.0) -> list[tupl
 
 
 def write_transcript(path: Path, title: str, meta: list[str], lines: list[tuple[float, str]]) -> None:
-    body = [f"# {title} — 字幕稿", "", " · ".join(m for m in meta if m), "",
+    body = [f"# {title} 字幕稿", "", " · ".join(m for m in meta if m), "",
             "> 自动生成的字幕，专有名词和代码可能听错；有疑问以视频为准。", ""]
     paras = paragraphs(lines)
     if not paras or sum(len(p.split()) for _, p in paras) < 20:
-        body.append("（没有识别到讲话——可能是演示动画或没有声音的录屏。）")
+        body.append("（没有识别到讲话，可能是演示动画或没有声音的录屏。）")
     for t, text in paras:
         body += [f"**[{fmt_ts(t)}]** {text}", ""]
     path.parent.mkdir(parents=True, exist_ok=True)

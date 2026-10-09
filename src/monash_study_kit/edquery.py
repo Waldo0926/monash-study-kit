@@ -1,6 +1,6 @@
 """查本地库：列帖子、搜帖子、读帖子、看新动态、课程内容。
 
-CLI（monash ed …）和 MCP 服务器共用这里。只读 SQLite，不碰 Ed 的接口——库由 sync 维护
+CLI（monash ed …）和 MCP 服务器共用这里。只读 SQLite，不碰 Ed 的接口，库由 sync 维护
 （MCP 在跑的时候后台每小时一次）。要最新状态就先 sync 或 show --live。
 
 每个函数都返回普通的 dict/list，方便直接转 JSON。
@@ -394,7 +394,7 @@ def lessons(conn, course, module=None, status=None) -> list[dict]:
 
 
 def quizzes(conn, course, module=None, status=None) -> list[dict]:
-    """lesson 里的测验题（题面 + 选项，没有答案——Ed 不对学生公开）。按 lesson、quiz 页、题号排。"""
+    """lesson 里的测验题（题面 + 选项，没有答案，Ed 不对学生公开）。按 lesson、quiz 页、题号排。"""
     out = []
     for l in lessons(conn, course, module, status):
         try:

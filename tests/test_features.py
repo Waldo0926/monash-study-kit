@@ -1,5 +1,6 @@
-import time
 """页面解析的测试。HTML 片段是从 2026-09 的 Monash 页面里截下来再删短的。"""
+import time
+
 from monash_study_kit import htmldom
 from monash_study_kit import features as F
 from monash_study_kit.htmldom import form_fields, parse

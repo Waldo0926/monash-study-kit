@@ -13,12 +13,16 @@ from __future__ import annotations
 import re
 import sqlite3
 import time
+import urllib.error
 from datetime import datetime, timedelta, timezone
 
 from . import features as F
 from .edlib import DB_PATH as ED_DB
-from .moodlelib import MoodleAuthError, MoodleClient
+from .moodlelib import MoodleAuthError, MoodleClient, MoodleError
 from .syncer import course_code
+
+# 没网、Moodle 抽风：这些错误只影响 Moodle 那一块，Ed 部分读的是本地库，照常给
+NETWORK_ERRORS = (MoodleError, urllib.error.URLError, TimeoutError, ConnectionError)
 
 WEEK_RE = re.compile(r"\bW(?:eek)?\s*(\d{1,2})\b", re.I)
 
@@ -115,6 +119,9 @@ def build(client: MoodleClient | None, courses: list[dict], days: int = 7) -> di
     except MoodleAuthError:
         out["due"] = []
         notes.append("Moodle 没登录（或登录已过期），也没有日历订阅链接：截止日期缺失")
+    except NETWORK_ERRORS as e:
+        out["due"] = []
+        notes.append(f"连不上 Moodle（{e}）：截止日期缺失，稍后再试")
 
     missing, news = [], []
     now = int(time.time())
@@ -126,6 +133,9 @@ def build(client: MoodleClient | None, courses: list[dict], days: int = 7) -> di
                      for n in F.news(client, c, 3) if (n.get("time_ts") or 0) >= now - days * 86400]
         except MoodleAuthError:
             notes.append("Moodle 会话失效：作业汇总和 Moodle 公告缺失")
+            break
+        except NETWORK_ERRORS as e:
+            notes.append(f"连不上 Moodle（{e}）：作业汇总和 Moodle 公告缺失")
             break
     out["possibly_missing"] = missing
 

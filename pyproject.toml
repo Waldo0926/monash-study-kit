@@ -35,3 +35,7 @@ packages = ["src/monash_study_kit"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+# 只开会真出 bug 的那类检查（语法错误、未定义的名字、没用的 import），代码风格不强求
+select = ["E9", "F"]

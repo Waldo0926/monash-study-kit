@@ -2,7 +2,7 @@ import sqlite3
 
 from monash_study_kit import content_index as CI
 
-TRANSCRIPT = """# Week 5 — 字幕稿
+TRANSCRIPT = """# Week 5 字幕稿
 
 > 自动生成
 

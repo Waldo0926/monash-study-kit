@@ -1,5 +1,4 @@
 """目录映射和各种解析的测试。章节结构照抄 2026-09 FIT2102 的 core_courseformat_get_state。"""
-from monash_study_kit import moodlelib
 from monash_study_kit.moodlelib import collect_links, is_attachment, parse_cookie_input
 from monash_study_kit.syncer import _same_file, course_code, course_folder, is_external, plan_layout, safe_name, week_folder
 

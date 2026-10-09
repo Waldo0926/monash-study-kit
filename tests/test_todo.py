@@ -67,3 +67,22 @@ def test_todo_without_ed(tmp_path, monkeypatch):
     monkeypatch.setattr(todo.F, "load_calendar_url", lambda: None)
     out = todo.build(DeadClient(), [], days=7)
     assert out["ed_lessons"] == [] and any("还没同步过 Ed" in n for n in out["notes"])
+
+
+class OfflineClient:
+    def call(self, *a, **k):
+        from monash_study_kit.moodlelib import MoodleError
+        raise MoodleError("GET /my/courses.php -> 503")
+
+    def html(self, *a, **k):
+        import urllib.error
+        raise urllib.error.URLError("no network")
+
+
+def test_todo_keeps_ed_parts_when_moodle_is_unreachable(tmp_path, monkeypatch):
+    ed_db(tmp_path / "ed.db")
+    monkeypatch.setattr(todo, "ED_DB", tmp_path / "ed.db")
+    out = todo.build(OfflineClient(), [{"id": 42804, "fullname": "FIT2109 x"}], days=7)
+    assert out["due"] == [] and out["possibly_missing"] == []
+    assert [a["ref"] for a in out["announcements"]] == ["FIT2109#402"]      # Ed 部分照常
+    assert sum("连不上 Moodle" in n for n in out["notes"]) == 2

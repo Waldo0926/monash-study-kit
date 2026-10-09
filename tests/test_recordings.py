@@ -1,5 +1,4 @@
 """录播：从 Ed 内容里认链接和密码、字幕稿的格式、转写的待办判断。"""
-from pathlib import Path
 
 from monash_study_kit import recordings as R
 from monash_study_kit import transcribe as T

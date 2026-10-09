@@ -61,7 +61,7 @@ def refresh(force: bool = False) -> dict:
         return cache
     try:
         latest = fetch_latest()
-    except Exception:  # noqa: BLE001 —— 没网、GitHub 抽风：安静地跳过
+    except Exception:  # noqa: BLE001  没网、GitHub 抽风：安静地跳过
         latest = cache.get("latest")
     cache = {"checked_at": time.time(), "latest": latest}
     try:
