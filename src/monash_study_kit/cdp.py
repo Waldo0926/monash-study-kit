@@ -1,7 +1,7 @@
 """和 Chrome DevTools 协议（CDP）说话用的最小 WebSocket 客户端。
 
 标准库没有 WebSocket，这里只实现 CDP 用得到的部分：握手、发文本帧（客户端必须加掩码）、
-收文本帧（含分片）、回 ping。不发 Origin 头——Chrome 只对带 Origin 的连接要求
+收文本帧（含分片）、回 ping。不发 Origin 头，因为 Chrome 只对带 Origin 的连接要求
 --remote-allow-origins，不带就放行。只连 127.0.0.1。
 """
 from __future__ import annotations

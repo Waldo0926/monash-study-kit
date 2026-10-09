@@ -2,7 +2,7 @@
 
 为什么这样做：
   * Monash 走 Okta SAML + MFA，命令行没法自己登录，只能让人在真浏览器里登。
-  * 不去读日常 Chrome 的 cookie——那要钥匙串里的解密密钥，能解开所有网站的登录状态。
+  * 不去读日常 Chrome 的 cookie：那要钥匙串里的解密密钥，能解开所有网站的登录状态。
     这里用的是 BROWSER_PROFILE 这个独立目录，里面只有你在这个窗口里登录过的东西。
   * 独立目录会记住 Okta 的“保持登录”，所以下次过期时可以先在后台（无界面）试着自动登录，
     Okta 那边还认你的话就不用再弹窗；不认才打开窗口让你登。
@@ -91,7 +91,7 @@ class Browser:
     def cookies(self) -> dict[str, str]:
         got = self.cdp.call("Storage.getCookies").get("cookies", [])
         return {c["name"]: c["value"] for c in got
-                if HOST.endswith(c.get("domain", "").lstrip(".")) and c["name"].startswith(KEEP)}
+                if _domain_matches(c.get("domain", "")) and c["name"].startswith(KEEP)}
 
     def page_urls(self) -> list[str]:
         infos = self.cdp.call("Target.getTargets").get("targetInfos", [])
@@ -112,8 +112,14 @@ class Browser:
             self.proc.kill()
 
 
+def _domain_matches(domain: str) -> bool:
+    """cookie 的 domain 是 Moodle 本站或它的上级域名。按点分段比，免得 "ash.edu" 也算进 monash.edu。"""
+    d = domain.lstrip(".").lower()
+    return bool(d) and (HOST == d or HOST.endswith("." + d))
+
+
 def _on_moodle(urls: list[str]) -> bool:
-    """有页面停在 Moodle 本站、而且不是登录页——大概登录完了，值得验证一下。"""
+    """有页面停在 Moodle 本站、而且不是登录页，大概登录完了，值得验证一下。"""
     for u in urls:
         p = urllib.parse.urlsplit(u)
         if p.hostname == HOST and not p.path.startswith(("/login", "/auth")):

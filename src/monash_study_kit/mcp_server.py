@@ -6,7 +6,7 @@
 和 sync_monash_data（在后台同步）。
 
 服务器开着的时候（也就是 Claude 开着的时候）在后台做两件事：
-  * 每 20 分钟给 Moodle 会话续一次期——Moodle 空闲 4 小时就把你踢出去；
+  * 每 20 分钟给 Moodle 会话续一次期，因为 Moodle 空闲 4 小时就把你踢出去；
   * 每小时同步一次 Ed 和 Moodle，再更新全文索引。
 后台的输出写进 mcp.log，绝不能写 stdout（stdout 是给 Claude 的协议通道）。
 
@@ -155,20 +155,30 @@ def _background():
     time.sleep(5)       # 先让 Claude 把握手做完
     last_touch = 0.0
     while True:
-        from . import update_check
-        if update_check.enabled():
-            update_check.refresh()          # 自己控制频率：一天最多真查一次
-        if jobs.hours_since_sync() * 3600 >= every_sync:
-            start_sync()
-        if time.time() - last_touch >= every_touch:
-            last_touch = time.time()
-            try:
-                jobs.keepalive()
-            except MoodleAuthError:
-                pass      # 没登录或已过期：等用户登录，不自己弹窗
-            except Exception as e:  # noqa: BLE001
-                log(f"续期失败：{e}")
+        try:
+            last_touch = _background_tick(every_sync, every_touch, last_touch)
+        except Exception:  # noqa: BLE001
+            # 这个线程一死，后台同步和续期就停到 Claude 重启为止，所以出什么错都只记日志
+            log("后台任务出错：\n" + traceback.format_exc())
         time.sleep(60)
+
+
+def _background_tick(every_sync: float, every_touch: float, last_touch: float) -> float:
+    """后台循环的一轮。返回更新后的“上次续期时间”。"""
+    from . import update_check
+    if update_check.enabled():
+        update_check.refresh()          # 自己控制频率：一天最多真查一次
+    if jobs.hours_since_sync() * 3600 >= every_sync:
+        start_sync()
+    if time.time() - last_touch >= every_touch:
+        last_touch = time.time()
+        try:
+            jobs.keepalive()
+        except MoodleAuthError:
+            pass      # 没登录或已过期：等用户登录，不自己弹窗
+        except Exception as e:  # noqa: BLE001
+            log(f"续期失败：{e}")
+    return last_touch
 
 
 # ---------------------------------------------------------------- 管理工具
@@ -323,7 +333,7 @@ def t_list_files(args):
             q += " AND folder LIKE ?"
             params.append(f"Week {int(args['week']):02d}%")
         return [dict(r) for r in con.execute(q + " ORDER BY folder, rowid LIMIT 200", params)]
-    q = "SELECT f.path, f.size, f.title FROM files f WHERE 1=1"
+    q = "SELECT f.path, f.size, f.title FROM files f WHERE f.removed_at IS NULL"
     params = []
     if args.get("course"):
         q += " AND f.course_id=?"
@@ -624,6 +634,9 @@ def call_tool(name: str, arguments: dict) -> dict:
 # ---------------------------------------------------------------- 协议
 
 def handle(msg: dict) -> dict | None:
+    if not isinstance(msg, dict):
+        # 2025-06-18 版协议不再有批量请求；收到数组或别的东西就当无效请求，别让 .get 把主循环弄崩
+        return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "请求必须是一个 JSON 对象"}}
     method, mid = msg.get("method"), msg.get("id")
     if mid is None:
         return None  # 通知（notifications/initialized 等）不用回
@@ -678,8 +691,9 @@ def main(background: bool = True) -> None:
         try:
             msg = json.loads(line)
         except json.JSONDecodeError:
-            continue
-        reply = handle(msg)
+            reply = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "不是合法的 JSON"}}
+        else:
+            reply = handle(msg)
         if reply is not None:
             sys.stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
             sys.stdout.flush()

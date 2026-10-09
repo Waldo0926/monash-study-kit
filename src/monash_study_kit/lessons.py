@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import sqlite3
 import urllib.request
 
@@ -22,16 +24,22 @@ def _safe_name(name: str) -> str:
 
 def download_pdf(url: str, dest, log=print) -> bool:
     """下载一个 PDF。已经存在就跳过，不重复下载。file_url 是 Ed 那边签发的直链，
-    不用带 x-token（这个域名不是 edstem.org，带了反而可能被拒）。"""
+    不用带 x-token（这个域名不是 edstem.org，带了反而可能被拒）。
+
+    先写到 .part 再改名：下到一半断网的话，留下的半个文件不会被当成“已经下好了”。"""
     if dest.exists():
         return True
     dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".part")
     try:
         req = urllib.request.Request(url, headers={"user-agent": UA})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            dest.write_bytes(resp.read())
+        with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as f:
+            while chunk := resp.read(1 << 16):
+                f.write(chunk)
+        os.replace(tmp, dest)
         return True
     except Exception as e:  # noqa: BLE001
+        tmp.unlink(missing_ok=True)
         log(f"  Ed 课件下载失败 {dest.name}: {e}")
         return False
 
@@ -52,7 +60,7 @@ CREATE TABLE IF NOT EXISTS lesson_files (
 );
 CREATE INDEX IF NOT EXISTS idx_lesson_files_lesson ON lesson_files(lesson_id);
 -- lesson 里 quiz 页的题目和选项（Markdown）。Ed 不给学生看答案（release_quiz_solutions 都是 false），
--- 作答记录的接口也是空的，所以只有题面——拿来当复习清单。
+-- 作答记录的接口也是空的，所以只有题面，拿来当复习清单。
 CREATE TABLE IF NOT EXISTS quiz_questions (
     id INTEGER PRIMARY KEY, slide_id INTEGER, lesson_id INTEGER, course_id INTEGER,
     slide_title TEXT, idx INTEGER, type TEXT, multiple INTEGER, question TEXT, options TEXT,
@@ -78,22 +86,25 @@ def fetch_lessons(client: EdClient, course_id: int) -> tuple[list[dict], list[di
     return modules, lessons
 
 
-def fetch_slides(client: EdClient, lesson_id: int) -> list[dict]:
+def fetch_slides(client: EdClient, lesson_id: int) -> list[dict] | None:
     """对应 GET /lessons/{id}，跟 ed-web 里 fetchLessonFiles() 用的是同一个接口。
     列表接口（/courses/{id}/lessons）不带 slides，pdf 的 file_url / webpage 的 url
-    都要进这个详情接口才有。"""
+    都要进这个详情接口才有。
+
+    请求失败返回 None（不是空列表）：调用方据此保留上次存的文件和测验题，
+    不然一次网络抖动就会把这节 lesson 的课件清单和题目全删掉。"""
     try:
         data = client.get(f"/lessons/{lesson_id}")
         return [s for s in (data.get("lesson") or {}).get("slides", []) if not s.get("is_hidden")]
     except Exception as e:
         if type(e).__name__ == "EdAuthError":
             raise
-        return []
+        return None
 
 
 def fetch_lesson_files(client: EdClient, lesson_id: int, slides: list[dict] | None = None) -> list[dict]:
     if slides is None:
-        slides = fetch_slides(client, lesson_id)
+        slides = fetch_slides(client, lesson_id) or []
     out = []
     for pos, s in enumerate(slides):
         idx = s.get("index") if isinstance(s.get("index"), int) else pos
@@ -148,12 +159,25 @@ def sync_quizzes(conn: sqlite3.Connection, client: EdClient, course_id: int, les
     return n
 
 
+def prune_lessons(conn: sqlite3.Connection, course_id: int, keep: set[int]) -> int:
+    """Ed 上删掉或藏起来的 lesson，连同它的课件记录、测验题和下载下来的文件一起去掉。返回删了几节。"""
+    gone = [r[0] for r in conn.execute("SELECT id FROM lessons WHERE course_id=?", (course_id,))
+            if r[0] not in keep]
+    for lid in gone:
+        conn.execute("DELETE FROM lesson_files WHERE lesson_id=?", (lid,))
+        conn.execute("DELETE FROM quiz_questions WHERE lesson_id=?", (lid,))
+        conn.execute("DELETE FROM lessons WHERE id=?", (lid,))
+        shutil.rmtree(FILES_DIR / str(course_id) / str(lid), ignore_errors=True)   # 全文索引下次就不再搜到
+    return len(gone)
+
+
 def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log=print) -> tuple[int, int]:
     """全量覆盖这门课的 modules/lessons。数据量小（一门课几十条），不用跟 threads
     那样做增量，Ed 的 lesson.updated_at 目前观察下来基本不维护，没法当指纹用。"""
     ensure_lessons_schema(conn)
     modules, lessons = fetch_lessons(client, course_id)
     ts = now_iso()
+    prune_lessons(conn, course_id, {l["id"] for l in lessons})
 
     for m in modules:
         conn.execute(
@@ -175,8 +199,11 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
                 l.get("due_at"), l.get("effective_due_at"), ts,
             ),
         )
-        conn.execute("DELETE FROM lesson_files WHERE lesson_id = ?", (l["id"],))
         slides = fetch_slides(client, l["id"])
+        if slides is None:
+            log(f"  lesson {l['id']} 的内容没取到，先保留上次的")
+            continue
+        conn.execute("DELETE FROM lesson_files WHERE lesson_id = ?", (l["id"],))
         sync_quizzes(conn, client, course_id, l["id"], slides, log)
         for f in fetch_lesson_files(client, l["id"], slides):
             local_path = None

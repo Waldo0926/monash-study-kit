@@ -4,7 +4,7 @@
   * FEATURES：按类别列出能做的事，每条一句示例问法和对应的命令。`monash help` 打印它，
     MCP 的“功能大全”提示也用它，两边不会对不上。
   * PROMPTS：MCP 预设提示。它们只在用户从 Claude 的“+”菜单里选中时才发给 Claude，
-    平时不占额度——这是它们比多加一个 help 工具划算的地方（工具清单每次对话都要整份发）。
+    平时不占额度，这是它们比多加一个 help 工具划算的地方（工具清单每次对话都要整份发）。
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def render(cli: bool = True) -> str:
             out.append(f"  · {what}")
             out.append(f"      问：“{ask}”" + (f"   命令：{cmd}" if cli else ""))
         out.append("")
-    out.append("不能做的：交作业、做测验、在 Ed 上发帖——这些要自己去网页上操作。")
+    out.append("不能做的：交作业、做测验、在 Ed 上发帖，这些要自己去网页上操作。")
     if cli:
         out.append("每个命令都有 --help；Claude 里输入框的“+”菜单里有 monash 的预设提示，点一下就能用。")
     return "\n".join(out)

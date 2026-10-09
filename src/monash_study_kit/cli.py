@@ -1,4 +1,4 @@
-"""monash —— Monash 学习助手命令行。
+"""monash：Monash 学习助手命令行。
 
     monash setup                 # 第一次用：登录 Ed 和 Moodle、选课、接进 Claude
     monash login                 # Moodle 登录过期了：打开专用登录窗口
@@ -83,7 +83,7 @@ def login_ed() -> bool:
             continue
         try:
             user = edlib.EdClient(token=token).me().get("user", {})
-        except Exception as e:  # noqa: BLE001 —— 格式不对 Ed 回 400，删掉的回 401
+        except Exception as e:  # noqa: BLE001  格式不对 Ed 回 400，删掉的回 401
             print(f"Ed 不认这个令牌（{getattr(e, 'code', e)}），再试一次")
             continue
         edlib.save_token(token)
@@ -247,7 +247,8 @@ def cmd_sync(args):
     m, e, idx = st.get("moodle") or {}, st.get("ed") or {}, st.get("index") or {}
     print("\n同步完成：" + "，".join(x for x in [
         f"Ed 新帖 {e.get('new_threads', 0)}、新回复 {e.get('new_replies', 0)}" if "ed" not in st["errors"] else "",
-        f"Moodle 新文件 {m.get('downloaded', 0)} 个（{m.get('bytes', 0) / 1e6:.1f} MB）" if "moodle" not in st["errors"] else "",
+        f"Moodle 新文件 {m.get('downloaded', 0)} 个（{m.get('bytes', 0) / 1e6:.1f} MB）"
+        + (f"、下架 {m['removed']} 个" if m.get("removed") else "") if "moodle" not in st["errors"] else "",
         f"索引了 {idx.get('indexed', 0)} 个文件" if idx else ""] if x))
     for k, v in (st.get("errors") or {}).items():
         print(f"  ! {k}：{v}")
@@ -265,6 +266,23 @@ def cmd_open(args):
     print(path)
 
 
+def parse_setting(key: str, raw: str, current):
+    """按默认值的类型解析。数字一律先当小数读：阿德莱德是 UTC+9.5，auto_sync_hours 也可以写 0.5。"""
+    if isinstance(current, bool):
+        if raw.lower() in ("true", "yes", "1", "on"):
+            return True
+        if raw.lower() in ("false", "no", "0", "off"):
+            return False
+        raise ValueError(f"{key} 只能是 true 或 false")
+    if isinstance(current, (int, float)):
+        try:
+            num = float(raw)
+        except ValueError:
+            raise ValueError(f"{key} 要填数字，比如 monash config {key} {current}") from None
+        return int(num) if num.is_integer() else num
+    return raw
+
+
 def cmd_config(args):
     if not args.key:
         for k, v in load_settings().items():
@@ -277,8 +295,7 @@ def cmd_config(args):
     if args.value is None:
         print(cur[args.key])
         return
-    v = args.value.lower()
-    val = v in ("true", "yes", "1", "on") if isinstance(cur[args.key], bool) else type(cur[args.key])(args.value)
+    val = parse_setting(args.key, args.value, cur[args.key])
     save_settings({args.key: val})
     print(f"{args.key} = {val}（Claude Desktop 要重启一下才会用上新设置）")
 
@@ -510,7 +527,7 @@ def cmd_m_news(args):
     if want_json(args):
         return emit_json(out)
     for n in out:
-        print(f"\n■ [{n['course']}] {n['title']}  —  {n['author']} · {local_time(n['time'])}")
+        print(f"\n■ [{n['course']}] {n['title']}  · {n['author']} · {local_time(n['time'])}")
         text = n["text"] if args.full else n["text"][:400] + ("…" if len(n["text"]) > 400 else "")
         print("  " + text.replace("\n", "\n  "))
         print(f"  {n['url']}")
@@ -523,7 +540,7 @@ def cmd_m_search(args):
     if want_json(args):
         return emit_json(data)
     for p in data:
-        print(f"\n■ {p['subject']}  —  {p['author']} · {local_time(p['time'])}")
+        print(f"\n■ {p['subject']}  · {p['author']} · {local_time(p['time'])}")
         print("  " + (p["text"][:300] + ("…" if len(p["text"]) > 300 else "")).replace("\n", "\n  "))
         print(f"  {p['url']}")
     if not data:
@@ -605,7 +622,7 @@ def cmd_m_ls(args):
                       if (r["code"] or "") == args.course.upper() or str(r["id"]) == args.course), None)
     if course_id is None:
         raise LookupError(f"本地没有课程 {args.course}（先 monash sync）")
-    q, params = "SELECT path, size FROM files WHERE course_id=?", [course_id]
+    q, params = "SELECT path, size FROM files WHERE course_id=? AND removed_at IS NULL", [course_id]
     if args.week:
         q += " AND path LIKE ?"
         params.append(f"%/Week {int(args.week):02d}%")

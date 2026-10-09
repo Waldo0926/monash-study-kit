@@ -17,7 +17,6 @@ import html
 import re
 import urllib.parse
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from .moodlelib import (FILES_DIR, HOST, MoodleClient, collect_links, filename_from,
                         is_attachment, now_iso)
@@ -102,7 +101,7 @@ def plan_layout(state: dict) -> Layout:
         if week:
             layout.folders[num] = week
             continue
-        # 非周次的章节：保留层级，但跳过只当容器的上级——自己没有内容的（比如 "Learning"），
+        # 非周次的章节：保留层级，但跳过只当容器的上级：自己没有内容的（比如 "Learning"），
         # 以及第 0 节（Monash 叫 "Unit dashboard"，Assessments 之类都挂在它下面）
         parts = [safe_name(s["title"]) for i, s in enumerate(path)
                  if i == len(path) - 1 or (s.get("cmlist") and s["number"] != 0)]
@@ -115,6 +114,7 @@ class SyncStats:
     downloaded: int = 0
     skipped: int = 0
     links: int = 0
+    removed: int = 0
     errors: list[str] = field(default_factory=list)
     bytes: int = 0
 
@@ -148,7 +148,7 @@ class CourseSync:
                 folder = layout.folders.get(cm.get("sectionnumber", num), "General")
                 try:
                     self.handle_cm(cm, folder, layout.titles.get(num, ""))
-                except Exception as e:  # noqa: BLE001 —— 一个坏活动不该拖垮整门课
+                except Exception as e:  # noqa: BLE001  一个坏活动不该拖垮整门课
                     if e.__class__.__name__ == "MoodleAuthError":
                         raise
                     self.stats.errors.append(f"{cm.get('name')} ({cm['id']}): {e}")
@@ -157,9 +157,32 @@ class CourseSync:
         # label、CMS 块和每个活动的说明文字只在课程页 HTML 里
         self.scan_section_pages(state, layout, cms)
         if not self.dry:
+            self.mark_removed()
             self.con.execute("UPDATE courses SET synced_at=? WHERE id=?", (now_iso(), self.cid))
             self.con.commit()
         return self.stats
+
+    def mark_removed(self) -> None:
+        """这一轮没再见到的文件标成已移除（老师下架了，或者换了个文件名重新上传）。
+
+        只有整门课一个错误都没有时才标：有活动请求失败的话，没见到不代表没了。
+        只管同步器自己下的（cmid 不为空），讲义网页和录播不归这里管。文件本身不删。
+        """
+        if self.stats.errors:
+            return
+        rows = self.con.execute("SELECT source, removed_at FROM files WHERE course_id=? AND cmid IS NOT NULL",
+                                (self.cid,)).fetchall()
+        now = now_iso()
+        for r in rows:
+            seen = r["source"] in self.seen_sources
+            if seen and r["removed_at"]:
+                self.con.execute("UPDATE files SET removed_at=NULL WHERE course_id=? AND source=?",
+                                 (self.cid, r["source"]))
+            elif not seen and not r["removed_at"]:
+                self.con.execute("UPDATE files SET removed_at=? WHERE course_id=? AND source=?",
+                                 (now, self.cid, r["source"]))
+                self.stats.removed += 1
+        self.con.commit()
 
     # ------------------------------------------------------------ 各类活动
 
@@ -280,15 +303,16 @@ class CourseSync:
         self.log(f"  ↓ {rel} ({size // 1024} KB)")
 
     def _unique(self, rel: str, source: str) -> str:
-        """同名文件换了内容（revision 变了）就覆盖旧的；别的来源撞名才加序号。"""
+        """同名文件换了内容（revision 变了）或者旧的已经下架，就覆盖旧的；别的来源撞名才加序号。"""
         stem, dot, ext = rel.rpartition(".")
         if not dot or "/" in ext:
             stem, ext = rel, ""
         n, cand = 1, rel
         while True:
-            owner = self.con.execute("SELECT source FROM files WHERE course_id=? AND path=?",
+            owner = self.con.execute("SELECT source, removed_at FROM files WHERE course_id=? AND path=?",
                                      (self.cid, cand)).fetchone()
-            if owner is None or owner["source"] == source or _same_file(owner["source"], source):
+            # 已经下架的旧文件占着这个名字，也直接让给新文件
+            if owner is None or owner["source"] == source or owner["removed_at"] or _same_file(owner["source"], source):
                 if owner is not None and owner["source"] != source:
                     self.con.execute("DELETE FROM files WHERE course_id=? AND source=?",
                                      (self.cid, owner["source"]))
@@ -332,7 +356,7 @@ def write_links_md(con, course_id: int, root: str) -> None:
     for r in rows:
         by_folder.setdefault(r["folder"], []).append(r)
     for folder, items in by_folder.items():
-        lines = [f"# {folder} — 链接", ""]
+        lines = [f"# {folder} 的链接", ""]
         last = None
         seen = set()
         for r in items:

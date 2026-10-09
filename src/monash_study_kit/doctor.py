@@ -201,7 +201,7 @@ def run(skip: tuple = ()) -> dict:
             continue
         try:
             results.append(fn())
-        except Exception as e:  # noqa: BLE001 —— 体检本身不能崩
+        except Exception as e:  # noqa: BLE001  体检本身不能崩
             results.append(_check(fn.__name__.removeprefix("check_"), WARN, f"检查时出错：{type(e).__name__}: {e}"))
     return {"version": __version__, "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "ok": not any(r["status"] == FAIL for r in results), "checks": results}

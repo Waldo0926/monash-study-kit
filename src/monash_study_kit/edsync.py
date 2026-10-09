@@ -84,6 +84,9 @@ def store_thread(conn, cid: int, t: dict, full: dict, stamp: str, prev=None) -> 
     existing = {r["id"] for r in conn.execute("SELECT id FROM replies WHERE thread_id=?", (t["id"],))}
     flat = edlib.flatten_replies(th, full.get("users") or {})
     edlib.save_attachments(conn, t["id"], th, flat)
+    # 拿到的是整帖，库里有、这次没有的回复就是在 Ed 上被删了，别让它一直留在本地
+    gone = existing - {r["id"] for r in flat}
+    conn.executemany("DELETE FROM replies WHERE id=?", [(rid,) for rid in gone])
     for r in flat:
         if r["id"] not in existing:
             new_replies += 1

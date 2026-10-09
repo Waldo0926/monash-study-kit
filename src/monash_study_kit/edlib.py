@@ -188,7 +188,7 @@ class EdClient:
     def thread(self, thread_id: int) -> dict:
         """抓单个帖子的完整内容。
 
-        千万别加 ?view=1 —— 那个参数会把帖子的 updated_at 顶成当前时间。
+        千万别加 ?view=1，那个参数会把帖子的 updated_at 顶成当前时间。
         我们拿 updated_at 当变更指纹，加了它就等于每抓一次都把指纹改一次，
         增量同步会永远退化成全量（而且每次都把 177 个帖子的时间戳再刷一遍）。
         不带 view=1 返回的正文、回复、users 完全一样。

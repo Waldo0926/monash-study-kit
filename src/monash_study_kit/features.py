@@ -7,7 +7,7 @@
            mod_forum_get_discussion_posts、
            message_popup_get_popup_notifications、core_message_get_unread_conversation_counts
   没开放（"Web service is not available"）：gradereport_user_*、mod_forum_get_forum_discussions、
-           mod_assign_get_submission_status、core_search_get_results —— 这些都解析页面
+           mod_assign_get_submission_status、core_search_get_results：这些都解析页面
 """
 from __future__ import annotations
 

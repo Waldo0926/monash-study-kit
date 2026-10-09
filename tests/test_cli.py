@@ -48,3 +48,18 @@ class ExitCodeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfigTests(unittest.TestCase):
+    def test_numbers_can_have_decimals(self):
+        self.assertEqual(cli.parse_setting("tz_offset", "9.5", 8), 9.5)     # 阿德莱德
+        self.assertEqual(cli.parse_setting("tz_offset", "10", 8), 10)
+        self.assertEqual(cli.parse_setting("auto_sync_hours", "0.5", 1), 0.5)
+
+    def test_bad_values_are_rejected_with_a_hint(self):
+        with self.assertRaises(ValueError):
+            cli.parse_setting("tz_offset", "ten", 8)
+        with self.assertRaises(ValueError):
+            cli.parse_setting("web_notes", "flase", True)
+        self.assertIs(cli.parse_setting("web_notes", "off", True), False)
+        self.assertEqual(cli.parse_setting("browser", "C:\\Chrome\\chrome.exe", ""), "C:\\Chrome\\chrome.exe")

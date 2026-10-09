@@ -16,12 +16,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
-from .paths import DATA_DIR, FILES_DIR, SECRETS_DIR, write_secret
+from .paths import DATA_DIR, FILES_DIR, SECRETS_DIR, write_secret  # noqa: F401  FILES_DIR 给 syncer 等模块用
 
 BASE_URL = os.environ.get("MOODLE_BASE_URL", "https://learning.monash.edu").rstrip("/")
 HOST = urllib.parse.urlsplit(BASE_URL).hostname or ""
@@ -154,9 +154,14 @@ class MoodleClient:
         if stream_to is not None and status == 200:
             tmp = stream_to.with_name(stream_to.name + ".part")
             tmp.parent.mkdir(parents=True, exist_ok=True)
-            with open(tmp, "wb") as f:
-                while chunk := resp.read(1 << 16):
-                    f.write(chunk)
+            try:
+                with open(tmp, "wb") as f:
+                    while chunk := resp.read(1 << 16):
+                        f.write(chunk)
+            except BaseException:
+                tmp.unlink(missing_ok=True)      # 下到一半断了，别在课件目录里留半个文件
+                resp.close()
+                raise
             os.replace(tmp, stream_to)
         else:
             out.body = resp.read()
@@ -192,8 +197,8 @@ class MoodleClient:
              content_type: str | None = None, max_hops: int = 8) -> Response:
         """POST 一个表单（或 multipart），然后像浏览器一样跟着 303 用 GET 走到最终页面。
 
-        返回的 Response.url 是最终落地的地址——Moodle 的写操作靠"落在哪一页"
-        判断成功与否（比如保存作业后回到 view 页）。
+        返回的 Response.url 是最终落地的地址，Moodle 的表单靠"落在哪一页"
+        判断成功与否（比如生成日历链接后停在导出页）。
         """
         url = self.abs(url)
         if body is None:
@@ -420,6 +425,7 @@ def db_connect(path: Path | None = None) -> sqlite3.Connection:
         section     TEXT,
         title       TEXT,
         synced_at   TEXT NOT NULL,
+        removed_at  TEXT,               -- Moodle 上已经没有了：文件先留着，列表和搜索里不再出现
         PRIMARY KEY (course_id, source)
     );
     CREATE TABLE IF NOT EXISTS links (
@@ -433,7 +439,15 @@ def db_connect(path: Path | None = None) -> sqlite3.Connection:
     );
     CREATE TABLE IF NOT EXISTS state (k TEXT PRIMARY KEY, v TEXT);
     """)
+    # 1.0.3 以前的库没有 removed_at，补上
+    if "removed_at" not in {r["name"] for r in con.execute("PRAGMA table_info(files)")}:
+        con.execute("ALTER TABLE files ADD COLUMN removed_at TEXT")
     return con
+
+
+def removed_paths(con) -> set[str]:
+    """Moodle 上已经下架的文件（相对 FILES_DIR）。"""
+    return {r["path"] for r in con.execute("SELECT path FROM files WHERE removed_at IS NOT NULL")}
 
 
 def set_state(con, k: str, v) -> None:
