@@ -12,7 +12,7 @@
 
 Connect Monash **Moodle** and **Ed** to Claude, then just ask Claude:
 
-- "What's due this week?" — Moodle deadlines, assignments you may have missed, unfinished Ed lessons, latest announcements
+- "What's due this week?": Moodle deadlines, assignments you may have missed, unfinished Ed lessons, latest announcements
 - "Anything new on Ed? Has anyone replied to my question?"
 - "Which week of FIT2102 covered monads? Which slide deck, which page?"
 - "What does the A2 spec ask for?", "What's my current grade in FIT2109?"
@@ -177,7 +177,7 @@ Replace `/full/path/monash` in the examples with your path. **In JSON, Windows b
 | Cursor | `~/.cursor/mcp.json` | Untested |
 | VS Code (Copilot) | Command Palette → `MCP: Open User Configuration` | Untested |
 | Gemini CLI | `~/.gemini/settings.json` | Untested |
-| ChatGPT web / mobile app | — | **Not supported**: only remote servers, cannot reach a program on your computer |
+| ChatGPT web / mobile app | n/a | **Not supported**: only remote servers, cannot reach a program on your computer |
 
 Codex (`~/.codex/config.toml`), or simply run `codex mcp add monash -- /full/path/monash mcp`:
 
@@ -314,26 +314,32 @@ and sends no personal information; to turn it off: `monash config update_check f
 
 ## FAQ
 
-**monash doesn't show up in Claude**
+### monash doesn't show up in Claude
+
 Run `monash setup claude` to reconnect. On Windows, **fully quit** Claude from the tray first.
 If it still fails, check for errors under Claude Desktop → Settings → Developer.
 
-**The login window won't open / "no browser found"**
+### The login window won't open / "no browser found"
+
 Install Chrome or Edge. If your browser lives somewhere unusual, point to it:
 `monash config browser "C:\Program Files\...\chrome.exe"`. If an earlier dedicated login window is still open, close it first.
 
-**"Path too long" when syncing course files on Windows**
+### "Path too long" when syncing course files on Windows
+
 By default Windows limits full paths to 260 characters, and unit name + week name + file name can exceed that. Store course files somewhere shorter:
 `monash config files_dir C:\Monash`, then `monash sync`.
 
-**Australian campuses**
+### Australian campuses
+
 Moodle shows times in your account's time zone; the default is Malaysia (UTC+8). For Australian campuses: `monash config tz_offset 10` (11 during daylight saving).
 
-**Where are Ed "assignment deadlines"?**
+### Where are Ed "assignment deadlines"?
+
 Most Ed lessons have no due date; Moodle is the source of truth for deadlines. The Ed-lesson part of `get_study_todo` follows your own progress
 (it lists unfinished lessons up to the week after the one you've reached).
 
-**Something is broken**
+### Something is broken
+
 Run `monash doctor` and follow the → after each item. If you need help, send the whole output; it contains no tokens, cookies or similar.
 You can also just tell Claude "monash isn't working" and it will run the same checks. The MCP background log is `mcp.log` in the data directory.
 
@@ -342,15 +348,47 @@ You can also just tell Claude "monash isn't working" and it will run the same ch
 ```bash
 uv sync
 uv run pytest
+uvx ruff check src tests
 uv run monash --help
 ```
 
 **Releasing**: whenever `src/` changes, bump `__version__` in `src/monash_study_kit/__init__.py` (patch for bug fixes,
-minor for new features); the update notice compares against this number on main. The CI `version-bump` check blocks PRs that forget it.
+minor for new features); the update notice compares against this number on main. The CI `version-bump` check blocks PRs that forget it. Note what changed in [`CHANGELOG.md`](CHANGELOG.md).
 
-Code layout: `moodlelib` (Moodle client), `syncer` (course-file sync), `features` (deadlines/grades/announcements queries),
-`edlib` / `edsync` / `edquery` / `lessons` (Ed), `content_index` (full-text index), `browser_login` + `cdp` (dedicated login window),
-`jobs` (sync and session refresh), `mcp_server`, `cli`. The only dependency is `pypdf`.
+### How it fits together
+
+```mermaid
+flowchart LR
+    Claude["Claude Desktop / Claude Code"] -- "stdio (JSON-RPC)" --> MCP["mcp_server"]
+    You["You, in a terminal"] --> CLI["cli / cli_ed"]
+    MCP --> Core
+    CLI --> Core
+    subgraph Core["Shared core (runs on your computer)"]
+        Jobs["jobs: sync + session refresh"]
+        Query["features / edquery / todo"]
+        Index["content_index: SQLite FTS5"]
+    end
+    Core -- "session cookie, read-only" --> Moodle["Moodle"]
+    Core -- "API token, read-only" --> Ed["Ed"]
+    Core -- "public pages only" --> Notes["Course-notes sites"]
+    Login["browser_login + cdp: dedicated login window"] -- "Moodle cookie only" --> Core
+```
+
+| Module | What it does |
+|---|---|
+| `moodlelib`, `htmldom` | Moodle client (cookie session, AJAX calls, downloads that never send the cookie off-site) and a small HTML tree for page parsing |
+| `syncer` | Mirrors each unit's Moodle files into `Unit/Week NN - Title/` folders |
+| `features`, `todo` | Deadlines (with an iCal fallback when the session has expired), grades, assignments, announcements, the combined to-do list |
+| `edlib`, `edsync`, `edquery` | Ed API client, incremental sync of posts and replies, local queries |
+| `lessons`, `lesson_reader` | Ed Lessons: progress, slides, quiz questions, a whole lesson as Markdown |
+| `content_index`, `textextract`, `webnotes` | Full-text search over PDFs, Office files, course-notes websites and transcripts |
+| `browser_login`, `cdp` | Dedicated login window driven over the Chrome DevTools Protocol (a minimal WebSocket client in the standard library) |
+| `jobs`, `mcp_server`, `cli` | Sync and keep-alive jobs, the MCP server, the command line |
+| `doctor`, `help_menu`, `update_check`, `claude_setup` | Health check, help and preset prompts, new-version notice, adding the server to Claude |
+| `recordings`, `transcribe` | Optional: lecture recordings to timestamped transcripts (`[media]` extra) |
+
+The only runtime dependency is `pypdf`; everything else (HTTP, SQLite, WebSocket, HTML parsing) uses the standard library.
+Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruff` checks for syntax errors, undefined names and unused imports.
 
 ## License
 

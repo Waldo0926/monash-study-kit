@@ -5,6 +5,20 @@ description = "Connect Monash Moodle and Ed to Claude via a local MCP server and
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
+authors = [{ name = "Shuoxun Wen" }]
+keywords = ["mcp", "model-context-protocol", "claude", "moodle", "edstem", "monash", "cli", "study-tools"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Education",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Education",
+]
 dependencies = [
     "pypdf>=4.0",
 ]
@@ -16,6 +30,11 @@ media = [
     "yt-dlp[default]>=2025.1.1",
     "deno>=2.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Waldo0926/monash-study-kit"
+Issues = "https://github.com/Waldo0926/monash-study-kit/issues"
+Changelog = "https://github.com/Waldo0926/monash-study-kit/blob/main/CHANGELOG.md"
 
 [project.scripts]
 monash = "monash_study_kit.cli:main"
