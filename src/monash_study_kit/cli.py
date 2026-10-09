@@ -247,7 +247,8 @@ def cmd_sync(args):
     m, e, idx = st.get("moodle") or {}, st.get("ed") or {}, st.get("index") or {}
     print("\n同步完成：" + "，".join(x for x in [
         f"Ed 新帖 {e.get('new_threads', 0)}、新回复 {e.get('new_replies', 0)}" if "ed" not in st["errors"] else "",
-        f"Moodle 新文件 {m.get('downloaded', 0)} 个（{m.get('bytes', 0) / 1e6:.1f} MB）" if "moodle" not in st["errors"] else "",
+        f"Moodle 新文件 {m.get('downloaded', 0)} 个（{m.get('bytes', 0) / 1e6:.1f} MB）"
+        + (f"、下架 {m['removed']} 个" if m.get("removed") else "") if "moodle" not in st["errors"] else "",
         f"索引了 {idx.get('indexed', 0)} 个文件" if idx else ""] if x))
     for k, v in (st.get("errors") or {}).items():
         print(f"  ! {k}：{v}")
@@ -621,7 +622,7 @@ def cmd_m_ls(args):
                       if (r["code"] or "") == args.course.upper() or str(r["id"]) == args.course), None)
     if course_id is None:
         raise LookupError(f"本地没有课程 {args.course}（先 monash sync）")
-    q, params = "SELECT path, size FROM files WHERE course_id=?", [course_id]
+    q, params = "SELECT path, size FROM files WHERE course_id=? AND removed_at IS NULL", [course_id]
     if args.week:
         q += " AND path LIKE ?"
         params.append(f"%/Week {int(args.week):02d}%")

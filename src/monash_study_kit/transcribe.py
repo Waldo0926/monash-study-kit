@@ -41,7 +41,7 @@ def file_hash(p: Path) -> str:
 
 def pending(con) -> list[dict]:
     rows = con.execute("SELECT f.course_id, f.path, f.title, f.section, c.fullname FROM files f "
-                       "LEFT JOIN courses c ON c.id=f.course_id ORDER BY f.path").fetchall()
+                       "LEFT JOIN courses c ON c.id=f.course_id WHERE f.removed_at IS NULL ORDER BY f.path").fetchall()
     have = {r["path"] for r in rows}
     out = []
     for r in rows:

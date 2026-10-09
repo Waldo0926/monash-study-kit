@@ -333,7 +333,7 @@ def t_list_files(args):
             q += " AND folder LIKE ?"
             params.append(f"Week {int(args['week']):02d}%")
         return [dict(r) for r in con.execute(q + " ORDER BY folder, rowid LIMIT 200", params)]
-    q = "SELECT f.path, f.size, f.title FROM files f WHERE 1=1"
+    q = "SELECT f.path, f.size, f.title FROM files f WHERE f.removed_at IS NULL"
     params = []
     if args.get("course"):
         q += " AND f.course_id=?"

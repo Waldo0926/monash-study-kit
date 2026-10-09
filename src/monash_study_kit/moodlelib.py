@@ -425,6 +425,7 @@ def db_connect(path: Path | None = None) -> sqlite3.Connection:
         section     TEXT,
         title       TEXT,
         synced_at   TEXT NOT NULL,
+        removed_at  TEXT,               -- Moodle 上已经没有了：文件先留着，列表和搜索里不再出现
         PRIMARY KEY (course_id, source)
     );
     CREATE TABLE IF NOT EXISTS links (
@@ -438,7 +439,15 @@ def db_connect(path: Path | None = None) -> sqlite3.Connection:
     );
     CREATE TABLE IF NOT EXISTS state (k TEXT PRIMARY KEY, v TEXT);
     """)
+    # 1.0.3 以前的库没有 removed_at，补上
+    if "removed_at" not in {r["name"] for r in con.execute("PRAGMA table_info(files)")}:
+        con.execute("ALTER TABLE files ADD COLUMN removed_at TEXT")
     return con
+
+
+def removed_paths(con) -> set[str]:
+    """Moodle 上已经下架的文件（相对 FILES_DIR）。"""
+    return {r["path"] for r in con.execute("SELECT path FROM files WHERE removed_at IS NOT NULL")}
 
 
 def set_state(con, k: str, v) -> None:

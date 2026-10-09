@@ -18,7 +18,7 @@ import sqlite3
 import zipfile
 from pathlib import Path
 
-from . import textextract
+from . import moodlelib, textextract
 from .edlib import DB_PATH as ED_DB
 from .moodlelib import FILES_DIR, now_iso
 from .paths import ED_FILES_DIR
@@ -121,12 +121,26 @@ def _ed_labels() -> dict[str, tuple[str, str]]:
     return out
 
 
+def _removed() -> set[str]:
+    """Moodle 上已经下架的文件，不再进搜索。还没有库（第一次同步前、测试里）就当没有。"""
+    if not (moodlelib.DATA_DIR / "moodle.db").exists():
+        return set()
+    con = moodlelib.db_connect()
+    try:
+        return moodlelib.removed_paths(con)
+    finally:
+        con.close()
+
+
 def candidates() -> list[dict]:
     files = []
     if FILES_DIR.exists():
+        removed = _removed()
         for p in FILES_DIR.rglob("*"):
             if p.is_file() and p.suffix.lower() in INDEX_EXT:
                 rel = p.relative_to(FILES_DIR)
+                if rel.as_posix() in removed:
+                    continue
                 m = CODE_RE.search(rel.parts[0]) if len(rel.parts) > 1 else None
                 files.append({"path": str(p), "source": "moodle", "course": m.group(1) if m else None,
                               "title": rel.as_posix()})

@@ -85,7 +85,7 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
     client, con = MoodleClient(), db_connect()
     courses = load_courses(client, con)
     targets = only or tracked_courses(con, courses)
-    total = {"courses": [], "downloaded": 0, "bytes": 0, "errors": 0}
+    total = {"courses": [], "downloaded": 0, "bytes": 0, "removed": 0, "errors": 0}
     for course in targets:
         log(f"Moodle {course_code(course) or course_folder(course)}")
         stats = CourseSync(client, con, course, dry_run=dry_run, log=log).run()
@@ -94,6 +94,7 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
         total["courses"].append(course_code(course))
         total["downloaded"] += stats.downloaded
         total["bytes"] += stats.bytes
+        total["removed"] += stats.removed
         total["errors"] += len(stats.errors)
     if not dry_run:
         set_state(con, "last_sync", {"at": now_iso(), "new_files": total["downloaded"]})
