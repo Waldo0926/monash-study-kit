@@ -151,8 +151,8 @@ class MoodleClient:
         except urllib.error.HTTPError as e:
             resp = e
         status = resp.status if hasattr(resp, "status") else resp.code
-        if urllib.parse.urlsplit(url).hostname == HOST:
-            self._absorb_cookies(resp.headers)
+        if parts.hostname == HOST and parts.scheme == BASE_SCHEME:
+            self._absorb_cookies(resp.headers)      # http:// 的回复可能被人改过，里面的 Set-Cookie 不收
         location = resp.headers.get("Location")
         out = Response(status, url, resp.headers,
                        location=urllib.parse.urljoin(url, location) if location else None)

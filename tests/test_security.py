@@ -460,3 +460,11 @@ def test_index_skips_symlinks_that_point_outside(two_dirs):
     inside.symlink_to(two_dirs / "files" / "U" / "a.md")      # 指向目录里面的软链接照常索引
     names = {Path(f["path"]).name for f in CI.candidates()}
     assert "notes.md" not in names and {"a.md", "alias.md"} <= names
+
+
+def test_set_cookie_over_plain_http_is_ignored(monkeypatch):
+    _fake_opener(monkeypatch, [FakeResp(200, body=b"ok", set_cookie="MoodleSession=injected; path=/")])
+    client = moodlelib.MoodleClient(jar={"MoodleSession": "real"}, persist=False)
+    client.get("http://learning.monash.edu/course/view.php?id=1")
+    assert client.jar == {"MoodleSession": "real"}
+
