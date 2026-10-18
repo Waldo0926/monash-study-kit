@@ -242,7 +242,21 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | 服务说明 | 187 |
 | **合计** | **2,972** |
 
-最大的单个工具是 `search_ed_threads`，324。想量自己的回答（问“这周要做什么”、搜课件时工具返回多少，和把整份文件贴进去比），运行 `uv run python scripts/measure_tokens.py --live --query <词>`，只输出数字。设了 `ANTHROPIC_API_KEY` 再加 `--api`，会用 Anthropic 免费的 token 计数接口算准确值。
+最大的单个工具是 `search_ed_threads`，324。
+
+回答占多少，用一个学生的真实数据（4 门 Moodle 课、3 门 Ed 课、376 个已索引的文件）加 `--live` 量的：
+
+| 问题 | 工具返回 | 改成把文件贴进去 |
+| --- | ---: | ---: |
+| 这周要做什么（`get_study_todo`） | 3,336 | |
+| 快到期的作业（`list_moodle_due`） | 408 | |
+| Ed 上有什么新的（`list_ed_updates`） | 3,934 | |
+| 在课件里找 "assignment"（`search_content`） | 2,596 | 25,466 |
+| 读第一个结果的第一页（`read_file`） | 96 | 96 |
+
+“改成把文件贴进去”是搜到的每个文件的全文。先搜再读大约只要它的 10%。
+
+想量自己的回答（问“这周要做什么”、搜课件时工具返回多少，和把整份文件贴进去比），运行 `uv run python scripts/measure_tokens.py --live --query <词>`，只输出数字。设了 `ANTHROPIC_API_KEY` 再加 `--api`，会用 Anthropic 免费的 token 计数接口算准确值。
 
 ## 命令速查
 

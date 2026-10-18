@@ -261,7 +261,21 @@ Every MCP tool's name, description and parameters are sent to Claude at the star
 | Server instructions | 187 |
 | **Total** | **2,972** |
 
-The largest single tool is `search_ed_threads` at 324. To measure your own answers (what a "what's due this week" or a course-file search returns, compared with pasting the whole files), run `uv run python scripts/measure_tokens.py --live --query <word>`. It prints only numbers. With `ANTHROPIC_API_KEY` set, `--api` uses Anthropic's free token-counting endpoint for exact counts.
+The largest single tool is `search_ed_threads` at 324.
+
+What the answers cost, measured on one student's real data (4 Moodle units, 3 Ed courses, 376 indexed files) with `--live`:
+
+| Question | Tool answer | Pasting the files instead |
+| --- | ---: | ---: |
+| What's due this week (`get_study_todo`) | 3,336 | |
+| Upcoming deadlines (`list_moodle_due`) | 408 | |
+| New on Ed (`list_ed_updates`) | 3,934 | |
+| Find "assignment" in course files (`search_content`) | 2,596 | 25,466 |
+| Read the top hit, first page (`read_file`) | 96 | 96 |
+
+"Pasting the files instead" is the full text of every file the search hit. Searching first costs about 10% of that.
+
+To measure your own answers (what a "what's due this week" or a course-file search returns, compared with pasting the whole files), run `uv run python scripts/measure_tokens.py --live --query <word>`. It prints only numbers. With `ANTHROPIC_API_KEY` set, `--api` uses Anthropic's free token-counting endpoint for exact counts.
 
 ## Command reference
 
