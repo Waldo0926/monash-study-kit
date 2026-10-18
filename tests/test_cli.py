@@ -63,3 +63,10 @@ class ConfigTests(unittest.TestCase):
             cli.parse_setting("web_notes", "flase", True)
         self.assertIs(cli.parse_setting("web_notes", "off", True), False)
         self.assertEqual(cli.parse_setting("browser", "C:\\Chrome\\chrome.exe", ""), "C:\\Chrome\\chrome.exe")
+
+
+def test_update_installs_from_pypi_first():
+    first, fallback = cli.update_commands(media=False)
+    assert first[-1] == "monash-study-kit" and fallback[-1].endswith("main.zip")
+    first, fallback = cli.update_commands(media=True)
+    assert first[-1] == "monash-study-kit[media]" and fallback[-1].startswith("monash-study-kit[media] @ https://")

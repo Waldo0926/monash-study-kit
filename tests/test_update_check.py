@@ -62,3 +62,20 @@ def test_notice_reaches_study_todo_and_status(tmp_path, monkeypatch):
     assert "99.0.0" in init["instructions"]
     r = M.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "study_todo"}})["result"]
     assert any("99.0.0" in n for n in json.loads(r["content"][0]["text"])["notes"])
+
+
+def test_fetch_prefers_pypi_and_falls_back_to_github(monkeypatch):
+    import urllib.error
+    pages = {U.PYPI_URL: json.dumps({"info": {"version": "2.3.4"}}).encode(),
+             U.VERSION_URL: b'__version__ = "2.3.0"\n'}
+
+    def get(url, timeout):
+        if isinstance(pages[url], Exception):
+            raise pages[url]
+        return pages[url]
+    monkeypatch.setattr(U, "_get", get)
+    assert U.fetch_latest() == "2.3.4"
+    pages[U.PYPI_URL] = urllib.error.HTTPError(U.PYPI_URL, 404, "Not Found", {}, None)   # 还没发到 PyPI
+    assert U.fetch_latest() == "2.3.0"
+    pages[U.PYPI_URL] = b"<html>oops</html>"
+    assert U.fetch_latest() == "2.3.0"

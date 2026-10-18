@@ -319,21 +319,31 @@ def cmd_uninstall(args):
     print("最后运行 uv tool uninstall monash-study-kit 卸载程序本身")
 
 
+# 从 PyPI 装。PyPI 上暂时装不到（刚合进 main、还没发版那几分钟，或者 PyPI 抽风）时退回 main 的 zip
+PACKAGE = "monash-study-kit"
 SOURCE = "https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip"
+
+
+def update_commands(media: bool) -> list[list[str]]:
+    extra = "[media]" if media else ""
+    base = ["uv", "tool", "install", "--reinstall", "--refresh"]
+    return [base + [PACKAGE + extra], base + [f"{PACKAGE}{extra} @ {SOURCE}" if media else SOURCE]]
 
 
 def cmd_update(args):
     import importlib.util
     import shutil
     media = importlib.util.find_spec("faster_whisper") is not None
-    spec = f"monash-study-kit[media] @ {SOURCE}" if media else SOURCE
-    cmd = ["uv", "tool", "install", "--reinstall", "--refresh", spec]
+    cmds = update_commands(media)
     if os.name == "nt" or not shutil.which("uv"):
         # Windows 上正在运行的 monash.exe（包括 Claude 开着的那个）不能被覆盖，要先退出 Claude 再在新窗口里跑
         print("先完全退出 Claude Desktop（托盘图标 → Quit），然后在新的 PowerShell 窗口里运行：\n")
-        print("  " + " ".join(f'"{c}"' if " " in c else c for c in cmd))
+        print("  " + " ".join(f'"{c}"' if " " in c else c for c in cmds[0]))
         return 0
-    r = subprocess.run(cmd)
+    r = subprocess.run(cmds[0])
+    if r.returncode != 0:
+        print("\nPyPI 上没装成，改从 GitHub 装：")
+        r = subprocess.run(cmds[1])
     if r.returncode == 0:
         from . import update_check
         update_check.clear()

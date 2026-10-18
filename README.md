@@ -3,6 +3,7 @@
 [![Type](https://img.shields.io/badge/Type-MCP_server_%2B_CLI-2563eb?style=for-the-badge)](#two-parts-one-codebase)
 [![Tech](https://img.shields.io/badge/Tech-Python_%C2%B7_MCP_%C2%B7_Local--first-7c3aed?style=for-the-badge)](#development)
 [![Release](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=Release&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
+[![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
 [![Access](https://img.shields.io/badge/Access-Read--only-475569?style=for-the-badge)](#privacy-and-security)
 
@@ -63,7 +64,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 After it finishes, **close Terminal and open it again**, then:
 
 ```bash
-uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+uv tool install monash-study-kit
 ```
 
 ```bash
@@ -81,7 +82,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 After it finishes, **close PowerShell and open it again**, then:
 
 ```powershell
-uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+uv tool install monash-study-kit
 ```
 
 ```powershell
@@ -290,7 +291,7 @@ To let Claude know what was said in class, recordings can be turned into timesta
 These dependencies are large (about 1 GB) and not installed by default. To get them, reinstall with `[media]`:
 
 ```bash
-uv tool install --reinstall "monash-study-kit[media] @ https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip"
+uv tool install --reinstall "monash-study-kit[media]"
 ```
 
 Then run it manually when needed (it never runs in the background, so it won't slow your computer down):
@@ -352,8 +353,9 @@ uvx ruff check src tests
 uv run monash --help
 ```
 
-**Releasing**: whenever `src/` changes, bump `__version__` in `src/monash_study_kit/__init__.py` (patch for bug fixes,
-minor for new features); the update notice compares against this number on main. The CI `version-bump` check blocks PRs that forget it. Note what changed in [`CHANGELOG.md`](CHANGELOG.md).
+**Releasing**: whenever `src/` changes, bump `__version__` in `src/monash_study_kit/__init__.py` (patch for bug fixes, minor for new features) and note what changed in [`CHANGELOG.md`](CHANGELOG.md). The CI `version-bump` check blocks PRs that forget it. After merging, push a tag such as `v1.1.0`: [`release.yml`](.github/workflows/release.yml) checks the tag against `__version__` and the changelog, runs the tests, builds the package, uploads it to PyPI with Trusted Publishing, installs it back from PyPI on all three OSes, and creates the GitHub release. Details are in [docs/releasing.md](docs/releasing.md).
+
+Every PR also builds the wheel, checks what went into it (`scripts/check_dist.py`) and installs it into a clean venv to run `monash --version`, `monash help` and an MCP handshake (`scripts/smoke_test.py`), so a module left out of the package fails CI instead of failing for users.
 
 ### How it fits together
 

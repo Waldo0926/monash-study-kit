@@ -1,10 +1,11 @@
-"""新版本提示：每天最多查一次 GitHub 上 main 分支的版本号，结果缓存在本地。
+"""新版本提示：每天最多查一次 PyPI 上的最新版本号，结果缓存在本地。
 
 朋友不会主动运行 monash update，修了 bug 也拿不到，所以在他们会看到的地方提一句：
 命令行（stderr 一行）、Claude 里的 study_todo / monash_status、monash doctor。
 
   * 命令行只读缓存，绝不等网络；缓存过期就在后台线程里刷新，下一次运行才看得到。
-  * 查的是 raw.githubusercontent.com 上的 __init__.py，不带任何身份信息。
+  * 查的是 PyPI 的公开 JSON 接口，不带任何身份信息。PyPI 上还没有这个包或者连不上时，
+    退回去看 GitHub 上 main 分支的 __init__.py（1.1.0 以前就是这么查的）。
   * 关掉：monash config update_check false，或者设 MONASH_KIT_NO_UPDATE_CHECK=1（CI 里自动关）。
 """
 from __future__ import annotations
@@ -19,6 +20,7 @@ import urllib.request
 from . import __version__
 from .paths import HOME, load_settings
 
+PYPI_URL = "https://pypi.org/pypi/monash-study-kit/json"
 VERSION_URL = "https://raw.githubusercontent.com/Waldo0926/monash-study-kit/main/src/monash_study_kit/__init__.py"
 CACHE_FILE = HOME / "update-check.json"
 EVERY = 24 * 3600
@@ -47,10 +49,20 @@ def read_cache() -> dict:
         return {}
 
 
-def fetch_latest(timeout: float = 5) -> str | None:
-    req = urllib.request.Request(VERSION_URL, headers={"User-Agent": f"monash-study-kit/{__version__}"})
+def _get(url: str, timeout: float) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": f"monash-study-kit/{__version__}"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        m = VERSION_RE.search(r.read(4096).decode("utf-8", "replace"))
+        return r.read(2_000_000)
+
+
+def fetch_latest(timeout: float = 5) -> str | None:
+    try:
+        version = json.loads(_get(PYPI_URL, timeout))["info"]["version"]
+        if VERSION_RE.fullmatch(f'__version__ = "{version}"'):
+            return version
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    m = VERSION_RE.search(_get(VERSION_URL, timeout)[:4096].decode("utf-8", "replace"))
     return m.group(1) if m else None
 
 
