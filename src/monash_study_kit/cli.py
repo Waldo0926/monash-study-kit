@@ -200,7 +200,7 @@ def cmd_setup(args):
 
 def cmd_status(args):
     st = jobs.read_status()
-    out = {"home": str(HOME), "files": str(FILES_DIR), "last_sync": st.get("last_sync"),
+    out = {"home": str(HOME), "files": str(FILES_DIR), "last_sync": jobs.last_sync_at(st),
            "errors": st.get("errors") or {}}
     try:
         out["moodle_session_left"] = MoodleClient().time_remaining()

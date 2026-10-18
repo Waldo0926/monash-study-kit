@@ -120,10 +120,11 @@ def check_courses() -> dict:
 
 def check_sync() -> dict:
     st = jobs.read_status()
-    if not st.get("last_sync"):
+    at = jobs.last_sync_at(st)
+    if not at:
         return _check("同步", WARN, "还没同步过", "monash sync")
     hours = jobs.hours_since_sync(st)
-    when = datetime.fromisoformat(st["last_sync"]).astimezone().strftime("%m-%d %H:%M")
+    when = datetime.fromisoformat(at).astimezone().strftime("%m-%d %H:%M")
     errs = {k: v for k, v in (st.get("errors") or {}).items() if v}
     detail = f"上次 {when}（{hours:.0f} 小时前）" + "".join(f"；{k}：{scrub(str(v))[:120]}" for k, v in errs.items())
     if errs:
