@@ -1,5 +1,7 @@
 """monash doctor：把常见问题一项项查一遍，每项给出“怎么修”。
 
+--deep 再拿第二个来源核对一遍工具给出的结果，见 doctor_deep.py。
+
 输出是给朋友发给帮忙的人看的，所以绝不打印令牌、cookie、日历链接、邮箱；
 路径、版本、课号、报错摘要可以打。每项检查互相独立，一项出错不影响别的。
 """
@@ -20,7 +22,7 @@ from .paths import DEFAULTS, FILES_DIR, HOME, LOG_FILE, load_settings
 OK, WARN, FAIL = "ok", "warn", "fail"
 MARK = {OK: "✓", WARN: "!", FAIL: "✗"}
 ERROR_LINE = re.compile(r"出错|失败|Traceback|Error", re.I)
-SECRET = re.compile(r"(authtoken=|MoodleSession[=:]\s*|Bearer\s+|token[=:]\s*)[^\s&\"',]+", re.I)
+SECRET = re.compile(r"(authtoken=|sesskey=|MoodleSession[=:]\s*|Bearer\s+|token[=:]\s*)[^\s&\"',]+", re.I)
 
 
 def _check(name: str, status: str, detail: str, fix: str = "") -> dict:
@@ -76,9 +78,9 @@ def check_moodle() -> dict:
     try:
         left = MoodleClient().time_remaining()
     except MoodleAuthError as e:
-        return _check("Moodle 登录", FAIL, f"{e}{fallback}", "monash login")
+        return _check("Moodle 登录", FAIL, f"{scrub(str(e))}{fallback}", "monash login")
     except (MoodleError, urllib.error.URLError, OSError) as e:
-        return _check("Moodle 登录", WARN, f"连不上 Moodle：{e}", "检查网络，过一会儿再试")
+        return _check("Moodle 登录", WARN, f"连不上 Moodle：{scrub(str(e))}", "检查网络，过一会儿再试")
     return _check("Moodle 登录", OK, f"已登录，会话还剩 {(left or 0) // 60} 分钟")
 
 
@@ -90,7 +92,7 @@ def check_ed() -> dict:
     except edlib.EdAuthError:
         return _check("Ed 令牌", FAIL, "令牌失效了（在 Ed 设置页被删了？）", "monash login ed，粘贴一个新令牌")
     except (urllib.error.URLError, OSError) as e:
-        return _check("Ed 令牌", WARN, f"连不上 Ed：{e}", "检查网络，过一会儿再试")
+        return _check("Ed 令牌", WARN, f"连不上 Ed：{scrub(str(e))}", "检查网络，过一会儿再试")
     return _check("Ed 令牌", OK, f"有效（{user.get('name') or '已登录'}）")
 
 
@@ -194,7 +196,7 @@ CHECKS = [check_install, check_data_dir, check_browser, check_moodle, check_ed, 
           check_claude_desktop, check_claude_code, check_mcp_log, check_settings]
 
 
-def run(skip: tuple = ()) -> dict:
+def run(skip: tuple = (), deep: bool = False) -> dict:
     results = []
     for fn in CHECKS:
         if fn.__name__ in skip:
@@ -202,7 +204,10 @@ def run(skip: tuple = ()) -> dict:
         try:
             results.append(fn())
         except Exception as e:  # noqa: BLE001  体检本身不能崩
-            results.append(_check(fn.__name__.removeprefix("check_"), WARN, f"检查时出错：{type(e).__name__}: {e}"))
+            results.append(_check(fn.__name__.removeprefix("check_"), WARN, f"检查时出错：{type(e).__name__}: {scrub(str(e))}"))
+    if deep:
+        from . import doctor_deep
+        results += doctor_deep.run()
     return {"version": __version__, "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "ok": not any(r["status"] == FAIL for r in results), "checks": results}
 

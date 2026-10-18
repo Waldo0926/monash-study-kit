@@ -1,12 +1,15 @@
 """从课件里抽文字：PDF（按页）、docx/pptx（按段/页）。
 
-PDF 用 pypdf（纯 Python，随包安装）；朋友的电脑上多半没有 pdftotext，Windows 更没有。
+PDF 默认用 pypdf（纯 Python，随包安装）；朋友的电脑上多半没有 pdftotext，Windows 更没有。
+装了 poppler 的机器（比如服务器）可以 `monash config pdf_extractor pdftotext`，排版更准。
 """
 from __future__ import annotations
 
 import html
 import logging
 import re
+import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -15,6 +18,11 @@ logging.getLogger("pypdf").setLevel(logging.ERROR)   # 课件 PDF 常有小毛�
 
 def pdf_pages(path: Path) -> list[str]:
     """每页一段文字；坏文件、加密文件返回空列表。"""
+    from .paths import load_settings
+    if load_settings().get("pdf_extractor") == "pdftotext" and shutil.which("pdftotext"):
+        pages = _pdftotext(path)
+        if pages is not None:
+            return pages
     try:
         from pypdf import PdfReader
         reader = PdfReader(str(path))
@@ -34,6 +42,20 @@ def pdf_pages(path: Path) -> list[str]:
         return []
 
 
+def _pdftotext(path: Path) -> list[str] | None:
+    try:
+        r = subprocess.run(["pdftotext", "-layout", str(path), "-"], capture_output=True, text=True,
+                           timeout=120, errors="replace")
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    pages = r.stdout.split("\f")
+    if pages and not pages[-1].strip():
+        pages.pop()                     # 最后一页后面也有一个换页符
+    return pages
+
+
 def _xml_text(xml: str, para_end: str, sep: str) -> str:
     """去掉标签、还原 &amp; &lt; 这些转义。
 
@@ -43,14 +65,25 @@ def _xml_text(xml: str, para_end: str, sep: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", xml))
 
 
+OFFICE_XML_MAX = 50 * 1024 * 1024   # 单个 slide/document.xml 解压后最多读这么多，防解压炸弹
+
+
+def _read_member(z: zipfile.ZipFile, name: str) -> str:
+    with z.open(name) as f:
+        data = f.read(OFFICE_XML_MAX + 1)
+    if len(data) > OFFICE_XML_MAX:
+        raise ValueError(f"{name} 解压后太大，不读")
+    return data.decode(errors="replace")
+
+
 def office_parts(path: Path) -> list[tuple[str, str]]:
     """pptx → [("slide N", 文字)]；docx → [("", 全文，段落间空行)]。"""
     with zipfile.ZipFile(path) as z:
         if path.suffix.lower() == ".pptx":
             nums = sorted(int(m.group(1)) for n in z.namelist()
                           if (m := re.match(r"ppt/slides/slide(\d+)\.xml$", n)))
-            return [(f"slide {i}", " ".join(_xml_text(z.read(f"ppt/slides/slide{i}.xml").decode(errors="replace"),
+            return [(f"slide {i}", " ".join(_xml_text(_read_member(z, f"ppt/slides/slide{i}.xml"),
                                                       r"</a:p>", " ").split()))
                     for i in nums]
-        xml = z.read("word/document.xml").decode(errors="replace")
+        xml = _read_member(z, "word/document.xml")
     return [("", _xml_text(xml, r"</w:p>", "\n\n"))]

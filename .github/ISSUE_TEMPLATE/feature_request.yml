@@ -1,0 +1,23 @@
+name: Feature request
+description: Something you'd like it to do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want to do
+      description: What you'd ask Claude or type in the terminal, and what answer you'd want.
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where the data is
+      description: Which Moodle or Ed page has this information today.
+  - type: checkboxes
+    id: readonly
+    attributes:
+      label: Read-only
+      options:
+        - label: This only reads from Moodle or Ed. (Submitting, posting or changing things is out of scope.)
+          required: true

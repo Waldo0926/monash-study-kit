@@ -1,0 +1,115 @@
+name: release
+
+# 推一个 v 开头的 tag 就发版：tag 和 __version__ 对得上、CHANGELOG 写了、全部测试过了，
+# 才打包上传 PyPI（Trusted Publishing，不存任何密码或令牌），再从 PyPI 装一遍确认能用，最后建 GitHub Release。
+#   git tag v1.1.0 && git push origin v1.1.0
+# PyPI 那边第一次要先加好 trusted publisher，步骤见 docs/releasing.md。
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+      - name: tag、__version__、CHANGELOG 三处一致，tag 在 main 上
+        id: v
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/monash_study_kit/__init__.py)
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag 是 v$tag，但 __version__ 是 $version"; exit 1
+          fi
+          if ! grep -qx "## $version" CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::CHANGELOG 里没有 ## $version 这一节"; exit 1
+          fi
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::v$version 指向的提交不在 main 上，先合进 main 再打 tag"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: check
+    uses: ./.github/workflows/test.yml
+
+  build:
+    needs: [check, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+      - run: uv build
+      - run: uv run --no-project scripts/check_dist.py dist "${{ needs.check.outputs.version }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/monash-study-kit/${{ needs.check.outputs.version }}/
+    permissions:
+      id-token: write       # Trusted Publishing 靠这个向 PyPI 证明是这个仓库的这个 workflow
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1
+
+  pypi-smoke:
+    # 用户真正会做的事：从 PyPI 装，然后跑起来
+    needs: [check, publish]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+      - name: 从 PyPI 装（刚上传可能要等一会儿才装得到）
+        shell: bash
+        run: |
+          v="${{ needs.check.outputs.version }}"
+          uv venv --python 3.13 smoke
+          if [ -d smoke/Scripts ]; then py=smoke/Scripts/python.exe exe=smoke/Scripts/monash.exe; else py=smoke/bin/python exe=smoke/bin/monash; fi
+          for i in 1 2 3 4 5 6; do
+            uv pip install --python "$py" --refresh "monash-study-kit==$v" && break
+            [ "$i" = 6 ] && exit 1
+            sleep 20
+          done
+          "$py" scripts/smoke_test.py "$exe" "$v"
+
+  github-release:
+    needs: [check, build, pypi-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: dist
+          path: dist/
+      - name: 用 CHANGELOG 里这一版的内容建 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ needs.check.outputs.version }}"
+          awk -v h="## $v" '$0 == h {on=1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
+          printf '\nInstall: `uv tool install monash-study-kit` (PyPI: https://pypi.org/project/monash-study-kit/%s/)\n' "$v" >> notes.md
+          gh release create "v$v" dist/* --title "v$v" --notes-file notes.md --verify-tag

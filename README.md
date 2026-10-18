@@ -3,6 +3,7 @@
 [![Type](https://img.shields.io/badge/Type-MCP_server_%2B_CLI-2563eb?style=for-the-badge)](#two-parts-one-codebase)
 [![Tech](https://img.shields.io/badge/Tech-Python_%C2%B7_MCP_%C2%B7_Local--first-7c3aed?style=for-the-badge)](#development)
 [![Release](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=Release&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
+[![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
 [![Access](https://img.shields.io/badge/Access-Read--only-475569?style=for-the-badge)](#privacy-and-security)
 
@@ -63,7 +64,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 After it finishes, **close Terminal and open it again**, then:
 
 ```bash
-uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+uv tool install monash-study-kit
 ```
 
 ```bash
@@ -81,7 +82,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 After it finishes, **close PowerShell and open it again**, then:
 
 ```powershell
-uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+uv tool install monash-study-kit
 ```
 
 ```powershell
@@ -250,6 +251,18 @@ If the file already lists other servers, add the `monash` entry rather than over
 
   `monash uninstall` removes it from Claude and asks whether to delete all data. Finally, delete the token on Ed's settings page.
 
+## Token use
+
+Every MCP tool's name, description and parameters are sent to Claude at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.1.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
+
+| Sent once per conversation | Tokens |
+| --- | ---: |
+| 17 tool definitions | 2,785 |
+| Server instructions | 187 |
+| **Total** | **2,972** |
+
+The largest single tool is `search_ed_threads` at 324. To measure your own answers (what a "what's due this week" or a course-file search returns, compared with pasting the whole files), run `uv run python scripts/measure_tokens.py --live --query <word>`. It prints only numbers. With `ANTHROPIC_API_KEY` set, `--api` uses Anthropic's free token-counting endpoint for exact counts.
+
 ## Command reference
 
 You can also query directly in the terminal without Claude:
@@ -259,6 +272,7 @@ You can also query directly in the terminal without Claude:
 | `monash status` | Login status, last sync time |
 | `monash help` | Everything it can do, each with an example question and the matching command |
 | `monash doctor` | Health check when something breaks: checks each item and tells you how to fix it; send the whole output to whoever helps you |
+| `monash doctor --deep` | Also fetches from Moodle and Ed and cross-checks the tools against a second source: due dates against the calendar feed, the assignment page against the course structure, synced files against Moodle, search against the files on disk, local Ed posts against Ed. Prints only counts, unit codes, dates and activity ids |
 | `monash todo` | This week: deadlines, possibly missed work, unfinished Ed lessons, announcements, unread replies |
 | `monash due [FIT2102]` | Deadlines |
 | `monash grep "monad" [FIT2102]` | Full-text search over course files, course-notes sites, Ed lesson pages and recording transcripts (with page numbers / timestamps) |
@@ -290,7 +304,7 @@ To let Claude know what was said in class, recordings can be turned into timesta
 These dependencies are large (about 1 GB) and not installed by default. To get them, reinstall with `[media]`:
 
 ```bash
-uv tool install --reinstall "monash-study-kit[media] @ https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip"
+uv tool install --reinstall "monash-study-kit[media]"
 ```
 
 Then run it manually when needed (it never runs in the background, so it won't slow your computer down):
@@ -352,8 +366,11 @@ uvx ruff check src tests
 uv run monash --help
 ```
 
-**Releasing**: whenever `src/` changes, bump `__version__` in `src/monash_study_kit/__init__.py` (patch for bug fixes,
-minor for new features); the update notice compares against this number on main. The CI `version-bump` check blocks PRs that forget it. Note what changed in [`CHANGELOG.md`](CHANGELOG.md).
+**Releasing**: whenever `src/` changes, bump `__version__` in `src/monash_study_kit/__init__.py` (patch for bug fixes, minor for new features) and note what changed in [`CHANGELOG.md`](CHANGELOG.md). The CI `version-bump` check blocks PRs that forget it. After merging, push a tag such as `v1.1.0`: [`release.yml`](.github/workflows/release.yml) checks the tag against `__version__` and the changelog, runs the tests, builds the package, uploads it to PyPI with Trusted Publishing, installs it back from PyPI on all three OSes, and creates the GitHub release. Details are in [docs/releasing.md](docs/releasing.md).
+
+See also [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) (how to report a problem), [docs/security.md](docs/security.md) (what is protected and how it is tested) and [docs/adr](docs/adr) (design decisions).
+
+Every PR also builds the wheel, checks what went into it (`scripts/check_dist.py`) and installs it into a clean venv to run `monash --version`, `monash help` and an MCP handshake (`scripts/smoke_test.py`), so a module left out of the package fails CI instead of failing for users.
 
 ### How it fits together
 
@@ -384,7 +401,7 @@ flowchart LR
 | `content_index`, `textextract`, `webnotes` | Full-text search over PDFs, Office files, course-notes websites and transcripts |
 | `browser_login`, `cdp` | Dedicated login window driven over the Chrome DevTools Protocol (a minimal WebSocket client in the standard library) |
 | `jobs`, `mcp_server`, `cli` | Sync and keep-alive jobs, the MCP server, the command line |
-| `doctor`, `help_menu`, `update_check`, `claude_setup` | Health check, help and preset prompts, new-version notice, adding the server to Claude |
+| `doctor`, `doctor_deep`, `help_menu`, `update_check`, `claude_setup` | Health check and `--deep` cross-checks, help and preset prompts, new-version notice, adding the server to Claude |
 | `recordings`, `transcribe` | Optional: lecture recordings to timestamped transcripts (`[media]` extra) |
 
 The only runtime dependency is `pypdf`; everything else (HTTP, SQLite, WebSocket, HTML parsing) uses the standard library.

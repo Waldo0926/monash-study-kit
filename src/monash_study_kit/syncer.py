@@ -36,11 +36,17 @@ def clean(text: str) -> str:
     return " ".join(html.unescape(text or "").split())
 
 
-def safe_name(name: str, limit: int = 80) -> str:
+NAME_LIMIT = int(load_settings().get("name_limit") or 80)
+
+
+def safe_name(name: str, limit: int | None = None) -> str:
     """能当文件/目录名用。去掉路径分隔符和 Windows 不认的字符，截短但保留扩展名。
 
-    上限 80：Windows 默认整条路径不能超过 260 个字符，课程/周次/文件夹/文件四层叠起来很容易超。
+    默认上限 80（设置里的 name_limit）：Windows 默认整条路径不能超过 260 个字符，
+    课程/周次/文件夹/文件四层叠起来很容易超。只在 Linux 服务器上跑的部署可以放宽，
+    但已经同步过的库别改，改了文件名会变，旧文件会被当成另一份再下一遍。
     """
+    limit = limit or NAME_LIMIT
     name = clean(name)
     name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', " ", name)
     name = re.sub(r"\s+", " ", name).strip(" .")
@@ -139,6 +145,8 @@ class CourseSync:
         layout = plan_layout(state)
         cms = {str(cm["id"]): cm for cm in state["cm"]}
         sections = {s["number"]: s for s in state["section"]}
+        if not self.dry:
+            self.clean_partials()
 
         for num in sorted(sections):
             for cmid in sections[num].get("cmlist") or []:
@@ -162,6 +170,17 @@ class CourseSync:
             self.con.commit()
         return self.stats
 
+    def clean_partials(self) -> None:
+        """清掉以前中断的下载留下的临时文件（.dl-*，1.0.3 及以前还会是 .dl-*.part.part）。
+
+        同步是一门一门串行跑的，跑到这门课时不会有正在下的文件。
+        """
+        root = FILES_DIR / self.root
+        if root.exists():
+            for p in root.rglob(".dl-*"):
+                if p.is_file():
+                    p.unlink(missing_ok=True)
+
     def mark_removed(self) -> None:
         """这一轮没再见到的文件标成已移除（老师下架了，或者换了个文件名重新上传）。
 
@@ -170,17 +189,19 @@ class CourseSync:
         """
         if self.stats.errors:
             return
-        rows = self.con.execute("SELECT source, removed_at FROM files WHERE course_id=? AND cmid IS NOT NULL",
+        rows = self.con.execute("SELECT source, path, removed_at FROM files WHERE course_id=? AND cmid IS NOT NULL",
                                 (self.cid,)).fetchall()
         now = now_iso()
         for r in rows:
             seen = r["source"] in self.seen_sources
+            # 视频的字幕稿（transcribe 登记成 transcript:<视频路径>）跟着视频一起标
+            sources = (r["source"], f"transcript:{r['path']}")
             if seen and r["removed_at"]:
-                self.con.execute("UPDATE files SET removed_at=NULL WHERE course_id=? AND source=?",
-                                 (self.cid, r["source"]))
+                self.con.execute("UPDATE files SET removed_at=NULL WHERE course_id=? AND source IN (?,?)",
+                                 (self.cid, *sources))
             elif not seen and not r["removed_at"]:
-                self.con.execute("UPDATE files SET removed_at=? WHERE course_id=? AND source=?",
-                                 (now, self.cid, r["source"]))
+                self.con.execute("UPDATE files SET removed_at=? WHERE course_id=? AND source IN (?,?)",
+                                 (now, self.cid, *sources))
                 self.stats.removed += 1
         self.con.commit()
 
@@ -284,7 +305,7 @@ class CourseSync:
             self.log(f"  + {rel_dir}/{safe_name(guess)}")
             self.stats.downloaded += 1
             return
-        tmp = FILES_DIR / rel_dir / f".dl-{cm['id']}.part"
+        tmp = FILES_DIR / rel_dir / f".dl-{cm['id']}"   # 下载时 client.download 自己会加 .part
         resp = self.c.download(source, tmp)
         name = safe_name(filename_from(resp, guess) or guess)
         rel = self._unique(f"{rel_dir}/{name}", source)

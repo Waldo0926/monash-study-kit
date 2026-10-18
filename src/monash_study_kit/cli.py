@@ -224,7 +224,7 @@ def cmd_status(args):
 
 def cmd_doctor(args):
     from . import doctor
-    report = doctor.run()
+    report = doctor.run(deep=args.deep)
     if want_json(args):
         return emit_json(report)
     print(doctor.render(report))
@@ -319,21 +319,31 @@ def cmd_uninstall(args):
     print("最后运行 uv tool uninstall monash-study-kit 卸载程序本身")
 
 
+# 从 PyPI 装。PyPI 上暂时装不到（刚合进 main、还没发版那几分钟，或者 PyPI 抽风）时退回 main 的 zip
+PACKAGE = "monash-study-kit"
 SOURCE = "https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip"
+
+
+def update_commands(media: bool) -> list[list[str]]:
+    extra = "[media]" if media else ""
+    base = ["uv", "tool", "install", "--reinstall", "--refresh"]
+    return [base + [PACKAGE + extra], base + [f"{PACKAGE}{extra} @ {SOURCE}" if media else SOURCE]]
 
 
 def cmd_update(args):
     import importlib.util
     import shutil
     media = importlib.util.find_spec("faster_whisper") is not None
-    spec = f"monash-study-kit[media] @ {SOURCE}" if media else SOURCE
-    cmd = ["uv", "tool", "install", "--reinstall", "--refresh", spec]
+    cmds = update_commands(media)
     if os.name == "nt" or not shutil.which("uv"):
         # Windows 上正在运行的 monash.exe（包括 Claude 开着的那个）不能被覆盖，要先退出 Claude 再在新窗口里跑
         print("先完全退出 Claude Desktop（托盘图标 → Quit），然后在新的 PowerShell 窗口里运行：\n")
-        print("  " + " ".join(f'"{c}"' if " " in c else c for c in cmd))
+        print("  " + " ".join(f'"{c}"' if " " in c else c for c in cmds[0]))
         return 0
-    r = subprocess.run(cmd)
+    r = subprocess.run(cmds[0])
+    if r.returncode != 0:
+        print("\nPyPI 上没装成，改从 GitHub 装：")
+        r = subprocess.run(cmds[1])
     if r.returncode == 0:
         from . import update_check
         update_check.clear()
@@ -394,6 +404,10 @@ def cmd_todo(args):
             print(f"○ [{x['course']}] {x['title']}")
         if half:
             print(f"另外 {len(half)} 个做了一半：monash ed lessons 课号 --status attempted")
+    if data.get("new_files"):
+        print(f"\n== 最近 {data['days']} 天新上的课件 ==")
+        for f in data["new_files"]:
+            print(f"{local_time(f['synced_at'])}  [{f['course']}] {f['path'].split('/', 1)[-1]}")
     if data["announcements"]:
         print(f"\n== 最近 {data['days']} 天的公告 ==")
         for n in data["announcements"]:
@@ -676,7 +690,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--window", action="store_true", help="直接开窗口，不先试后台自动登录")
     cmd(sub, "status", cmd_status, json_flag=True, help="登录状态、上次同步")
     cmd(sub, "help", cmd_help, help="能做的事和示例问法（Claude 里怎么问、对应哪条命令）")
-    cmd(sub, "doctor", cmd_doctor, json_flag=True, help="体检：一项项查哪里不对，告诉你怎么修")
+    p = cmd(sub, "doctor", cmd_doctor, json_flag=True, help="体检：一项项查哪里不对，告诉你怎么修")
+    p.add_argument("--deep", action="store_true",
+                   help="再去 Moodle 和 Ed 拉一遍，和日历订阅、课程结构、本地文件对照（要一两分钟）")
     p = cmd(sub, "sync", cmd_sync, help="同步 Ed + Moodle + 全文索引")
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
     p.add_argument("--dry-run", action="store_true", help="只列出 Moodle 会下载什么")

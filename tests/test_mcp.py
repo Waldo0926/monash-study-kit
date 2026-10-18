@@ -58,7 +58,8 @@ def test_auth_errors_tell_claude_what_to_do(monkeypatch):
 
 
 def test_read_file_stays_inside_files_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(M, "FILES_DIR", tmp_path)
+    from monash_study_kit import content_index as CI
+    monkeypatch.setattr(CI, "FILES_DIR", tmp_path)
     (tmp_path / "U").mkdir()
     (tmp_path / "U" / "a.py").write_text("x" * 50, encoding="utf-8")
     r = call("tools/call", {"name": "read_file", "arguments": {"path": "U/a.py", "max_chars": 10}})["result"]

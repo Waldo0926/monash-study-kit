@@ -19,7 +19,7 @@ import re
 import time
 from pathlib import Path
 
-from .moodlelib import FILES_DIR, now_iso
+from .moodlelib import FILES_DIR, get_state, now_iso, set_state
 from .recordings import fmt_ts, register, write_transcript
 
 MEDIA = (".mp4", ".mov", ".m4a", ".mp3", ".webm", ".mkv", ".wav")
@@ -37,6 +37,21 @@ def file_hash(p: Path) -> str:
     with open(p, "rb") as f:
         h.update(f.read(16 << 20))
     return h.hexdigest()
+
+
+def cached_hash(con, rel: str) -> str:
+    """file_hash 记在库里，文件大小和修改时间没变就直接用。
+
+    每次开跑都要给所有转写过的视频算一遍哈希来认重复，视频一多就是每次读几个 GB。
+    """
+    st = (FILES_DIR / rel).stat()
+    key = f"hash:{rel}"
+    hit = get_state(con, key)
+    if hit and hit[:2] == [st.st_size, st.st_mtime]:
+        return hit[2]
+    h = file_hash(FILES_DIR / rel)
+    set_state(con, key, [st.st_size, st.st_mtime, h])
+    return h
 
 
 def pending(con) -> list[dict]:
@@ -83,11 +98,11 @@ def run(con, *, model_name: str = MODEL, limit: int = 0, match: str | None = Non
     for r in con.execute("SELECT path FROM files").fetchall():
         p = r["path"]
         if p.lower().endswith(MEDIA) and transcript_path(p) in have and (FILES_DIR / p).exists():
-            seen.setdefault(file_hash(FILES_DIR / p), transcript_path(p))
+            seen.setdefault(cached_hash(con, p), transcript_path(p))
     for item in todo:
         media = FILES_DIR / item["path"]
         out_rel = transcript_path(item["path"])
-        h = file_hash(media)
+        h = cached_hash(con, item["path"])
         name = Path(item["path"]).name
         title = item["title"] or Path(name).stem
         if h in seen:

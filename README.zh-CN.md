@@ -3,6 +3,7 @@
 [![类型](https://img.shields.io/badge/%E7%B1%BB%E5%9E%8B-MCP_%E6%9C%8D%E5%8A%A1_%2B_CLI-2563eb?style=for-the-badge)](#它由两部分组成)
 [![技术](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF-Python_%C2%B7_MCP_%C2%B7_%E6%9C%AC%E5%9C%B0%E4%BC%98%E5%85%88-7c3aed?style=for-the-badge)](#开发)
 [![版本](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=%E7%89%88%E6%9C%AC&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
+[![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![许可证](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-16a34a?style=for-the-badge)](LICENSE)
 [![访问](https://img.shields.io/badge/%E8%AE%BF%E9%97%AE-%E5%8F%AA%E8%AF%BB-475569?style=for-the-badge)](#隐私和安全)
 
@@ -61,7 +62,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 装完**关掉终端再重新打开**，然后：
 
 ```bash
-uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+uv tool install monash-study-kit
 ```
 
 ```bash
@@ -79,7 +80,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 装完**关掉 PowerShell 再重新打开**，然后：
 
 ```powershell
-uv tool install https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip
+uv tool install monash-study-kit
 ```
 
 ```powershell
@@ -231,6 +232,18 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 
   `monash uninstall` 会把它从 Claude 里移除，并询问要不要删掉所有数据。最后记得去 Ed 设置页删掉令牌。
 
+## Token 用量
+
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给 Claude，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.1.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+
+| 每次对话发一次 | Token |
+| --- | ---: |
+| 17 个工具定义 | 2,785 |
+| 服务说明 | 187 |
+| **合计** | **2,972** |
+
+最大的单个工具是 `search_ed_threads`，324。想量自己的回答（问“这周要做什么”、搜课件时工具返回多少，和把整份文件贴进去比），运行 `uv run python scripts/measure_tokens.py --live --query <词>`，只输出数字。设了 `ANTHROPIC_API_KEY` 再加 `--api`，会用 Anthropic 免费的 token 计数接口算准确值。
+
 ## 命令速查
 
 不用 Claude 也可以直接在终端里查：
@@ -240,6 +253,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | `monash status` | 登录状态、上次同步时间 |
 | `monash help` | 能做的事，每条附示例问法和对应命令 |
 | `monash doctor` | 出问题时的体检：一项项查，告诉你怎么修；需要帮忙时把输出整段发给别人 |
+| `monash doctor --deep` | 再去 Moodle 和 Ed 拉一遍，拿第二个来源核对工具的结果：截止日期对日历订阅，作业汇总页对课程结构，本地课件对 Moodle，全文搜索对磁盘上的文件，本地 Ed 帖子对 Ed。只输出数量、课号、日期和活动编号 |
 | `monash todo` | 本周待办：截止、可能漏交、Ed 没做完的 lesson、公告、未读回复 |
 | `monash due [FIT2102]` | 截止日期 |
 | `monash grep "monad" [FIT2102]` | 全文搜课件、课程笔记网页、Ed Lessons 正文、录播字幕稿（带页码/时间戳） |
@@ -270,7 +284,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 这部分依赖比较大（约 1 GB），默认不装。想要的话重新安装时加上 `[media]`：
 
 ```bash
-uv tool install --reinstall "monash-study-kit[media] @ https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip"
+uv tool install --reinstall "monash-study-kit[media]"
 ```
 
 然后需要的时候手动运行（不会在后台自动跑，免得拖慢电脑）：
@@ -326,7 +340,11 @@ uvx ruff check src tests
 uv run monash --help
 ```
 
-**发新版**：改了 `src/` 就把 `src/monash_study_kit/__init__.py` 里的 `__version__` 加一（修 bug 加最后一位，加功能加中间一位），朋友那边的更新提示比的就是 main 上的这个号。CI 的 `version-bump` 检查会拦住忘了改的 PR。改了什么记在 [`CHANGELOG.md`](CHANGELOG.md)。
+**发新版**：改了 `src/` 就把 `src/monash_study_kit/__init__.py` 里的 `__version__` 加一（修 bug 加最后一位，加功能加中间一位），改了什么记在 [`CHANGELOG.md`](CHANGELOG.md)。CI 的 `version-bump` 检查会拦住忘了改的 PR。合进 main 之后推一个 tag，比如 `v1.1.0`：[`release.yml`](.github/workflows/release.yml) 会核对 tag、`__version__` 和 CHANGELOG，跑测试，打包，用 Trusted Publishing 传到 PyPI，再在三个系统上从 PyPI 装回来试一遍，最后建 GitHub Release。详见 [docs/releasing.md](docs/releasing.md)。
+
+另见 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)（怎么报告安全问题）、[docs/security.md](docs/security.md)（保护了什么、怎么测的）和 [docs/adr](docs/adr)（设计决定）。这几份是英文的。
+
+每个 PR 也会打包，检查包里有什么（`scripts/check_dist.py`），装进一个干净的 venv 跑 `monash --version`、`monash help` 和一次 MCP 握手（`scripts/smoke_test.py`）。漏打包的模块会在 CI 里报错，不会等到用户装了才发现。
 
 ### 整体结构
 
@@ -357,7 +375,7 @@ flowchart LR
 | `content_index`、`textextract`、`webnotes` | 全文搜索：PDF、Office 文件、课程笔记网页、录播字幕稿 |
 | `browser_login`、`cdp` | 专用登录窗口，用 Chrome DevTools 协议控制（自己用标准库写的最小 WebSocket 客户端） |
 | `jobs`、`mcp_server`、`cli` | 同步和续期任务、MCP 服务器、命令行 |
-| `doctor`、`help_menu`、`update_check`、`claude_setup` | 体检、帮助和预设提示、新版本提示、接进 Claude |
+| `doctor`、`doctor_deep`、`help_menu`、`update_check`、`claude_setup` | 体检和 `--deep` 对照核对、帮助和预设提示、新版本提示、接进 Claude |
 | `recordings`、`transcribe` | 可选：录播转带时间戳的字幕稿（`[media]`） |
 
 运行时只依赖 `pypdf`，HTTP、SQLite、WebSocket、HTML 解析都用标准库。CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外用 `ruff` 查语法错误、未定义的名字和没用的 import。

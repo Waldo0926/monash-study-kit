@@ -25,10 +25,13 @@ from .paths import DATA_DIR, FILES_DIR, SECRETS_DIR, write_secret  # noqa: F401 
 
 BASE_URL = os.environ.get("MOODLE_BASE_URL", "https://learning.monash.edu").rstrip("/")
 HOST = urllib.parse.urlsplit(BASE_URL).hostname or ""
+BASE_SCHEME = urllib.parse.urlsplit(BASE_URL).scheme
 COOKIE_FILE = SECRETS_DIR / "moodle-cookie"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
 # 请求之间歇一下：这是用个人账号访问学校系统，别像爬虫一样猛打
 REQUEST_GAP = float(os.environ.get("MONASH_KIT_GAP", "0.4"))
+# 会话失效时提示用户跑的命令。服务器上的部署登录方式不一样，用环境变量换掉
+LOGIN_HINT = os.environ.get("MONASH_KIT_LOGIN_HINT", "monash login")
 
 
 class MoodleAuthError(RuntimeError):
@@ -83,7 +86,7 @@ def parse_cookie_input(text: str) -> dict[str, str]:
 
 def load_cookies() -> dict[str, str]:
     if not COOKIE_FILE.exists():
-        raise MoodleAuthError("还没登录 Moodle，先运行 `monash login`")
+        raise MoodleAuthError(f"还没登录 Moodle，先运行 `{LOGIN_HINT}`")
     try:
         jar = json.loads(COOKIE_FILE.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
@@ -139,15 +142,17 @@ class MoodleClient:
         req.add_header("User-Agent", UA)
         for k, v in (headers or {}).items():
             req.add_header(k, v)
-        if urllib.parse.urlsplit(url).hostname == HOST:
+        parts = urllib.parse.urlsplit(url)
+        # 只发给本站，而且协议要和 BASE_URL 一样：http:// 的链接不带 cookie，免得明文发出去
+        if parts.hostname == HOST and parts.scheme == BASE_SCHEME:
             req.add_unredirected_header("Cookie", "; ".join(f"{k}={v}" for k, v in self.jar.items()))
         try:
             resp = _opener.open(req, timeout=60)
         except urllib.error.HTTPError as e:
             resp = e
         status = resp.status if hasattr(resp, "status") else resp.code
-        if urllib.parse.urlsplit(url).hostname == HOST:
-            self._absorb_cookies(resp.headers)
+        if parts.hostname == HOST and parts.scheme == BASE_SCHEME:
+            self._absorb_cookies(resp.headers)      # http:// 的回复可能被人改过，里面的 Set-Cookie 不收
         location = resp.headers.get("Location")
         out = Response(status, url, resp.headers,
                        location=urllib.parse.urljoin(url, location) if location else None)
@@ -308,6 +313,25 @@ class MoodleClient:
         raise MoodleError(f"跳转太多：{url}")
 
 
+def multipart(fields: list[tuple[str, str]], files: list[tuple[str, str, bytes]]) -> tuple[bytes, str]:
+    """标准库没有 multipart 编码器，自己拼一个。files: (字段名, 文件名, 内容)。
+
+    本包只读，用不到；自己在服务器上部署、要交作业的话用它上传文件。"""
+    import secrets
+    boundary = "----mdl" + secrets.token_hex(12)
+    out = bytearray()
+    for name, value in fields:
+        out += (f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n').encode()
+        out += str(value).encode() + b"\r\n"
+    for name, filename, data in files:
+        safe = filename.replace('"', "%22")
+        out += (f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; filename="{safe}"\r\n'
+                f"Content-Type: application/octet-stream\r\n\r\n").encode()
+        out += data + b"\r\n"
+    out += f"--{boundary}--\r\n".encode()
+    return bytes(out), f"multipart/form-data; boundary={boundary}"
+
+
 def _is_redirect(r: Response) -> bool:
     return bool(r.location) and r.status in (301, 302, 303, 307, 308)
 
@@ -321,7 +345,7 @@ def _check_login_url(url: str) -> None:
     host = parts.hostname or ""
     if host.endswith("okta.com") or (host == HOST and parts.path.startswith("/login/")) \
             or (host == HOST and "/auth/saml" in parts.path):
-        raise MoodleAuthError("Moodle 登录已过期（被跳到登录页），运行 `monash login` 重新登录")
+        raise MoodleAuthError(f"Moodle 登录已过期（被跳到登录页），运行 `{LOGIN_HINT}` 重新登录")
 
 
 def filename_from(resp: Response, fallback: str) -> str:

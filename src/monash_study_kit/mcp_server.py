@@ -21,12 +21,13 @@ import threading
 import time
 import traceback
 import zipfile
+from datetime import datetime, timedelta, timezone
 
 from . import __version__, edlib, edquery, help_menu, jobs, textextract
 from . import features as F
 from .edlib import EdAuthError
 from .moodlelib import COOKIE_FILE, FILES_DIR, MoodleAuthError, MoodleClient, db_connect
-from .paths import ED_FILES_DIR, HOME, LOG_FILE, ensure_private_dir, load_settings
+from .paths import HOME, LOG_FILE, ensure_private_dir, load_settings
 from .syncer import course_code, course_folder
 
 PROTOCOL = "2025-06-18"
@@ -333,7 +334,7 @@ def t_list_files(args):
             q += " AND folder LIKE ?"
             params.append(f"Week {int(args['week']):02d}%")
         return [dict(r) for r in con.execute(q + " ORDER BY folder, rowid LIMIT 200", params)]
-    q = "SELECT f.path, f.size, f.title FROM files f WHERE f.removed_at IS NULL"
+    q = "SELECT f.path, f.size, f.title, f.synced_at FROM files f WHERE f.removed_at IS NULL"
     params = []
     if args.get("course"):
         q += " AND f.course_id=?"
@@ -344,6 +345,14 @@ def t_list_files(args):
     if args.get("query"):
         q += " AND (f.path LIKE ? OR f.title LIKE ?)"
         params += [f"%{args['query']}%"] * 2
+    if args.get("since_days"):
+        # “这周新上了什么”：按同步时间过滤，新的排前面（老师换过文件也会重新同步，也算新的）
+        since = datetime.now(timezone.utc) - timedelta(days=int(args["since_days"]))
+        q += " AND f.synced_at >= ? AND f.path NOT LIKE '%.transcript.md'"
+        params.append(since.isoformat(timespec="seconds"))
+        rows = con.execute(q + " ORDER BY f.synced_at DESC LIMIT 200", params).fetchall()
+        return [{"path": r["path"], "bytes": r["size"], "activity": r["title"], "synced_at": r["synced_at"]}
+                for r in rows]
     rows = con.execute(q + " ORDER BY f.path LIMIT 200", params).fetchall()
     if not rows and not con.execute("SELECT 1 FROM files LIMIT 1").fetchone():
         return {"files": [], "note": "还没同步过 Moodle 课件（没登录，或者第一次同步还没跑完；看 get_monash_status）"}
@@ -352,17 +361,15 @@ def t_list_files(args):
 
 def t_read_file(args):
     """读一个已同步的课件：文本直接给；PDF 按页抽文字；docx/pptx 抽文字；zip 先列清单。"""
-    rel = args["path"].replace("\\", "/").lstrip("/")
-    base = FILES_DIR
-    if rel.startswith("ed:"):                  # search_content 给的 Ed 课件路径
-        base, rel = ED_FILES_DIR, rel[3:].lstrip("/")
-    path = (base / rel).resolve()
-    if base.resolve() not in path.parents or not path.is_file():
-        raise ValueError("只能读 list_files 或 search_content 给出的路径")
+    from . import content_index as CI
+    rel = args["path"].replace("\\", "/")
+    path = CI.resolve_readable(rel)          # 只允许课件目录和 Ed 课件目录里的文件
     limit = min(int(args.get("max_chars", MAX_TEXT)), 100000)
     offset = int(args.get("offset", 0))
     ext = path.suffix.lower()
     if ext in TEXT_EXT:
+        if path.stat().st_size > CI.MAX_FILE:
+            raise ValueError(f"文件太大（超过 {CI.MAX_FILE >> 20} MB），没法当文字读")
         text = path.read_text(encoding="utf-8", errors="replace")
         if ext == ".ipynb":
             nb = json.loads(text)
@@ -382,7 +389,12 @@ def t_read_file(args):
                 return {"zip": rel, "files": names[:300]}
             if inner not in names:
                 raise ValueError(f"zip 里没有 {inner}")
-            return _clip(z.read(inner).decode(errors="replace"), limit, offset)
+            # 按解压后的大小限制，压缩包里一个很小的条目也可能解出好几 GB
+            with z.open(inner) as f:
+                data = f.read(CI.MAX_FILE + 1)
+            if len(data) > CI.MAX_FILE:
+                raise ValueError(f"zip 里的 {inner} 太大（超过 {CI.MAX_FILE >> 20} MB），没法当文字读")
+            return _clip(data.decode(errors="replace"), limit, offset)
     if ext in (".docx", ".pptx"):
         parts = textextract.office_parts(path)
         return _clip("\n\n".join(f"[{loc}] {t}" if loc else t for loc, t in parts), limit, offset)
@@ -505,8 +517,9 @@ TOOLS = {
                             {"conversation_id": (I, False), "limit": (I, False)}),
     "search_content": (t_search_content, "全文搜索已同步课件/PDF/笔记/字幕；只列文件用 list_files，拿到 path 后用 read_file。返回匹配片段、文件路径和定位信息。",
                        {"query": (S, True), "course": (S, False), "limit": (I, False)}),
-    "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。返回文件/外链和可供 read_file 使用的路径。",
-                   {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False)}),
+    "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。问“最近新上了什么课件”用 since_days。返回文件/外链和可供 read_file 使用的路径。",
+                   {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False),
+                    "since_days": (I, False)}),
     "read_file": (t_read_file, "读取 list_files/search_content 给出的课件路径；ZIP 用 inner，长内容用 offset/max_chars 分页。若要搜索未知文件先用 search_content。返回文本或 ZIP 清单。",
                   {"path": (S, True), "inner": (S, False), "offset": (I, False), "max_chars": (I, False)}),
     "list_ed_updates": (t_ed_updates, "列 Ed 新帖、新回复和本人相关未读回复；浏览/搜索历史帖子用 search_ed_threads，读完整帖子用 read_ed_thread。返回更新分组和同步时间。",
@@ -564,6 +577,7 @@ PARAM_HELP = {
     ("list_files", "week"): "教学周编号，如 8",
     ("list_files", "query"): "按文件名或路径筛选",
     ("list_files", "links"): "true=列外链；须同时给 course",
+    ("list_files", "since_days"): "只看最近几天新同步的，新的排前面",
     ("read_file", "path"): "list_files/search_content 返回的路径",
     ("read_file", "inner"): "ZIP 内路径；省略=列 ZIP 清单",
     ("read_file", "offset"): "字符起点，默认0",
