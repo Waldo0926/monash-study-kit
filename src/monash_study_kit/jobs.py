@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import content_index, edlib, edsync, lessons
 from .edlib import EdAuthError
-from .moodlelib import MoodleAuthError, MoodleClient, db_connect, now_iso, set_state
+from .moodlelib import DATA_DIR, MoodleAuthError, MoodleClient, db_connect, get_state, now_iso, set_state
 from .paths import HOME, load_settings
 from .syncer import CourseSync, clean, course_code, course_folder, write_links_md
 
@@ -187,8 +187,26 @@ def write_status(status: dict) -> None:
     os.replace(tmp, STATUS_FILE)
 
 
-def hours_since_sync(status: dict | None = None) -> float:
+def last_sync_at(status: dict | None = None) -> str | None:
+    """上次同步的时间。服务器上自己部署时课件是另一个脚本同步的，不写 status.json，
+    只在库里记 last_sync，所以 status.json 没有就看库里的。"""
     at = (status or read_status()).get("last_sync")
+    if at:
+        return at
+    if not (DATA_DIR / "moodle.db").exists():
+        return None
+    try:
+        con = db_connect()
+        try:
+            return (get_state(con, "last_sync") or {}).get("at")
+        finally:
+            con.close()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def hours_since_sync(status: dict | None = None) -> float:
+    at = last_sync_at(status)
     if not at:
         return float("inf")
     return (datetime.now(timezone.utc) - datetime.fromisoformat(at)).total_seconds() / 3600

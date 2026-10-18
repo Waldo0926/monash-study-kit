@@ -16,7 +16,7 @@ from __future__ import annotations
 import random
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import content_index as CI
@@ -30,7 +30,9 @@ DAYS = 14
 DUE_KINDS = {"due", "due date", "closes", "cut-off date"}
 SAMPLE = 3          # 每类差异最多举几个例子
 RESOLVE_MAX = 10    # 每门课最多为了分辨“录像没下”多问几次 Moodle
-WORD_RE = re.compile(r"[A-Za-z]{7,}")
+# 只挑完整的单词：网址里的一段（比如 Google Docs 链接里的 ID）在索引里是另一个词，搜不回来不算错
+WORD_RE = re.compile(r"(?<!\w)[A-Za-z]{7,}(?!\w)")
+URL_RE = re.compile(r"\S+://\S+|www\.\S+")
 
 
 class Context:
@@ -56,6 +58,16 @@ class Context:
 
 def _day(ts: int | None) -> str:
     return datetime.fromtimestamp(ts).strftime("%m-%d") if ts else "?"
+
+
+def _parse_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        t = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
 
 
 def _examples(items) -> str:
@@ -116,14 +128,17 @@ def deep_files(ctx: Context) -> dict:
         rows = ctx.con.execute("SELECT cmid, path FROM files WHERE course_id=? AND removed_at IS NULL",
                                (c["id"],)).fetchall()
         have = {r["cmid"] for r in rows}
-        want = [i for i, cm in cms.items() if cm.get("module") == "resource" and cm.get("url")]
+        # stealth：老师设成“能打开但课程页上不显示”，同步按课程页走，本来就不下
+        want = [i for i, cm in cms.items() if cm.get("module") == "resource" and cm.get("url")
+                and not cm.get("stealth")]
         total += len(want)
         lost = [i for i in want if i not in have]
         for i in lost[:RESOLVE_MAX]:
             # 录像默认不下载、只记链接：问一下 Moodle 文件名，是录像就不算漏
+            # 文件名看本站最后那个地址（同步也是按它判断）；CloudFront 的地址常常没有扩展名
             local, external, _ = ctx.client.resolve(cms[i]["url"] + "&redirect=1")
-            target = (external or local).split("?", 1)[0].lower()
-            if not videos and target.endswith(VIDEO_EXT):
+            names = [u.split("?", 1)[0].lower() for u in (local, external) if u]
+            if not videos and any(n.endswith(VIDEO_EXT) for n in names):
                 expected += 1
             else:
                 missing.append(f"{course_code(c)} cmid {i}")
@@ -162,7 +177,7 @@ def deep_index(ctx: Context, probes: int = 5) -> dict:
     sample = [p for p in chunk_counts if Path(p).exists()]
     for path in random.Random(0).sample(sample, min(probes, len(sample))):
         row = con.execute("SELECT text FROM content_fts WHERE path = ? LIMIT 1", (path,)).fetchone()
-        words = WORD_RE.findall(row[0] if row else "")
+        words = WORD_RE.findall(URL_RE.sub(" ", row[0] if row else ""))
         if not words:
             continue
         tried += 1
@@ -195,19 +210,29 @@ def deep_ed(ctx: Context, limit: int = 30) -> dict:
     client, conn = edlib.EdClient(), edlib.db_connect()
     try:
         courses = conn.execute("SELECT id, code FROM courses WHERE tracked=1").fetchall()
-        missing, stale, total = [], [], 0
+        run = conn.execute("SELECT started_at FROM runs ORDER BY id DESC LIMIT 1").fetchone()
+        since = _parse_time(run["started_at"] if run else None)
+        missing, stale, newer, total = [], [], 0, 0
         for c in courses:
             live = client.get(f"/courses/{c['id']}/threads", {"limit": limit, "offset": 0, "sort": "new"}).get("threads", [])
             local = {r["id"]: r["content_hash"] for r in
                      conn.execute("SELECT id, content_hash FROM threads WHERE course_id=?", (c["id"],))}
             code = edsync.short_code(c["code"])
             total += len(live)
-            missing += [f"{code}#{t.get('number')}" for t in live if t["id"] not in local]
-            stale += [f"{code}#{t.get('number')}" for t in live
-                      if t["id"] in local and local[t["id"]] != edsync.content_stamp(t)]
+            for t in live:
+                if t["id"] in local and local[t["id"]] == edsync.content_stamp(t):
+                    continue
+                # 上次同步开始之后才发或才改的帖子，下次同步就有了，不算漏
+                changed = _parse_time(t.get("updated_at") or t.get("created_at"))
+                if since and changed and changed >= since:
+                    newer += 1
+                elif t["id"] in local:
+                    stale.append(f"{code}#{t.get('number')}")
+                else:
+                    missing.append(f"{code}#{t.get('number')}")
     finally:
         conn.close()
-    detail = f"{len(courses)} 门课最新的 {total} 个帖子"
+    detail = f"{len(courses)} 门课最新的 {total} 个帖子" + (f"（{newer} 个是上次同步之后才有变化的）" if newer else "")
     if missing or stale:
         parts = ([f"本地没有：{_examples(missing)}"] if missing else []) + \
                 ([f"本地是旧的：{_examples(stale)}"] if stale else [])

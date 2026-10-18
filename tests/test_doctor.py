@@ -71,3 +71,17 @@ def test_one_crashing_check_does_not_break_the_report(monkeypatch):
 def test_skip_lets_mcp_avoid_slow_checks(monkeypatch):
     monkeypatch.setattr(doctor, "CHECKS", [doctor.check_settings, doctor.check_claude_code])
     assert [c["name"] for c in doctor.run(skip=("check_claude_code",))["checks"]] == ["设置"]
+
+
+def test_sync_check_falls_back_to_the_moodle_db(tmp_path, monkeypatch):
+    # 服务器上课件是自己的脚本同步的，只在库里记 last_sync，不写 status.json
+    from monash_study_kit import jobs, moodlelib
+    monkeypatch.setattr(jobs, "STATUS_FILE", tmp_path / "status.json")
+    monkeypatch.setattr(jobs, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(jobs, "db_connect", lambda: moodlelib.db_connect(tmp_path / "moodle.db"))
+    assert jobs.last_sync_at() is None and doctor.check_sync()["detail"] == "还没同步过"
+    con = moodlelib.db_connect(tmp_path / "moodle.db")
+    moodlelib.set_state(con, "last_sync", {"at": moodlelib.now_iso(), "new_files": 0})
+    con.close()
+    r = doctor.check_sync()
+    assert r["status"] == doctor.OK and "0 小时前" in r["detail"]

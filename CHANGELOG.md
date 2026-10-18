@@ -2,6 +2,16 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.1.1
+
+`monash doctor --deep` on my server reported four problems that weren't real. Fixed in the checks, no change to syncing:
+
+- "Never synced" on a deployment that syncs Moodle with its own script: the last sync time now falls back to the one stored in the Moodle database when `status.json` has none (`doctor`, `monash status`).
+- Files the teacher made available but hidden from the course page (Moodle "stealth" activities) were counted as missing. Sync follows the course page, so these are skipped.
+- Videos served from CloudFront were counted as missing: the CloudFront address has no file extension, so the check now also looks at the Moodle file name, as sync does.
+- The search probe sometimes picked a word inside a link (for example a Google Docs ID in `links.md`), which the index stores as a different word. It now picks whole words outside links.
+- Ed posts changed after the last sync started are no longer reported as stale; the next sync picks them up.
+
 ## 1.1.0
 
 The code that runs my own server deployment (moodle-sync on a VPS, and ed-digest) used to be a copy of this package and had drifted. Its fixes and features are now here, so both deployments install this package instead of carrying their own copy.
