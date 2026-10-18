@@ -176,12 +176,17 @@ def _removed() -> set[str]:
         con.close()
 
 
+def _inside(path: Path, root: Path) -> bool:
+    """软链接指到文件目录外面的不进索引，和 read_file 的规则一样。"""
+    return not path.is_symlink() or root.resolve() in path.resolve().parents
+
+
 def candidates() -> list[dict]:
     files = []
     if FILES_DIR.exists():
         removed = _removed()
         for p in FILES_DIR.rglob("*"):
-            if p.is_file() and p.suffix.lower() in INDEX_EXT:
+            if p.is_file() and p.suffix.lower() in INDEX_EXT and _inside(p, FILES_DIR):
                 rel = p.relative_to(FILES_DIR)
                 if rel.as_posix() in removed:
                     continue
@@ -192,7 +197,7 @@ def candidates() -> list[dict]:
     if ed_files.exists():
         labels = _ed_labels()
         for p in ed_files.rglob("*"):
-            if p.is_file() and p.suffix.lower() in INDEX_EXT:
+            if p.is_file() and p.suffix.lower() in INDEX_EXT and _inside(p, ed_files):
                 rel = p.relative_to(ed_files).as_posix()
                 course, title, url = labels.get(rel, (None, rel, None))
                 files.append({"path": str(p), "source": "ed", "course": course, "title": title, "url": url})

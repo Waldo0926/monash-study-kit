@@ -25,6 +25,7 @@ from .paths import DATA_DIR, FILES_DIR, SECRETS_DIR, write_secret  # noqa: F401 
 
 BASE_URL = os.environ.get("MOODLE_BASE_URL", "https://learning.monash.edu").rstrip("/")
 HOST = urllib.parse.urlsplit(BASE_URL).hostname or ""
+BASE_SCHEME = urllib.parse.urlsplit(BASE_URL).scheme
 COOKIE_FILE = SECRETS_DIR / "moodle-cookie"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
 # 请求之间歇一下：这是用个人账号访问学校系统，别像爬虫一样猛打
@@ -141,7 +142,9 @@ class MoodleClient:
         req.add_header("User-Agent", UA)
         for k, v in (headers or {}).items():
             req.add_header(k, v)
-        if urllib.parse.urlsplit(url).hostname == HOST:
+        parts = urllib.parse.urlsplit(url)
+        # 只发给本站，而且协议要和 BASE_URL 一样：http:// 的链接不带 cookie，免得明文发出去
+        if parts.hostname == HOST and parts.scheme == BASE_SCHEME:
             req.add_unredirected_header("Cookie", "; ".join(f"{k}={v}" for k, v in self.jar.items()))
         try:
             resp = _opener.open(req, timeout=60)

@@ -22,7 +22,7 @@ from .paths import DEFAULTS, FILES_DIR, HOME, LOG_FILE, load_settings
 OK, WARN, FAIL = "ok", "warn", "fail"
 MARK = {OK: "✓", WARN: "!", FAIL: "✗"}
 ERROR_LINE = re.compile(r"出错|失败|Traceback|Error", re.I)
-SECRET = re.compile(r"(authtoken=|MoodleSession[=:]\s*|Bearer\s+|token[=:]\s*)[^\s&\"',]+", re.I)
+SECRET = re.compile(r"(authtoken=|sesskey=|MoodleSession[=:]\s*|Bearer\s+|token[=:]\s*)[^\s&\"',]+", re.I)
 
 
 def _check(name: str, status: str, detail: str, fix: str = "") -> dict:
@@ -78,9 +78,9 @@ def check_moodle() -> dict:
     try:
         left = MoodleClient().time_remaining()
     except MoodleAuthError as e:
-        return _check("Moodle 登录", FAIL, f"{e}{fallback}", "monash login")
+        return _check("Moodle 登录", FAIL, f"{scrub(str(e))}{fallback}", "monash login")
     except (MoodleError, urllib.error.URLError, OSError) as e:
-        return _check("Moodle 登录", WARN, f"连不上 Moodle：{e}", "检查网络，过一会儿再试")
+        return _check("Moodle 登录", WARN, f"连不上 Moodle：{scrub(str(e))}", "检查网络，过一会儿再试")
     return _check("Moodle 登录", OK, f"已登录，会话还剩 {(left or 0) // 60} 分钟")
 
 
@@ -92,7 +92,7 @@ def check_ed() -> dict:
     except edlib.EdAuthError:
         return _check("Ed 令牌", FAIL, "令牌失效了（在 Ed 设置页被删了？）", "monash login ed，粘贴一个新令牌")
     except (urllib.error.URLError, OSError) as e:
-        return _check("Ed 令牌", WARN, f"连不上 Ed：{e}", "检查网络，过一会儿再试")
+        return _check("Ed 令牌", WARN, f"连不上 Ed：{scrub(str(e))}", "检查网络，过一会儿再试")
     return _check("Ed 令牌", OK, f"有效（{user.get('name') or '已登录'}）")
 
 
@@ -204,7 +204,7 @@ def run(skip: tuple = (), deep: bool = False) -> dict:
         try:
             results.append(fn())
         except Exception as e:  # noqa: BLE001  体检本身不能崩
-            results.append(_check(fn.__name__.removeprefix("check_"), WARN, f"检查时出错：{type(e).__name__}: {e}"))
+            results.append(_check(fn.__name__.removeprefix("check_"), WARN, f"检查时出错：{type(e).__name__}: {scrub(str(e))}"))
     if deep:
         from . import doctor_deep
         results += doctor_deep.run()

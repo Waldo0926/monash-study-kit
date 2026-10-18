@@ -65,14 +65,25 @@ def _xml_text(xml: str, para_end: str, sep: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", xml))
 
 
+OFFICE_XML_MAX = 50 * 1024 * 1024   # 单个 slide/document.xml 解压后最多读这么多，防解压炸弹
+
+
+def _read_member(z: zipfile.ZipFile, name: str) -> str:
+    with z.open(name) as f:
+        data = f.read(OFFICE_XML_MAX + 1)
+    if len(data) > OFFICE_XML_MAX:
+        raise ValueError(f"{name} 解压后太大，不读")
+    return data.decode(errors="replace")
+
+
 def office_parts(path: Path) -> list[tuple[str, str]]:
     """pptx → [("slide N", 文字)]；docx → [("", 全文，段落间空行)]。"""
     with zipfile.ZipFile(path) as z:
         if path.suffix.lower() == ".pptx":
             nums = sorted(int(m.group(1)) for n in z.namelist()
                           if (m := re.match(r"ppt/slides/slide(\d+)\.xml$", n)))
-            return [(f"slide {i}", " ".join(_xml_text(z.read(f"ppt/slides/slide{i}.xml").decode(errors="replace"),
+            return [(f"slide {i}", " ".join(_xml_text(_read_member(z, f"ppt/slides/slide{i}.xml"),
                                                       r"</a:p>", " ").split()))
                     for i in nums]
-        xml = z.read("word/document.xml").decode(errors="replace")
+        xml = _read_member(z, "word/document.xml")
     return [("", _xml_text(xml, r"</w:p>", "\n\n"))]

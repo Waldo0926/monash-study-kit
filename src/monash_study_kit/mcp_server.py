@@ -368,6 +368,8 @@ def t_read_file(args):
     offset = int(args.get("offset", 0))
     ext = path.suffix.lower()
     if ext in TEXT_EXT:
+        if path.stat().st_size > CI.MAX_FILE:
+            raise ValueError(f"文件太大（超过 {CI.MAX_FILE >> 20} MB），没法当文字读")
         text = path.read_text(encoding="utf-8", errors="replace")
         if ext == ".ipynb":
             nb = json.loads(text)
@@ -387,7 +389,12 @@ def t_read_file(args):
                 return {"zip": rel, "files": names[:300]}
             if inner not in names:
                 raise ValueError(f"zip 里没有 {inner}")
-            return _clip(z.read(inner).decode(errors="replace"), limit, offset)
+            # 按解压后的大小限制，压缩包里一个很小的条目也可能解出好几 GB
+            with z.open(inner) as f:
+                data = f.read(CI.MAX_FILE + 1)
+            if len(data) > CI.MAX_FILE:
+                raise ValueError(f"zip 里的 {inner} 太大（超过 {CI.MAX_FILE >> 20} MB），没法当文字读")
+            return _clip(data.decode(errors="replace"), limit, offset)
     if ext in (".docx", ".pptx"):
         parts = textextract.office_parts(path)
         return _clip("\n\n".join(f"[{loc}] {t}" if loc else t for loc, t in parts), limit, offset)

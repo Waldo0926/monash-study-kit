@@ -124,15 +124,19 @@ class EdClient:
                 time.sleep(gap)
             self._last = time.time()
 
+    def _request(self, url: str, data: bytes | None = None) -> urllib.request.Request:
+        req = urllib.request.Request(url, data=data, method="POST" if data is not None else "GET",
+                                     headers={"accept": "application/json", "user-agent": UA})
+        # 令牌放在“不跟随跳转”的头里：Ed 万一把请求跳到别的网站，urllib 不会把令牌一起带过去
+        for k, v in auth_headers(self.token).items():
+            req.add_unredirected_header(k, v)
+        return req
+
     def get(self, path: str, params: dict | None = None, retries: int = 4):
         url = f"{API_BASE}{path}"
         if params:
             url += "?" + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={
-            **auth_headers(self.token),
-            "accept": "application/json",
-            "user-agent": UA,
-        })
+        req = self._request(url)
         for attempt in range(retries):
             self._throttle()
             try:
@@ -158,11 +162,7 @@ class EdClient:
 
 
     def post(self, path: str):
-        req = urllib.request.Request(f"{API_BASE}{path}", data=b"", method="POST", headers={
-            **auth_headers(self.token),
-            "accept": "application/json",
-            "user-agent": UA,
-        })
+        req = self._request(f"{API_BASE}{path}", data=b"")
         try:
             with urllib.request.urlopen(req, timeout=45) as resp:
                 return json.loads(resp.read().decode("utf-8"))

@@ -20,7 +20,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from .cdp import CDP, WebSocketClosed
+from .cdp import CDP, PipeCDP, WebSocketClosed
 from .moodlelib import BASE_URL, HOST, MoodleAuthError, MoodleClient, save_cookies
 from .paths import BROWSER, BROWSER_PROFILE, ensure_private_dir
 
@@ -59,22 +59,32 @@ def find_browser() -> str | None:
 
 
 class Browser:
-    """一个用 BROWSER_PROFILE 启动、开着远程调试端口的浏览器。"""
+    """一个用 BROWSER_PROFILE 启动、能用 CDP 控制的浏览器（POSIX 走管道，Windows 走本机端口）。"""
 
     def __init__(self, url: str, headless: bool = False):
         exe = find_browser()
         if not exe:
             raise LoginFailed("没找到 Chrome / Edge / Brave。装一个 Chrome，或者用 monash config browser <路径> 指定浏览器程序")
         ensure_private_dir(BROWSER_PROFILE)
+        flags = ["--no-first-run", "--no-default-browser-check", "--disable-sync",
+                 "--window-size=1100,860", "--new-window", url]
+        if headless:
+            flags.insert(0, "--headless=new")
+        if os.name != "nt":
+            # 不开端口：DevTools 走管道，登录窗口开着的时候本机别的程序也连不上它
+            self.cdp = PipeCDP([exe, f"--user-data-dir={BROWSER_PROFILE}", "--remote-debugging-pipe", *flags])
+            self.proc = self.cdp.proc
+            try:
+                self.cdp.call("Browser.getVersion", timeout=30)
+            except (OSError, RuntimeError, TimeoutError) as e:
+                self.proc.kill()
+                raise LoginFailed("浏览器没能启动（如果这个专用窗口已经开着，先把它关掉再试）") from e
+            return
+        # Windows：随机端口，端口号写在专用配置目录里（只有自己能读）
         port_file = BROWSER_PROFILE / "DevToolsActivePort"
         port_file.unlink(missing_ok=True)
-        args = [exe, f"--user-data-dir={BROWSER_PROFILE}", "--remote-debugging-port=0",
-                "--no-first-run", "--no-default-browser-check", "--disable-sync",
-                "--window-size=1100,860", "--new-window", url]
-        if headless:
-            args.insert(1, "--headless=new")
-        self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                     stdin=subprocess.DEVNULL)
+        self.proc = subprocess.Popen([exe, f"--user-data-dir={BROWSER_PROFILE}", "--remote-debugging-port=0", *flags],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             if port_file.exists():

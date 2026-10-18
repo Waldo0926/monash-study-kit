@@ -16,6 +16,13 @@ The code that runs my own server deployment (moodle-sync on a VPS, and ed-digest
 - `monash media` caches each video's fingerprint, so it no longer re-reads every transcribed video on each run.
 - Ed: replies under a deleted reply are kept, as Ed still shows them.
 - Saving the Moodle cookie or Ed token uses a per-process temporary file, so two MCP servers (Claude Desktop and Claude Code) refreshing at once can't clash.
+- Security fixes from a review of the whole package (`docs/security.md`):
+  - The Moodle cookie is only sent over the same scheme as `MOODLE_BASE_URL` (HTTPS), never to an `http://` link.
+  - The Ed token is no longer carried along if Ed ever redirects a request to another site.
+  - The login window talks to the browser over a pipe on macOS and Linux, so no DevTools port is open while you log in.
+  - `read_file` refuses text files over 30 MB and zip entries that unpack to more than that, and docx/pptx text is read with a size cap.
+  - `monash doctor` also hides `sesskey` values and scrubs error messages from checks that crash.
+  - Symlinks in the course-file folders that point outside them are no longer indexed.
 - `monash doctor --deep` cross-checks the tools against a second source: upcoming due dates against the iCal feed, the assignment overview page against the course structure, synced files against the course structure (lecture videos that are deliberately not downloaded are told apart), the search index against the files on disk plus a few real searches that must find their file again, and the latest Ed posts against the local copy. It only reads, and prints counts, unit codes, dates and activity ids, never titles, file names or grades.
 - Published on PyPI: install with `uv tool install monash-study-kit`. `monash update` installs from PyPI (falling back to GitHub), and the update notice checks PyPI first.
 - Releases are made by pushing a tag: CI checks the tag against `__version__` and this changelog, runs the tests, uploads with Trusted Publishing, installs the result back from PyPI on three OSes and creates the GitHub release. Every PR also installs the built wheel into a clean venv and runs `monash --version`, `monash help` and an MCP handshake. See `docs/releasing.md`.

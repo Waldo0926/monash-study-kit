@@ -3,6 +3,9 @@
 标准库没有 WebSocket，这里只实现 CDP 用得到的部分：握手、发文本帧（客户端必须加掩码）、
 收文本帧（含分片）、回 ping。不发 Origin 头，因为 Chrome 只对带 Origin 的连接要求
 --remote-allow-origins，不带就放行。只连 127.0.0.1。
+
+macOS 和 Linux 上不开端口，用 PipeCDP：DevTools 走 fd 3/4 两根管道（--remote-debugging-pipe），
+本机别的程序和别的用户都连不上。Windows 没有 fork/exec 时挪 fd 的办法，只能用端口。
 """
 from __future__ import annotations
 
@@ -11,6 +14,7 @@ import json
 import os
 import socket
 import struct
+import subprocess
 import time
 import urllib.parse
 
@@ -118,3 +122,67 @@ class CDP:
 
     def close(self) -> None:
         self.ws.close()
+
+
+class PipeCDP:
+    """--remote-debugging-pipe 上的 CDP：浏览器从 fd 3 读命令、往 fd 4 写回复，消息以 \\0 结尾。只用于 POSIX。"""
+
+    def __init__(self, argv: list[str]):
+        to_child_r, self._to_child = os.pipe()        # 我们写 → 浏览器从 fd 3 读
+        self._from_child, from_child_w = os.pipe()    # 浏览器写 fd 4 → 我们读
+
+        def wire():                                    # 子进程里、exec 之前
+            # 先挪到别的号上再 dup2：管道本身可能就是 fd 3/4，dup2(3, 3) 什么都不做，
+            # close-on-exec 标志还在，exec 时浏览器那头就被关了
+            a, b = os.dup(to_child_r), os.dup(from_child_w)
+            os.dup2(a, 3)
+            os.dup2(b, 4)
+            os.set_inheritable(3, True)
+            os.set_inheritable(4, True)
+
+        self.proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL, preexec_fn=wire, close_fds=False)
+        os.close(to_child_r)
+        os.close(from_child_w)
+        os.set_blocking(self._from_child, False)
+        self._buf = b""
+        self._id = 0
+
+    def call(self, method: str, params: dict | None = None, timeout: float = 15) -> dict:
+        self._id += 1
+        mid = self._id
+        try:
+            os.write(self._to_child, json.dumps({"id": mid, "method": method, "params": params or {}}).encode() + b"\0")
+        except OSError as e:
+            raise WebSocketClosed("浏览器已经关掉了") from e
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            while b"\0" in self._buf:
+                raw, self._buf = self._buf.split(b"\0", 1)
+                try:
+                    msg = json.loads(raw)
+                except ValueError:
+                    continue
+                if msg.get("id") == mid:
+                    if "error" in msg:
+                        raise RuntimeError(f"{method}: {msg['error'].get('message')}")
+                    return msg.get("result") or {}
+            try:
+                chunk = os.read(self._from_child, 1 << 16)
+            except BlockingIOError:
+                if self.proc.poll() is not None:
+                    raise WebSocketClosed("浏览器已经关掉了") from None
+                time.sleep(0.05)
+                continue
+            if not chunk:
+                raise WebSocketClosed("浏览器已经关掉了")
+            self._buf += chunk
+        raise TimeoutError(f"{method} 没有回应")
+
+    def close(self) -> None:
+        for fd in (self._to_child, self._from_child):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
