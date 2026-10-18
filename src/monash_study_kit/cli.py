@@ -394,6 +394,10 @@ def cmd_todo(args):
             print(f"○ [{x['course']}] {x['title']}")
         if half:
             print(f"另外 {len(half)} 个做了一半：monash ed lessons 课号 --status attempted")
+    if data.get("new_files"):
+        print(f"\n== 最近 {data['days']} 天新上的课件 ==")
+        for f in data["new_files"]:
+            print(f"{local_time(f['synced_at'])}  [{f['course']}] {f['path'].split('/', 1)[-1]}")
     if data["announcements"]:
         print(f"\n== 最近 {data['days']} 天的公告 ==")
         for n in data["announcements"]:

@@ -1,12 +1,15 @@
 """从课件里抽文字：PDF（按页）、docx/pptx（按段/页）。
 
-PDF 用 pypdf（纯 Python，随包安装）；朋友的电脑上多半没有 pdftotext，Windows 更没有。
+PDF 默认用 pypdf（纯 Python，随包安装）；朋友的电脑上多半没有 pdftotext，Windows 更没有。
+装了 poppler 的机器（比如服务器）可以 `monash config pdf_extractor pdftotext`，排版更准。
 """
 from __future__ import annotations
 
 import html
 import logging
 import re
+import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -15,6 +18,11 @@ logging.getLogger("pypdf").setLevel(logging.ERROR)   # 课件 PDF 常有小毛�
 
 def pdf_pages(path: Path) -> list[str]:
     """每页一段文字；坏文件、加密文件返回空列表。"""
+    from .paths import load_settings
+    if load_settings().get("pdf_extractor") == "pdftotext" and shutil.which("pdftotext"):
+        pages = _pdftotext(path)
+        if pages is not None:
+            return pages
     try:
         from pypdf import PdfReader
         reader = PdfReader(str(path))
@@ -32,6 +40,20 @@ def pdf_pages(path: Path) -> list[str]:
         return out
     except Exception:  # noqa: BLE001
         return []
+
+
+def _pdftotext(path: Path) -> list[str] | None:
+    try:
+        r = subprocess.run(["pdftotext", "-layout", str(path), "-"], capture_output=True, text=True,
+                           timeout=120, errors="replace")
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    pages = r.stdout.split("\f")
+    if pages and not pages[-1].strip():
+        pages.pop()                     # 最后一页后面也有一个换页符
+    return pages
 
 
 def _xml_text(xml: str, para_end: str, sep: str) -> str:

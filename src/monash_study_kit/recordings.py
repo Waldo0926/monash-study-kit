@@ -142,9 +142,13 @@ def zoom_download(share_url: str, passcode: str | None, dest_for, exists=lambda 
             dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = dest.with_name(dest.name + ".part")
             req = urllib.request.Request(mp4, headers={"User-Agent": UA, "Referer": base + "/"})
-            with op.open(req, timeout=120) as r, open(tmp, "wb") as f:
-                while chunk := r.read(1 << 20):
-                    f.write(chunk)
+            try:
+                with op.open(req, timeout=120) as r, open(tmp, "wb") as f:
+                    while chunk := r.read(1 << 20):
+                        f.write(chunk)
+            except BaseException:
+                tmp.unlink(missing_ok=True)  # 几百 MB 的半截视频别留在周目录里
+                raise
             os.replace(tmp, dest)
         out.append({"clip": clip, "total": total, "path": dest, "duration": res.get("duration"),
                     "skipped": exists(clip)})

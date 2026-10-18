@@ -14,16 +14,16 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .paths import DATA_DIR, SECRETS_DIR, write_secret
+from .paths import DATA_DIR, ED_DB, ED_TOKEN_FILE, write_secret
 
 API_BASE = "https://edstem.org/api"
 WEB_BASE = "https://edstem.org/au/courses"
 TOKEN_PAGE = "https://edstem.org/au/settings/api-tokens"
 UA = "monash-study-kit (personal study helper)"   # Ed 对 Python 默认 UA 回 403
 
-TOKEN_FILE = SECRETS_DIR / "ed-token"
+TOKEN_FILE = ED_TOKEN_FILE
 CONFIG_FILE = DATA_DIR / "ed-config.json"
-DB_PATH = DATA_DIR / "ed.db"
+DB_PATH = ED_DB
 
 
 class EdAuthError(RuntimeError):
@@ -61,6 +61,17 @@ def auth_headers(token: str) -> dict:
     if is_api_token(token):
         return {"authorization": f"Bearer {token}"}
     return {"x-token": token}
+
+
+def token_expiry(token: str) -> datetime | None:
+    """读浏览器 JWT 的 exp（不校验签名，只是为了提前提醒续期）。API 令牌不过期，返回 None。"""
+    try:
+        import base64
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return datetime.fromtimestamp(json.loads(base64.urlsafe_b64decode(payload))["exp"], tz=timezone.utc)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def load_config() -> dict:
@@ -145,6 +156,34 @@ class EdClient:
                 raise
         raise RuntimeError(f"请求失败：{path}")
 
+
+    def post(self, path: str):
+        req = urllib.request.Request(f"{API_BASE}{path}", data=b"", method="POST", headers={
+            **auth_headers(self.token),
+            "accept": "application/json",
+            "user-agent": UA,
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise EdAuthError(f"Ed 返回 {e.code}：令牌失效（{path}）") from e
+            raise
+
+    def renew(self) -> datetime | None:
+        """浏览器里取的 JWT 固定 14 天过期，POST /api/renew_token 可以随时换一张新的并写回令牌文件。
+
+        定时任务至少每 14 天跑一次就永远不会过期。API 令牌不过期，不用也不能续，返回 None。
+        """
+        if is_api_token(self.token):
+            return None
+        tok = (self.post("/renew_token") or {}).get("token")
+        if not tok:
+            raise RuntimeError("renew_token 没有返回 token 字段")
+        save_token(tok)
+        self.token = tok
+        return token_expiry(tok)
 
     def me(self) -> dict:
         return self.get("/user")
@@ -406,6 +445,10 @@ def flatten_replies(thread: dict, users=None) -> list[dict]:
     def walk(items, kind, depth, parent_id):
         for it in items or []:
             if it.get("deleted_at"):
+                # 被删的回复本身不要，但它下面别人的回复还在 Ed 上显示，照样收进来
+                # （父回复不在库里，edquery._nest_order 会把它们排到最后）
+                walk(it.get("comments"), "reply", depth + 1, it.get("id"))
+                walk(it.get("replies"), "reply", depth + 1, it.get("id"))
                 continue
             out.append({
                 "id": it.get("id"),

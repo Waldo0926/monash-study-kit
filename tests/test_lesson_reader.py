@@ -83,8 +83,9 @@ def test_slide_order_recorded_from_api():
 
 
 def test_read_file_opens_ed_files_but_not_outside(tmp_path, monkeypatch):
+    from monash_study_kit import content_index as CI
     from monash_study_kit import mcp_server as M
-    monkeypatch.setattr(M, "ED_FILES_DIR", tmp_path / "ed")
+    monkeypatch.setattr(CI, "ED_FILES_DIR", tmp_path / "ed")
     (tmp_path / "ed" / "1").mkdir(parents=True)
     (tmp_path / "ed" / "1" / "a.md").write_text("hello ed", encoding="utf-8")
     (tmp_path / "secret").write_text("token", encoding="utf-8")

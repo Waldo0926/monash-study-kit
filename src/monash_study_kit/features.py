@@ -198,6 +198,18 @@ def _ical_ts(v: str | None) -> int | None:
     return None
 
 
+# 日历标题 = 活动名 + Monash 追加的排课/系统信息 + 类型后缀，比如
+#   "Week 8 Applied Session Submission - Allocate+ FIT2102 Tutorial 09 MA_... Wed 14:00 (Due date)"
+#   "Assignment 2 - CALLISTA: FIT2109 MALAYSIA ON-CAMPUS S2 2026 (Due date)"
+# 接口版有单独的 activityname，iCal 没有，只能从标题里剥。
+ICAL_SUFFIX_RE = re.compile(r"\s+-\s+(Allocate\+|CALLISTA:).*$", re.I)
+
+
+def ical_activity(summary: str) -> str:
+    name = KIND_RE.sub("", summary).strip()
+    return ICAL_SUFFIX_RE.sub("", name).strip() or summary
+
+
 def ical_items(text: str, now: int | None = None) -> list[dict]:
     now = now or int(time.time())
     out = []
@@ -212,7 +224,7 @@ def ical_items(text: str, now: int | None = None) -> list[dict]:
             "course_id": None,
             "name": re.sub(r"\s+is due$", "", name),
             "kind": (kind.group(1) or kind.group(2)).lower() if kind else "event",
-            "activity": None, "module": None,
+            "activity": ical_activity(name), "module": None,
             "due": _ts(ts), "due_ts": ts, "overdue": (ts or 0) < now,
             "action": None, "actionable": False, "url": None,
             "source": "ical",
@@ -340,12 +352,13 @@ def discussions(client: MoodleClient, forum_cmid: int, limit: int = 20) -> list[
     out = []
     for tr in doc.find_all("tr", data__region="discussion-list-item"):
         a = tr.find("a", cls="w-100") or tr.find("a", href=lambda h: "discuss.php?d=" in h)
-        if not a:
+        did = tr.get("data-discussionid") or ""
+        if not a or not did.isdigit():   # 置顶分隔行之类没有 id，跳过，别让整页公告都读不出来
             continue
         author = tr.find(cls="author-info") or (tr.find_all("td")[2] if len(tr.find_all("td")) > 2 else None)
         replies = tr.find(cls="replies") or tr.find(data__region="replies")
         times = [t.get("datetime") for t in tr.find_all("time") if t.get("datetime")]
-        out.append({"id": int(tr.get("data-discussionid")), "title": a.text(), "url": a.get("href"),
+        out.append({"id": int(did), "title": a.text(), "url": a.get("href"),
                     "author": author.text() if author else "", "replies": replies.text() if replies else None,
                     "time": times[0] if times else None,
                     "pinned": "pinned" in tr.classes or tr.find(data__region="pinned-label", hidden=None) is not None})
@@ -562,7 +575,7 @@ def get(client: MoodleClient, ref: str, to: Path, force: bool = False,
         targets = [url]
     receipts = []
     for t in dict.fromkeys(targets):
-        tmp = to / f".mdl-get-{abs(hash(t))}.part"
+        tmp = to / f".mdl-get-{abs(hash(t))}"     # 下载时 client.download 自己会加 .part
         resp = client.download(t, tmp)
         name = safe_name(filename_from(resp, "download"))
         dest = to / name

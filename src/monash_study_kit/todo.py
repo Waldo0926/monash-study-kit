@@ -3,6 +3,7 @@
     monash todo [--days 7]
 
   - Moodle：接下来 N 天的截止/日历事件（会话失效时用 iCal 订阅链接）、已过截止但没交也没分的作业；
+  - 最近 N 天新同步下来的课件（读本地库，不发请求）；
   - Ed：还没做完的 lesson（只到你目前进度的下一周）、最近 N 天的公告、有未读新回复的帖子。
 
 Ed 的部分读本地的 ed.db（只读打开），不发请求；库由 sync 维护。
@@ -18,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import features as F
 from .edlib import DB_PATH as ED_DB
-from .moodlelib import MoodleAuthError, MoodleClient, MoodleError
+from .moodlelib import MoodleAuthError, MoodleClient, MoodleError, db_connect
 from .syncer import course_code
 
 # 没网、Moodle 抽风：这些错误只影响 Moodle 那一块，Ed 部分读的是本地库，照常给
@@ -108,6 +109,25 @@ def _ts(iso: str | None) -> float:
         return 0.0
 
 
+def new_files(courses: list[dict], days: int, limit: int = 30) -> list[dict]:
+    """最近 N 天新下载或者被老师换过的课件。synced_at 在重新下载时也会更新，所以换过的也算。"""
+    ids = [int(c["id"]) for c in courses]
+    if not ids:
+        return []
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    con = db_connect()
+    try:
+        rows = con.execute(f"""SELECT f.path, f.title, f.synced_at, c.code FROM files f
+                               JOIN courses c ON c.id = f.course_id
+                               WHERE f.course_id IN ({",".join("?" * len(ids))}) AND f.removed_at IS NULL
+                                 AND f.synced_at >= ? AND f.path NOT LIKE '%.transcript.md'
+                               ORDER BY f.synced_at DESC LIMIT ?""", (*ids, since, limit)).fetchall()
+    finally:
+        con.close()
+    return [{"course": _code(r["code"]), "path": r["path"], "activity": r["title"], "synced_at": r["synced_at"]}
+            for r in rows]
+
+
 def build(client: MoodleClient | None, courses: list[dict], days: int = 7) -> dict:
     notes: list[str] = []
     out: dict = {"days": days, "generated_at": datetime.now(timezone.utc).isoformat(timespec="minutes")}
@@ -138,6 +158,7 @@ def build(client: MoodleClient | None, courses: list[dict], days: int = 7) -> di
             notes.append(f"连不上 Moodle（{e}）：作业汇总和 Moodle 公告缺失")
             break
     out["possibly_missing"] = missing
+    out["new_files"] = new_files(courses, days)
 
     con = _ed_conn()
     if con is None:
