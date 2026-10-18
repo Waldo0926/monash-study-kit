@@ -241,6 +241,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | `monash status` | 登录状态、上次同步时间 |
 | `monash help` | 能做的事，每条附示例问法和对应命令 |
 | `monash doctor` | 出问题时的体检：一项项查，告诉你怎么修；需要帮忙时把输出整段发给别人 |
+| `monash doctor --deep` | 再去 Moodle 和 Ed 拉一遍，拿第二个来源核对工具的结果：截止日期对日历订阅，作业汇总页对课程结构，本地课件对 Moodle，全文搜索对磁盘上的文件，本地 Ed 帖子对 Ed。只输出数量、课号、日期和活动编号 |
 | `monash todo` | 本周待办：截止、可能漏交、Ed 没做完的 lesson、公告、未读回复 |
 | `monash due [FIT2102]` | 截止日期 |
 | `monash grep "monad" [FIT2102]` | 全文搜课件、课程笔记网页、Ed Lessons 正文、录播字幕稿（带页码/时间戳） |
@@ -360,7 +361,7 @@ flowchart LR
 | `content_index`、`textextract`、`webnotes` | 全文搜索：PDF、Office 文件、课程笔记网页、录播字幕稿 |
 | `browser_login`、`cdp` | 专用登录窗口，用 Chrome DevTools 协议控制（自己用标准库写的最小 WebSocket 客户端） |
 | `jobs`、`mcp_server`、`cli` | 同步和续期任务、MCP 服务器、命令行 |
-| `doctor`、`help_menu`、`update_check`、`claude_setup` | 体检、帮助和预设提示、新版本提示、接进 Claude |
+| `doctor`、`doctor_deep`、`help_menu`、`update_check`、`claude_setup` | 体检和 `--deep` 对照核对、帮助和预设提示、新版本提示、接进 Claude |
 | `recordings`、`transcribe` | 可选：录播转带时间戳的字幕稿（`[media]`） |
 
 运行时只依赖 `pypdf`，HTTP、SQLite、WebSocket、HTML 解析都用标准库。CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外用 `ruff` 查语法错误、未定义的名字和没用的 import。

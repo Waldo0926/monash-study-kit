@@ -1,5 +1,7 @@
 """monash doctor：把常见问题一项项查一遍，每项给出“怎么修”。
 
+--deep 再拿第二个来源核对一遍工具给出的结果，见 doctor_deep.py。
+
 输出是给朋友发给帮忙的人看的，所以绝不打印令牌、cookie、日历链接、邮箱；
 路径、版本、课号、报错摘要可以打。每项检查互相独立，一项出错不影响别的。
 """
@@ -194,7 +196,7 @@ CHECKS = [check_install, check_data_dir, check_browser, check_moodle, check_ed, 
           check_claude_desktop, check_claude_code, check_mcp_log, check_settings]
 
 
-def run(skip: tuple = ()) -> dict:
+def run(skip: tuple = (), deep: bool = False) -> dict:
     results = []
     for fn in CHECKS:
         if fn.__name__ in skip:
@@ -203,6 +205,9 @@ def run(skip: tuple = ()) -> dict:
             results.append(fn())
         except Exception as e:  # noqa: BLE001  体检本身不能崩
             results.append(_check(fn.__name__.removeprefix("check_"), WARN, f"检查时出错：{type(e).__name__}: {e}"))
+    if deep:
+        from . import doctor_deep
+        results += doctor_deep.run()
     return {"version": __version__, "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "ok": not any(r["status"] == FAIL for r in results), "checks": results}
 

@@ -260,6 +260,7 @@ You can also query directly in the terminal without Claude:
 | `monash status` | Login status, last sync time |
 | `monash help` | Everything it can do, each with an example question and the matching command |
 | `monash doctor` | Health check when something breaks: checks each item and tells you how to fix it; send the whole output to whoever helps you |
+| `monash doctor --deep` | Also fetches from Moodle and Ed and cross-checks the tools against a second source: due dates against the calendar feed, the assignment page against the course structure, synced files against Moodle, search against the files on disk, local Ed posts against Ed. Prints only counts, unit codes, dates and activity ids |
 | `monash todo` | This week: deadlines, possibly missed work, unfinished Ed lessons, announcements, unread replies |
 | `monash due [FIT2102]` | Deadlines |
 | `monash grep "monad" [FIT2102]` | Full-text search over course files, course-notes sites, Ed lesson pages and recording transcripts (with page numbers / timestamps) |
@@ -386,7 +387,7 @@ flowchart LR
 | `content_index`, `textextract`, `webnotes` | Full-text search over PDFs, Office files, course-notes websites and transcripts |
 | `browser_login`, `cdp` | Dedicated login window driven over the Chrome DevTools Protocol (a minimal WebSocket client in the standard library) |
 | `jobs`, `mcp_server`, `cli` | Sync and keep-alive jobs, the MCP server, the command line |
-| `doctor`, `help_menu`, `update_check`, `claude_setup` | Health check, help and preset prompts, new-version notice, adding the server to Claude |
+| `doctor`, `doctor_deep`, `help_menu`, `update_check`, `claude_setup` | Health check and `--deep` cross-checks, help and preset prompts, new-version notice, adding the server to Claude |
 | `recordings`, `transcribe` | Optional: lecture recordings to timestamped transcripts (`[media]` extra) |
 
 The only runtime dependency is `pypdf`; everything else (HTTP, SQLite, WebSocket, HTML parsing) uses the standard library.

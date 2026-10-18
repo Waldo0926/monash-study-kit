@@ -224,7 +224,7 @@ def cmd_status(args):
 
 def cmd_doctor(args):
     from . import doctor
-    report = doctor.run()
+    report = doctor.run(deep=args.deep)
     if want_json(args):
         return emit_json(report)
     print(doctor.render(report))
@@ -690,7 +690,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--window", action="store_true", help="直接开窗口，不先试后台自动登录")
     cmd(sub, "status", cmd_status, json_flag=True, help="登录状态、上次同步")
     cmd(sub, "help", cmd_help, help="能做的事和示例问法（Claude 里怎么问、对应哪条命令）")
-    cmd(sub, "doctor", cmd_doctor, json_flag=True, help="体检：一项项查哪里不对，告诉你怎么修")
+    p = cmd(sub, "doctor", cmd_doctor, json_flag=True, help="体检：一项项查哪里不对，告诉你怎么修")
+    p.add_argument("--deep", action="store_true",
+                   help="再去 Moodle 和 Ed 拉一遍，和日历订阅、课程结构、本地文件对照（要一两分钟）")
     p = cmd(sub, "sync", cmd_sync, help="同步 Ed + Moodle + 全文索引")
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
     p.add_argument("--dry-run", action="store_true", help="只列出 Moodle 会下载什么")
