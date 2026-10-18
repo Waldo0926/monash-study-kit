@@ -1,0 +1,39 @@
+name: Bug report
+description: Something doesn't work or gives a wrong answer
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't paste cookies, tokens, calendar links, unit materials, other students' posts or your grades.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did or asked Claude, what you expected, and what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `monash doctor`
+      description: Run `monash doctor --deep` if the problem is a wrong or missing result. The output leaves out credentials.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Claude Desktop
+        - Claude Code
+        - The monash command in a terminal
+        - Another MCP client
+    validations:
+      required: true
+  - type: input
+    id: unit
+    attributes:
+      label: Unit code (if it only happens in one unit)
+      placeholder: FIT2102

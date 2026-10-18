@@ -232,6 +232,18 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 
   `monash uninstall` 会把它从 Claude 里移除，并询问要不要删掉所有数据。最后记得去 Ed 设置页删掉令牌。
 
+## Token 用量
+
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给 Claude，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.1.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+
+| 每次对话发一次 | Token |
+| --- | ---: |
+| 17 个工具定义 | 2,785 |
+| 服务说明 | 187 |
+| **合计** | **2,972** |
+
+最大的单个工具是 `search_ed_threads`，324。想量自己的回答（问“这周要做什么”、搜课件时工具返回多少，和把整份文件贴进去比），运行 `uv run python scripts/measure_tokens.py --live --query <词>`，只输出数字。设了 `ANTHROPIC_API_KEY` 再加 `--api`，会用 Anthropic 免费的 token 计数接口算准确值。
+
 ## 命令速查
 
 不用 Claude 也可以直接在终端里查：
@@ -329,6 +341,8 @@ uv run monash --help
 ```
 
 **发新版**：改了 `src/` 就把 `src/monash_study_kit/__init__.py` 里的 `__version__` 加一（修 bug 加最后一位，加功能加中间一位），改了什么记在 [`CHANGELOG.md`](CHANGELOG.md)。CI 的 `version-bump` 检查会拦住忘了改的 PR。合进 main 之后推一个 tag，比如 `v1.1.0`：[`release.yml`](.github/workflows/release.yml) 会核对 tag、`__version__` 和 CHANGELOG，跑测试，打包，用 Trusted Publishing 传到 PyPI，再在三个系统上从 PyPI 装回来试一遍，最后建 GitHub Release。详见 [docs/releasing.md](docs/releasing.md)。
+
+另见 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)（怎么报告安全问题）、[docs/security.md](docs/security.md)（保护了什么、怎么测的）和 [docs/adr](docs/adr)（设计决定）。这几份是英文的。
 
 每个 PR 也会打包，检查包里有什么（`scripts/check_dist.py`），装进一个干净的 venv 跑 `monash --version`、`monash help` 和一次 MCP 握手（`scripts/smoke_test.py`）。漏打包的模块会在 CI 里报错，不会等到用户装了才发现。
 

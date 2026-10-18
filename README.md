@@ -251,6 +251,18 @@ If the file already lists other servers, add the `monash` entry rather than over
 
   `monash uninstall` removes it from Claude and asks whether to delete all data. Finally, delete the token on Ed's settings page.
 
+## Token use
+
+Every MCP tool's name, description and parameters are sent to Claude at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.1.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
+
+| Sent once per conversation | Tokens |
+| --- | ---: |
+| 17 tool definitions | 2,785 |
+| Server instructions | 187 |
+| **Total** | **2,972** |
+
+The largest single tool is `search_ed_threads` at 324. To measure your own answers (what a "what's due this week" or a course-file search returns, compared with pasting the whole files), run `uv run python scripts/measure_tokens.py --live --query <word>`. It prints only numbers. With `ANTHROPIC_API_KEY` set, `--api` uses Anthropic's free token-counting endpoint for exact counts.
+
 ## Command reference
 
 You can also query directly in the terminal without Claude:
@@ -355,6 +367,8 @@ uv run monash --help
 ```
 
 **Releasing**: whenever `src/` changes, bump `__version__` in `src/monash_study_kit/__init__.py` (patch for bug fixes, minor for new features) and note what changed in [`CHANGELOG.md`](CHANGELOG.md). The CI `version-bump` check blocks PRs that forget it. After merging, push a tag such as `v1.1.0`: [`release.yml`](.github/workflows/release.yml) checks the tag against `__version__` and the changelog, runs the tests, builds the package, uploads it to PyPI with Trusted Publishing, installs it back from PyPI on all three OSes, and creates the GitHub release. Details are in [docs/releasing.md](docs/releasing.md).
+
+See also [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) (how to report a problem), [docs/security.md](docs/security.md) (what is protected and how it is tested) and [docs/adr](docs/adr) (design decisions).
 
 Every PR also builds the wheel, checks what went into it (`scripts/check_dist.py`) and installs it into a clean venv to run `monash --version`, `monash help` and an MCP handshake (`scripts/smoke_test.py`), so a module left out of the package fails CI instead of failing for users.
 
