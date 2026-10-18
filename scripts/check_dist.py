@@ -28,6 +28,8 @@ def fail(msg: str) -> None:
 
 
 def main() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")   # Windows 的控制台默认 cp1252，打不出中文
     if len(sys.argv) != 3:
         fail("用法：check_dist.py <dist 目录> <版本号>")
     dist, version = Path(sys.argv[1]), sys.argv[2]

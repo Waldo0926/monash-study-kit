@@ -40,6 +40,8 @@ def run(exe: str, *args: str, env: dict, stdin: str | None = None) -> str:
 
 
 def main() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")   # Windows 的控制台默认 cp1252，打不出中文
     if len(sys.argv) != 3:
         fail("用法：smoke_test.py <monash 可执行文件> <版本号>")
     exe, version = sys.argv[1], sys.argv[2]
