@@ -1,6 +1,8 @@
 """Moodle 上下架或换名重传的文件：标成已移除，列表和搜索里不再出现，放回来就恢复。"""
 import sqlite3
 
+import pytest
+
 from monash_study_kit import content_index as CI
 from monash_study_kit import mcp_server as M
 from monash_study_kit import moodlelib, syncer
@@ -84,4 +86,7 @@ def test_removed_files_are_hidden_from_list_and_search(tmp_path, monkeypatch):
     idx = sqlite3.connect(":memory:")
     CI.index(idx)
     assert [h["path"] for h in CI.search(idx, "functor")] == ["F/keep.md"]
+    assert CI.resolve_readable("F/keep.md").name == "keep.md"
+    with pytest.raises(ValueError, match="撤下"):                 # 记得路径也读不到
+        CI.resolve_readable("F/gone.md")
     con.close()

@@ -310,6 +310,8 @@ def resolve_readable(rel: str) -> Path:
     path = (base / rel.lstrip("/")).resolve()
     if base.resolve() not in path.parents or not path.is_file():
         raise ValueError("只能读 list_files / search_content 给出的文件（相对路径，Ed 的带 ed: 前缀）")
+    if base is FILES_DIR and path.relative_to(FILES_DIR.resolve()).as_posix() in _removed():
+        raise ValueError("这个文件已经在 Moodle 上撤下了")
     return path
 
 
