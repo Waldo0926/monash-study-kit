@@ -19,7 +19,8 @@
     monash open                  # 打开课件文件夹
     monash config                # 看/改设置
     monash update                # 更新到最新版
-    monash uninstall             # 从 Claude 里移除（可选删除数据）
+    monash connect cursor        # 接进别的 AI 软件：codex、cursor、vscode、windsurf、gemini
+    monash uninstall             # 从 Claude 和其他 AI 软件里移除（可选删除数据）
 
 大部分查询加 --json 输出 JSON（输出被管道接走时自动是 JSON，--text 强制文本）。
 退出码：0 成功，1 参数不对，2 需要登录，3 连不上 Moodle/Ed 或对方出错，4 找不到课程/帖子，130 被中断。
@@ -300,8 +301,43 @@ def cmd_config(args):
     print(f"{args.key} = {val}（Claude Desktop 要重启一下才会用上新设置）")
 
 
+CONNECT_TARGETS = ["claude", "claude-desktop", "claude-code", "codex", "cursor", "vscode", "windsurf", "gemini"]
+
+
+def cmd_connect(args):
+    from . import claude_setup, clients
+    if not args.client:
+        print("可以接进这些 AI 软件（monash connect <名字>）：\n")
+        rows = [["claude", "Claude Desktop + Claude Code", "运行 monash setup claude 也一样"]]
+        for c in clients.CLIENTS.values():
+            state = "已接入" if clients.is_connected(c.key) else ("检测到" if clients.detected(c) else "")
+            rows.append([c.key, c.name, state])
+        for key, name, state in rows:
+            print(f"  {key:<10} {name:<30} {state}")
+        print("\n--print 只打印要加的配置，不改文件；--remove 移除。")
+        return 0
+    if args.client.startswith("claude"):
+        if args.print or args.remove:
+            print("Claude 用 monash setup claude 接入、monash uninstall 移除", file=sys.stderr)
+            return EXIT_USAGE
+        desktop = args.client != "claude-code" and claude_setup.install_desktop()
+        code = args.client != "claude-desktop" and claude_setup.install_code()
+        if args.client == "claude-code" and not code:
+            print("没找到 claude 命令。先装好 Claude Code 再运行一次")
+        return 0 if desktop or code else 1
+    client = clients.CLIENTS[args.client]
+    if args.print:
+        print(f"# {client.path()}")
+        print(clients.snippet(client, claude_setup.server_command()))
+        return 0
+    if args.remove:
+        print(f"已从 {client.name} 移除 monash" if clients.disconnect(args.client) else f"{client.name} 里本来就没有 monash")
+        return 0
+    return 0 if clients.connect(args.client) else 1
+
+
 def cmd_uninstall(args):
-    from . import claude_setup
+    from . import claude_setup, clients
     path = claude_setup.desktop_config_path()
     if path and path.exists():
         if claude_setup.desktop_running():
@@ -313,6 +349,12 @@ def cmd_uninstall(args):
     if shutil.which("claude"):
         subprocess.run(["claude", "mcp", "remove", "-s", "user", "monash"], capture_output=True)
         print("已从 Claude Code 移除 monash")
+    for key, c in clients.CLIENTS.items():
+        try:
+            if clients.disconnect(key):
+                print(f"已从 {c.name} 移除 monash")
+        except OSError:
+            pass
     if _yes(f"要删除所有数据吗（课件、登录状态、登录窗口的配置）？{HOME}", default=False):
         shutil.rmtree(HOME, ignore_errors=True)
         print("已删除")
@@ -711,7 +753,12 @@ def build_parser() -> argparse.ArgumentParser:
     cmd(sub, "open", cmd_open, help="打开课件文件夹")
     p = cmd(sub, "config", cmd_config, help="看/改设置")
     p.add_argument("key", nargs="?"); p.add_argument("value", nargs="?")
-    cmd(sub, "uninstall", cmd_uninstall, help="从 Claude 移除，可选删除数据")
+    p = cmd(sub, "connect", cmd_connect, help="接进别的 AI 软件：Codex、Cursor、VS Code、Windsurf、Gemini CLI")
+    p.add_argument("client", nargs="?", choices=CONNECT_TARGETS, help="不写就列出所有软件和接入状态")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--print", action="store_true", help="只打印要加进配置文件的那段，不改文件")
+    g.add_argument("--remove", action="store_true", help="从这个软件里移除 monash")
+    cmd(sub, "uninstall", cmd_uninstall, help="从 Claude 和其他 AI 软件移除，可选删除数据")
     cmd(sub, "update", cmd_update, help="更新到最新版")
     cmd(sub, "mcp", cmd_mcp, help="MCP 服务器（Claude 启动它，不用手动跑）")
 

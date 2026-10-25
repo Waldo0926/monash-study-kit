@@ -157,12 +157,19 @@ while Claude is open they keep running even if your usage is exhausted; if Claud
 ## Other AI clients
 
 MCP is an open protocol and `monash mcp` is a standard local (stdio) MCP server, so any client that supports local MCP servers should in principle work.
-`monash setup` only configures Claude Desktop and Claude Code automatically; the clients below need manual configuration.
+`monash setup` configures Claude Desktop and Claude Code. For the others, run `monash setup` first (login and units), then one command:
 
-> ⚠️ **None of the clients below have been tested.** The configuration follows each vendor's official docs (as of 2026-09); the official docs take precedence.
-> Only **Claude Desktop** and **Claude Code** have been tested.
+```sh
+monash connect            # list clients and whether monash is connected
+monash connect cursor     # or codex, vscode, windsurf, gemini
+```
 
-**Step 1: find the full path of the `monash` program** (many clients don't inherit your terminal's PATH, so a full path is safer)
+It adds only the `monash` entry to the client's config file with the full path to the program, keeps everything else, and saves a backup first. Codex is set up with `codex mcp add` when the `codex` command exists. `--print` shows the entry without changing anything, and `--remove` takes it out again. `monash uninstall` removes it from every client.
+
+> ⚠️ **The clients below have not been tested end to end.** `monash connect` writes the format from each vendor's official docs (as of 2026-10); the official docs take precedence.
+> Only **Claude Desktop** and **Claude Code** have been tested with real use.
+
+To configure a client by hand instead, first find the full path of the `monash` program (many clients don't inherit your terminal's PATH):
 
 - macOS: run `which monash`, usually `/Users/<you>/.local/bin/monash`
 - Windows: run `(Get-Command monash).Source` in PowerShell, usually `C:\Users\<you>\.local\bin\monash.exe`
@@ -170,12 +177,13 @@ MCP is an open protocol and `monash mcp` is a standard local (stdio) MCP server,
 Replace `/full/path/monash` in the examples with your path. **In JSON, Windows backslashes must be doubled**
 (`C:\\Users\\...`); in TOML, use single quotes (`'C:\Users\...'`).
 
-**Step 2: configure your client**
+**Manual configuration**
 
 | Client | Config location | Status |
 |---|---|---|
 | Codex CLI / Codex in the ChatGPT desktop app / Codex IDE extension | `~/.codex/config.toml` (shared by all three) | Untested |
 | Cursor | `~/.cursor/mcp.json` | Untested |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | Untested |
 | VS Code (Copilot) | Command Palette → `MCP: Open User Configuration` | Untested |
 | Gemini CLI | `~/.gemini/settings.json` | Untested |
 | ChatGPT web / mobile app | n/a | **Not supported**: only remote servers, cannot reach a program on your computer |
@@ -188,7 +196,7 @@ command = "/full/path/monash"
 args = ["mcp"]
 ```
 
-Cursor (`~/.cursor/mcp.json`) and Gemini CLI (`~/.gemini/settings.json`) use the same format:
+Cursor (`~/.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`) and Gemini CLI (`~/.gemini/settings.json`) use the same format:
 
 ```json
 {
@@ -203,7 +211,7 @@ VS Code (`mcp.json`; note the outer key is `servers`, not `mcpServers`):
 ```json
 {
   "servers": {
-    "monash": { "command": "/full/path/monash", "args": ["mcp"] }
+    "monash": { "type": "stdio", "command": "/full/path/monash", "args": ["mcp"] }
   }
 }
 ```
@@ -249,7 +257,7 @@ If the file already lists other servers, add the `monash` entry rather than over
   uv tool uninstall monash-study-kit
   ```
 
-  `monash uninstall` removes it from Claude and asks whether to delete all data. Finally, delete the token on Ed's settings page.
+  `monash uninstall` removes it from Claude and the other AI clients and asks whether to delete all data. Finally, delete the token on Ed's settings page.
 
 ## Token use
 
@@ -301,6 +309,7 @@ You can also query directly in the terminal without Claude:
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed lesson progress / quiz questions (for revision) |
 | `monash ed read FIT2109 "W3 Pre-Class"` | A whole lesson as Markdown: text slides, reading pages and PDFs in order, plus its quiz questions |
 | `monash config` | View / change settings (restart Claude Desktop afterwards) |
+| `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
 | `monash update` | Update to the latest version |
 
 Add `--json` for JSON output (output is JSON automatically when piped; `--text` forces text). Every command has `--help`.
