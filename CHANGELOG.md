@@ -2,6 +2,11 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.2.0
+
+- `monash connect <client>` connects Study Kit to Codex, Cursor, VS Code, Windsurf or Gemini CLI in one command. It adds only the `monash` entry with the full path to the program, keeps the rest of the config file and saves a backup first. Codex uses `codex mcp add` when the `codex` command is installed. `monash connect` alone lists the clients and whether each is connected, `--print` shows the entry without writing it, and `--remove` takes it out. A config file that isn't plain JSON (for example with comments) is left alone and the entry is printed to paste by hand.
+- `monash uninstall` also removes the entry from those clients.
+
 ## 1.1.1
 
 `monash doctor --deep` on my server reported four problems that weren't real. Fixed in the checks, no change to syncing:

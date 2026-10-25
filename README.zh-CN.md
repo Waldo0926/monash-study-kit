@@ -146,23 +146,31 @@ monash login
 
 ## 接入其他 AI 客户端
 
-MCP 是开放协议，`monash mcp` 是标准的本地（stdio）MCP 服务器，所以支持本地 MCP 的客户端理论上都能接。`monash setup` 只会自动配置 Claude Desktop 和 Claude Code，下面这些要手动配置。
+MCP 是开放协议，`monash mcp` 是标准的本地（stdio）MCP 服务器，所以支持本地 MCP 的客户端理论上都能接。`monash setup` 会配置 Claude Desktop 和 Claude Code。其他客户端先运行 `monash setup`（登录、选课），再运行一条命令：
 
-> ⚠️ **下面这些客户端都没有实际测试过**，配置格式照各家官方文档写（2026-09），以官方文档为准。测试过的只有 **Claude Desktop** 和 **Claude Code**。
+```sh
+monash connect            # 列出所有客户端和接入状态
+monash connect cursor     # 或 codex、vscode、windsurf、gemini
+```
 
-**第 1 步：找到 `monash` 程序的完整路径**（很多客户端启动时读不到终端的 PATH，所以最好写完整路径）
+它只在客户端的配置文件里加 `monash` 这一项，写程序的完整路径，其他内容原样保留，改之前先备份。装了 `codex` 命令的话 Codex 用 `codex mcp add` 接。`--print` 只打印要加的配置不改文件，`--remove` 移除。`monash uninstall` 会从所有客户端移除。
+
+> ⚠️ **下面这些客户端没有完整实际测试过**，`monash connect` 写的格式照各家官方文档（2026-10），以官方文档为准。实际用过的只有 **Claude Desktop** 和 **Claude Code**。
+
+想手动配置的话，先找到 `monash` 程序的完整路径（很多客户端启动时读不到终端的 PATH）：
 
 - macOS：终端里运行 `which monash`，一般是 `/Users/你的用户名/.local/bin/monash`
 - Windows：PowerShell 里运行 `(Get-Command monash).Source`，一般是 `C:\Users\你的用户名\.local\bin\monash.exe`
 
 下面的例子里把 `/完整路径/monash` 换成你的路径。**Windows 路径写进 JSON 时，反斜杠要写两遍**（`C:\\Users\\...`）；写进 TOML 时用单引号（`'C:\Users\...'`）。
 
-**第 2 步：按客户端配置**
+**手动配置**
 
 | 客户端 | 配置位置 | 状态 |
 |---|---|---|
 | Codex CLI / ChatGPT 桌面 App 里的 Codex / Codex IDE 插件 | `~/.codex/config.toml`（三者共用） | 未测试 |
 | Cursor | `~/.cursor/mcp.json` | 未测试 |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | 未测试 |
 | VS Code（Copilot） | 命令面板 → `MCP: Open User Configuration` | 未测试 |
 | Gemini CLI | `~/.gemini/settings.json` | 未测试 |
 | ChatGPT 网页版 / 手机 App | 无 | **不支持**：只能接远程服务器，连不上你电脑上的程序 |
@@ -175,7 +183,7 @@ command = "/完整路径/monash"
 args = ["mcp"]
 ```
 
-Cursor（`~/.cursor/mcp.json`）和 Gemini CLI（`~/.gemini/settings.json`），格式一样：
+Cursor（`~/.cursor/mcp.json`）、Windsurf（`~/.codeium/windsurf/mcp_config.json`）和 Gemini CLI（`~/.gemini/settings.json`），格式一样：
 
 ```json
 {
@@ -190,7 +198,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 ```json
 {
   "servers": {
-    "monash": { "command": "/完整路径/monash", "args": ["mcp"] }
+    "monash": { "type": "stdio", "command": "/完整路径/monash", "args": ["mcp"] }
   }
 }
 ```
@@ -230,7 +238,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
   uv tool uninstall monash-study-kit
   ```
 
-  `monash uninstall` 会把它从 Claude 里移除，并询问要不要删掉所有数据。最后记得去 Ed 设置页删掉令牌。
+  `monash uninstall` 会把它从 Claude 和其他 AI 客户端里移除，并询问要不要删掉所有数据。最后记得去 Ed 设置页删掉令牌。
 
 ## Token 用量
 
@@ -282,6 +290,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
 | `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
 | `monash config` | 看/改设置（改完重启 Claude Desktop） |
+| `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash update` | 更新到最新版 |
 
 加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
