@@ -6,6 +6,7 @@
 [![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![许可证](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-16a34a?style=for-the-badge)](LICENSE)
 [![访问](https://img.shields.io/badge/%E8%AE%BF%E9%97%AE-%E5%8F%AA%E8%AF%BB-475569?style=for-the-badge)](#隐私和安全)
+[![文档](https://img.shields.io/badge/%E6%96%87%E6%A1%A3-docs.secureview.tech-1e5eff?style=for-the-badge)](https://docs.secureview.tech/zh-cn/study-kit/)
 
 [![CI](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml/badge.svg)](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml) [![Monash Study Kit MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit/badges/score.svg)](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit)
 
@@ -21,6 +22,10 @@
 所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
+
+![monash todo 的输出：Moodle 截止、可能漏交的作业、Ed 还没开始的 lesson、新上的课件、公告和未读回复](docs/screenshots/todo.png)
+
+图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的。Claude 通过 MCP 工具读到的是同样的数据。带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)。
 
 ---
 
@@ -50,6 +55,20 @@
 - Monash 账号
 
 ## 安装
+
+最快的办法是一条命令：装好 `uv` 和本工具，然后直接进入 `monash setup`（可以先[看看脚本内容](https://docs.secureview.tech/zh-cn/study-kit/install/)）：
+
+```bash
+# macOS，在终端里
+curl -LsSf https://docs.secureview.tech/study-kit/install.sh | sh
+```
+
+```powershell
+# Windows，在 PowerShell 里
+powershell -ExecutionPolicy ByPass -c "irm https://docs.secureview.tech/study-kit/install.ps1 | iex"
+```
+
+也可以手动一步步来：
 
 ### macOS
 
