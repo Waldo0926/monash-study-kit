@@ -122,7 +122,7 @@ Use your own words: Claude picks tools by meaning, not keywords, so both "anythi
 To see everything it can do:
 
 - Ask Claude "what can you do", or choose one of monash's preset prompts from the **"+" menu**: feature overview, this week's to-dos,
-  Ed updates, find a topic, quiz review, grades and feedback. Presets are only sent when you click them, so they cost nothing otherwise.
+  Ed updates, find a topic, quiz review, assignment requirements, grades and feedback. Presets are only sent when you click them, so they cost nothing otherwise.
 - Run `monash help` in the terminal: every feature with an example question and the matching command.
 
 ### When the Moodle login expires
@@ -225,6 +225,16 @@ If the file already lists other servers, add the `monash` entry rather than over
 - Tool descriptions are written with Claude in mind. Other models usually follow them fine, but this hasn't been verified.
 - If you'd rather not bother, the CLI works with no AI at all (see [Works without Claude usage](#works-without-claude-usage)); you can paste the output of `monash todo` and friends into any AI.
 
+### Agent skill
+
+For coding agents that read skills (Claude Code, Codex, Cursor and others), there is a skill that tells the agent which `monash` command answers which question, how to handle assignment questions (brief and rubric first, then staff answers on Ed, each with a source), and what it must leave to you (logins, tokens, submitting):
+
+```sh
+npx skills add Waldo0926/monash-study-kit
+```
+
+The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.md). A test checks that every command in it still exists. `npx skills` is a third-party installer from Vercel and needs Node.js; you can also copy the file into your agent's skills folder by hand.
+
 ### What can be searched
 
 `monash grep` and Claude's course-material search cover:
@@ -261,13 +271,15 @@ If the file already lists other servers, add the `monash` entry rather than over
 
 ## Token use
 
-Every MCP tool's name, description and parameters are sent to Claude at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.1.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
+Every MCP tool's name, description and parameters are sent to Claude at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.3.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
 
 | Sent once per conversation | Tokens |
 | --- | ---: |
 | 17 tool definitions | 2,785 |
-| Server instructions | 187 |
-| **Total** | **2,972** |
+| Server instructions | 270 |
+| **Total** | **3,055** |
+
+The instructions grew from 187 in 1.2.0 when the rule for assignment questions was added (brief and rubric first, then staff answers on Ed).
 
 The largest single tool is `search_ed_threads` at 324.
 

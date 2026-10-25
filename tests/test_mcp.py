@@ -94,7 +94,7 @@ def test_catalog_stays_small():
     tools = call("tools/list")["result"]["tools"]
     size = len(json.dumps(tools, ensure_ascii=False))
     assert len(tools) <= 17 and size <= 9200, (len(tools), size)
-    assert len(M.INSTRUCTIONS) <= 300
+    assert len(M.INSTRUCTIONS) <= 400
     enums = tools[[t["name"] for t in tools].index("search_ed_threads")]["inputSchema"]["properties"]["only"]["enum"]
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}
 
