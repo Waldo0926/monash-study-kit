@@ -6,6 +6,7 @@
 [![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
 [![Access](https://img.shields.io/badge/Access-Read--only-475569?style=for-the-badge)](#privacy-and-security)
+[![Docs](https://img.shields.io/badge/Docs-docs.secureview.tech-1e5eff?style=for-the-badge)](https://docs.secureview.tech/study-kit/)
 
 [![CI](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml/badge.svg)](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml) [![Monash Study Kit MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit/badges/score.svg)](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit)
 
@@ -22,6 +23,10 @@ Everything stays **on your own computer**: course files, login state and the dat
 All tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed.
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
+
+![What monash todo prints: Moodle deadlines, a possibly missed assignment, Ed lessons not started, new course files, announcements and unread replies](docs/screenshots/todo.png)
+
+The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Claude reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
 
 ---
 
@@ -52,6 +57,20 @@ In short: MCP turns Claude into a TA who knows your units; the CLI handles setup
 - A Monash account
 
 ## Installation
+
+The quickest way is one command, which installs `uv`, the kit and then starts `monash setup` (you can [read the scripts](https://docs.secureview.tech/study-kit/install/) first):
+
+```bash
+# macOS, in Terminal
+curl -LsSf https://docs.secureview.tech/study-kit/install.sh | sh
+```
+
+```powershell
+# Windows, in PowerShell
+powershell -ExecutionPolicy ByPass -c "irm https://docs.secureview.tech/study-kit/install.ps1 | iex"
+```
+
+Or do the same steps by hand:
 
 ### macOS
 
