@@ -115,7 +115,7 @@ monash setup
 
 直接用自己的话问就行：Claude 按意思挑工具，不是靠关键词触发，“这周有啥要交的”和“我是不是漏交了什么”都能用到待办。想看都能做什么：
 
-- 在 Claude 里问“你能做什么”，或者从输入框的 **“+” 菜单**里选 monash 的预设提示：功能大全、本周待办、Ed 新消息、找知识点、测验题复习、成绩和反馈。预设提示点了才发给 Claude，平时不占额度。
+- 在 Claude 里问“你能做什么”，或者从输入框的 **“+” 菜单**里选 monash 的预设提示：功能大全、本周待办、Ed 新消息、找知识点、测验题复习、作业要求、成绩和反馈。预设提示点了才发给 Claude，平时不占额度。
 - 终端里运行 `monash help`：每项功能附一句示例问法和对应的命令。
 
 ### Moodle 登录过期了怎么办
@@ -212,6 +212,16 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 - 工具说明是按 Claude 写的，别的模型一般也能照着用，但效果没验证过。
 - 不想折腾的话，命令行本身跟任何 AI 都无关（见[没额度了也能用](#claude-没额度了也能用)），可以把 `monash todo` 之类的输出直接复制给任何 AI。
 
+### 给 AI 用的技能包
+
+会读 skill 的 AI 编程工具（Claude Code、Codex、Cursor 等）可以装这个技能包。它告诉 AI 哪个问题用哪条 `monash` 命令、问作业要求时怎么用资料（作业说明和评分细则优先，再看 Ed 上教职员工的回答，每条标出处），以及哪些事必须留给你自己（登录、令牌、交作业）：
+
+```sh
+npx skills add Waldo0926/monash-study-kit
+```
+
+文件在 [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.md)，有测试检查里面的命令都还存在。`npx skills` 是 Vercel 做的第三方安装工具，要装 Node.js；也可以把文件手动复制到 AI 的 skills 文件夹。
+
 ### 搜得到哪些内容
 
 `monash grep` 和 Claude 里的课件搜索覆盖：
@@ -242,13 +252,15 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 
 ## Token 用量
 
-每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给 Claude，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.1.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给 Claude，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.3.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
 
 | 每次对话发一次 | Token |
 | --- | ---: |
 | 17 个工具定义 | 2,785 |
-| 服务说明 | 187 |
-| **合计** | **2,972** |
+| 服务说明 | 270 |
+| **合计** | **3,055** |
+
+服务说明在 1.2.0 是 187，1.3.0 加了作业问题的规则（作业说明和评分细则优先，再看 Ed 上教职员工的回答）后变成 270。
 
 最大的单个工具是 `search_ed_threads`，324。
 

@@ -4,7 +4,12 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## Unreleased
 
-- The package author is listed as Waldo. PyPI shows it from the next release.
+## 1.3.0
+
+- Questions about an assignment now follow a fixed order of sources. The Moodle brief and marking rubric come first. On Ed, only replies from teaching staff and answers they endorsed count; other students' replies are leads, not rules. A later staff correction wins, but when the brief and Ed disagree Claude lists both with their dates and suggests asking staff instead of picking one. Every rule it states names where it came from. This is in the server instructions, so it applies without doing anything.
+- New preset prompt "作业要求" (assignment requirements) in the "+" menu: give it an assignment name and it reads the brief, the rubric and staff answers on Ed, and lists what to hand in, how it is marked, deadlines and format, and Ed clarifications, each with its source.
+- Agent skill at `skills/monash-study-kit/SKILL.md`, installable with `npx skills add Waldo0926/monash-study-kit`. It maps questions to `monash` commands, carries the same rule for assignment questions, and lists what the agent must leave to the student (logins, tokens, submitting). A test checks every command in it against the CLI and the exit codes against `EXIT_CODES`.
+- The package author is listed as Waldo.
 
 ## 1.2.0
 

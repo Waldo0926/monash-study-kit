@@ -83,6 +83,15 @@ def _quiz(a):
             "Ed 不公开答案，请根据课件判断，拿不准的地方直接说。")
 
 
+def _assignment(a):
+    course = f"{a['course']} 的" if a.get("course") else ""
+    return (f"帮我弄清楚{course}“{a['assignment']}”的要求。先找到作业说明和评分细则读原文，"
+            "再在 Ed 上搜这个作业的帖子，只采用教师和助教的回复、被 endorse 的回答，同学的回复只当线索。"
+            "按要交什么、怎么评分、截止和格式、Ed 上的补充说明列出来，每条写出处"
+            "（文件名和页码，或帖子编号、谁说的、日期）。"
+            "作业说明和 Ed 不一致的地方单独列出，标明哪个更新，不要替我下结论，提醒我去问老师确认。")
+
+
 def _grades(a):
     return "我各门课现在的成绩和老师反馈怎么样？有没有需要特别注意的？"
 
@@ -99,6 +108,8 @@ PROMPTS = {
                    [("topic", "要找的知识点，如 monad", True), ("course", "课号，可不填", False)], _topic),
     "quiz_review": ("测验题复习", "用 Ed Lessons 的测验题一题一题练",
                     [("course", "课号，如 FIT2109", True), ("week", "第几周，可不填", False)], _quiz),
+    "assignment_rules": ("作业要求", "读作业说明、评分细则和老师在 Ed 上的答疑，每条标出处",
+                         [("assignment", "作业名，如 A2", True), ("course", "课号，可不填", False)], _assignment),
     "grades": ("成绩和反馈", "各课成绩和老师反馈", [], _grades),
 }
 
