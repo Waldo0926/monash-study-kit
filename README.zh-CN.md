@@ -174,7 +174,9 @@ monash connect cursor     # 或 codex、vscode、windsurf、gemini
 
 它只在客户端的配置文件里加 `monash` 这一项，写程序的完整路径，其他内容原样保留，改之前先备份。装了 `codex` 命令的话 Codex 用 `codex mcp add` 接。`--print` 只打印要加的配置不改文件，`--remove` 移除。`monash uninstall` 会从所有客户端移除。
 
-> ⚠️ **下面这些客户端没有完整实际测试过**，`monash connect` 写的格式照各家官方文档（2026-10），以官方文档为准。实际用过的只有 **Claude Desktop** 和 **Claude Code**。
+> **已验证：** Claude Desktop、Claude Code 的本地接入，以及 ChatGPT、Codex 通过同一套 v1.3.0 核心的私有远程集成。2026 年 10 月 30 日，Codex 成功查询了 Moodle 和 Ed 课程，ChatGPT 的课程查询也已确认。公开包的 stdio 握手、17 个工具目录、隔离数据下的课程查询和 ping 均通过离线测试。
+>
+> 私有远程服务器不包含在这个公开包里。这些验证不等同于验证 Codex、Cursor、VS Code、Windsurf、Gemini CLI 的原生本地接入。`monash connect` 写的格式照各家官方文档（2026-10），有出入时以官方文档为准。
 
 想手动配置的话，先找到 `monash` 程序的完整路径（很多客户端启动时读不到终端的 PATH）：
 
@@ -192,7 +194,7 @@ monash connect cursor     # 或 codex、vscode、windsurf、gemini
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | 未测试 |
 | VS Code（Copilot） | 命令面板 → `MCP: Open User Configuration` | 未测试 |
 | Gemini CLI | `~/.gemini/settings.json` | 未测试 |
-| ChatGPT 网页版 / 手机 App | 无 | **不支持**：只能接远程服务器，连不上你电脑上的程序 |
+| ChatGPT 网页版 / 手机 App | 单独托管的远程地址 | 需要远程 MCP 服务器；仅安装公开本地包不会提供远程地址 |
 
 Codex（`~/.codex/config.toml`），或者直接运行 `codex mcp add monash -- /完整路径/monash mcp`：
 

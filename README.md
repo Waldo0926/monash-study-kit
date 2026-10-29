@@ -185,8 +185,9 @@ monash connect cursor     # or codex, vscode, windsurf, gemini
 
 It adds only the `monash` entry to the client's config file with the full path to the program, keeps everything else, and saves a backup first. Codex is set up with `codex mcp add` when the `codex` command exists. `--print` shows the entry without changing anything, and `--remove` takes it out again. `monash uninstall` removes it from every client.
 
-> ⚠️ **The clients below have not been tested end to end.** `monash connect` writes the format from each vendor's official docs (as of 2026-10); the official docs take precedence.
-> Only **Claude Desktop** and **Claude Code** have been tested with real use.
+> **Verified:** Claude Desktop and Claude Code with the local server; ChatGPT and Codex through a private remote integration using the same v1.3.0 core. On 30 October 2026, Codex successfully queried Moodle and Ed courses; ChatGPT's course query was also confirmed. The public package's stdio handshake, 17-tool catalog, isolated course query and ping passed an offline smoke test.
+>
+> The private remote server is not included in this public package. These checks do not establish native local Codex, Cursor, VS Code, Windsurf or Gemini CLI connectivity. `monash connect` writes the format from each vendor's official docs (as of 2026-10); the official docs take precedence.
 
 To configure a client by hand instead, first find the full path of the `monash` program (many clients don't inherit your terminal's PATH):
 
@@ -205,7 +206,7 @@ Replace `/full/path/monash` in the examples with your path. **In JSON, Windows b
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | Untested |
 | VS Code (Copilot) | Command Palette → `MCP: Open User Configuration` | Untested |
 | Gemini CLI | `~/.gemini/settings.json` | Untested |
-| ChatGPT web / mobile app | n/a | **Not supported**: only remote servers, cannot reach a program on your computer |
+| ChatGPT web / mobile app | Separately hosted remote endpoint | Requires a remote MCP server; the public local package alone does not provide one |
 
 Codex (`~/.codex/config.toml`), or simply run `codex mcp add monash -- /full/path/monash mcp`:
 
