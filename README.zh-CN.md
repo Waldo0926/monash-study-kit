@@ -18,6 +18,7 @@
 - “Ed 上有什么新消息？我上次问的问题有人回了吗？”
 - “FIT2102 哪一周讲了 monad？在哪份讲义第几页？”
 - “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
+- “用 FIT2109 第 3 周的测验题考考我。”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
 
 默认所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。
 
@@ -123,14 +124,14 @@ monash setup
 
 完成后打开 Claude Desktop，在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行。
 
-## 学习面板、本地课件页和可选远程接入（1.4.0）
+## 1.4 新增了什么
 
-- **三个学习面板：** 待办卡片、Ed Lesson 进度、测验练习，在支持 MCP Apps 的客户端显示。原来的工具文字结果保留；练习答案只发给 AI 讲解，不交给 Ed。
-- **活动查找：** 新增 `search_moodle_activities`，按名称定位 Moodle 章节和活动。
-- **本地课件页：** 运行 `monash library --open`，按课程和周次浏览、下载已同步的 Moodle/Ed Lesson 文件，不用打开 AI，只监听本机。
-- **可选自托管：** `monash remote serve --public-url https://你的域名`，在自己的 HTTPS 代理后运行带 OAuth 的单用户远程 MCP。远程仅开放 16 个只读查询工具，登录和手动同步留在服务器终端。不会自动启动或安装服务。
+- **学习面板。** 在支持 MCP Apps 的软件里，问“这周我有什么要做的”“看看我 FIT2109 的 lesson 进度”“帮我练一下第 3 周的测验”时，回答会附一个小面板：截止日期卡片、按 module 分的 lesson 进度、可以一题一题点的测验题。做完测验点 **交给 AI 批改**，你的选择会发回对话，AI 根据 lesson 内容讲解。不会提交到 Ed。不支持面板的软件照样收到和以前一样的文字回答。
+- **按名字找 Moodle 活动。** 问“Moodle 上第 7 周的 workshop 在哪？”会用新工具 `search_moodle_activities`，要先登录 Moodle。
+- **不用 AI 也能翻课件。** `monash library --open` 会在浏览器里打开一个页面，列出已经同步的 Moodle 和 Ed lesson 文件。可以按课程、周次或文件名筛选，点一下下载原文件。只监听 `127.0.0.1`，别的设备打不开。
+- **可选的远程接入。** `monash remote serve` 让 ChatGPT，或者网页版、手机上的 Claude，通过 HTTPS 查你自己的数据。可以用自己的服务器和域名，也可以在自己电脑上开 Cloudflare 免费的临时隧道先试试，不用注册账号，也不用买域名。每个软件都要用终端里给的一次性配对码配对，远程只开放 16 个只读查询工具。你不运行它就不会启动。步骤见[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)。
 
-设置方法、接入方式和验证步骤见[完整指南](docs/panels-library-remote.md)。普通本地使用仍不需要域名、VPS 或远程账号。
+1.4.1 在 `monash --help` 最上面的说明里补上了 `library` 和 `remote`。平时在自己电脑上用，仍然不需要服务器、域名或额外的账号。技术说明见 [docs/panels-library-remote.md](docs/panels-library-remote.md)（英文）。
 
 ## 平时怎么用
 
@@ -183,9 +184,9 @@ monash connect cursor     # 或 codex、vscode、windsurf、gemini
 
 它只在客户端的配置文件里加 `monash` 这一项，写程序的完整路径，其他内容原样保留，改之前先备份。装了 `codex` 命令的话 Codex 用 `codex mcp add` 接。`--print` 只打印要加的配置不改文件，`--remove` 移除。`monash uninstall` 会从所有客户端移除。
 
-> **已验证：** Claude Desktop、Claude Code 的本地接入，以及 ChatGPT、Codex 通过同一套 v1.3.0 核心的私有远程集成。2026 年 10 月 30 日，Codex 成功查询了 Moodle 和 Ed 课程，ChatGPT 的课程查询也已确认。公开包的 stdio 握手、17 个工具目录、隔离数据下的课程查询和 ping 均通过离线测试。
+> **已验证：** Claude Desktop、Claude Code 的本地接入。ChatGPT 和 Codex 通过 v1.3.0 核心的私有远程集成验证过：2026 年 10 月 30 日，Codex 成功查询了 Moodle 和 Ed 课程，ChatGPT 的课程查询也已确认。作者用 ChatGPT Plus 加自己的域名和服务器可以正常使用。
 >
-> 已验证的私有部署保持独立；1.4.0 新增可选的[自托管远程模式](docs/panels-library-remote.md)。这些验证不等同于验证 Codex、Cursor、VS Code、Windsurf、Gemini CLI 的原生本地接入。`monash connect` 写的格式照各家官方文档（2026-10），有出入时以官方文档为准。
+> 2026 年 10 月 30 日，PyPI 上的 1.4.0 包也在干净环境里用编造的数据测过一遍：stdio 握手、18 个工具的目录、三个面板、`monash library`，以及 `monash remote` 用 Claude 和 ChatGPT 回调地址走完的整套登录和查询流程。这些都不等同于验证 Codex、Cursor、VS Code、Windsurf、Gemini CLI 的原生本地接入。`monash connect` 写的格式照各家官方文档（2026-10），有出入时以官方文档为准。
 
 想手动配置的话，先找到 `monash` 程序的完整路径（很多客户端启动时读不到终端的 PATH）：
 
@@ -203,7 +204,7 @@ monash connect cursor     # 或 codex、vscode、windsurf、gemini
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | 未测试 |
 | VS Code（Copilot） | 命令面板 → `MCP: Open User Configuration` | 未测试 |
 | Gemini CLI | `~/.gemini/settings.json` | 未测试 |
-| ChatGPT 网页版 / 手机 App | 单独托管的远程地址 | 需要远程 MCP 服务器；仅安装公开本地包不会提供远程地址 |
+| ChatGPT、Claude 网页版 / 手机 App | `monash remote serve`，配自己的域名或 Cloudflare 临时隧道 | 作者的 ChatGPT Plus 加自己域名可用，见[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/) |
 
 Codex（`~/.codex/config.toml`），或者直接运行 `codex mcp add monash -- /完整路径/monash mcp`：
 
@@ -270,6 +271,8 @@ npx skills add Waldo0926/monash-study-kit
   里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）。运行 `monash open` 可以打开课件文件夹。
 - **存了哪些凭据**：Moodle 的会话 cookie、Ed 的 API 令牌、Moodle 日历订阅链接。都只在你电脑上，只用来访问 Moodle / Ed 本身。**别把 `secrets` 文件夹发给别人。**
 - **Claude 能看到什么**：只有你提问时 Claude 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字）。令牌和 cookie 永远不会发给 Claude。**也不要把 Ed 令牌贴进聊天里**，令牌只在终端里输入。
+- **课件浏览页**：`monash library` 只监听 `127.0.0.1`，只提供同步时登记过的文件。页面没有密码，不要把它转发到公网。
+- **可选的远程模式**：`monash remote` 把配对过的软件记在 `secrets/remote-mcp.db`，只存令牌的哈希。访问令牌有效 1 小时，刷新令牌 30 天，每用一次就换新的。`monash remote revoke --all` 可以一次全部撤销。
 - **会对 Moodle / Ed 做什么**：只读。请求之间有间隔，不会像爬虫一样猛打学校的系统。
 - **彻底删除**：
 
@@ -325,6 +328,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash login` / `monash login ed` | 登录 Moodle / 换 Ed 令牌 |
 | `monash courses` | 重新选要跟踪的课 |
 | `monash open` | 打开课件文件夹 |
+| `monash library [--open]` | 在浏览器里翻和下载已同步的课件（只在本机） |
 | `monash moodle grades [FIT2102]` | 成绩和反馈 |
 | `monash moodle assignments --missing` | 可能漏交的作业 |
 | `monash moodle news` / `find` / `get` / `messages` / `calendar` | 公告 / 找活动 / 下载单个文件 / 站内信 / 日历订阅链接 |
@@ -333,6 +337,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
 | `monash config` | 看/改设置（改完重启 Claude Desktop） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
+| `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
 | `monash update` | 更新到最新版 |
 
 加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
@@ -428,6 +433,10 @@ flowchart LR
     Core -- "API 令牌，只读" --> Ed["Ed"]
     Core -- "只抓公开页面" --> Notes["课程笔记网站"]
     Login["browser_login + cdp：专用登录窗口"] -- "只取 Moodle 的 cookie" --> Core
+    Web["ChatGPT / 网页版 Claude（可选）"] -- "HTTPS + OAuth" --> Remote["remote"]
+    Remote --> Core
+    Browser["你的浏览器"] -- "只限 127.0.0.1" --> Library["library"]
+    Library --> Core
 ```
 
 | 模块 | 作用 |
@@ -440,6 +449,9 @@ flowchart LR
 | `content_index`、`textextract`、`webnotes` | 全文搜索：PDF、Office 文件、课程笔记网页、录播字幕稿 |
 | `browser_login`、`cdp` | 专用登录窗口，用 Chrome DevTools 协议控制（自己用标准库写的最小 WebSocket 客户端） |
 | `jobs`、`mcp_server`、`cli` | 同步和续期任务、MCP 服务器、命令行 |
+| `widgets`、`ui/panel.html` | 学习面板：每个工具给 MCP Apps 宿主附带的数据，以及负责画面板的那一个 HTML 页面 |
+| `library` | `monash library`：本机只读的课件浏览页 |
+| `remote` | `monash remote`：可选的单用户远程 MCP，带配对码、OAuth 和 PKCE |
 | `doctor`、`doctor_deep`、`help_menu`、`update_check`、`claude_setup` | 体检和 `--deep` 对照核对、帮助和预设提示、新版本提示、接进 Claude |
 | `recordings`、`transcribe` | 可选：录播转带时间戳的字幕稿（`[media]`） |
 
