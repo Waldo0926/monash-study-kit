@@ -16,6 +16,7 @@ FEATURES = [
         ("作业提交状态、可能漏交", "我有没有漏交什么作业？", "monash moodle assignments --missing"),
     ]),
     ("课程资料", [
+        ("按章节或活动名定位 Moodle 项目", "找到 FIT2102 第 7 周的 workshop", "monash moodle find 'week 7' FIT2102"),
         ("全文搜课件、课程笔记网页、Ed 课件、录播字幕稿，带页码/时间戳", "哪一周讲了 monad？在哪份讲义第几页？",
          'monash grep "monad"'),
         ("读课件原文、帮你解释", "帮我看看 A2 的 spec 要求什么", "monash open"),
@@ -35,6 +36,7 @@ FEATURES = [
         ("Moodle 私信（只读）", "Moodle 上有人给我发消息吗？", "monash moodle messages"),
     ]),
     ("维护", [
+        ("在本机网页浏览已同步课件", "打开本地课件浏览页", "monash library --open"),
         ("登录 / 重新登录 Moodle", "帮我重新登录 Moodle", "monash login"),
         ("马上同步一次", "同步一下最新的", "monash sync"),
         ("出问题时体检", "monash 用不了了", "monash doctor"),

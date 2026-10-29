@@ -102,13 +102,13 @@ The open DevTools port was gap G6. It is fixed on macOS and Linux. Windows keeps
 
 The redirect case was gap G2 and is fixed.
 
-## 5. MCP server: stdio only, read-only tools
+## 5. MCP server: stdio by default, read-only tools
 
 **Risk.** A network listener would let other programs or other machines call the tools with the student's session. A write tool would let a model submit work or post on Ed because it misread a request. The design decision is in [ADR 0002](adr/0002-read-only-public-package.md).
 
 **What the code does.**
-- `mcp_server.py:693-713`: `main()` reads JSON-RPC lines from `sys.stdin` and writes replies to `sys.stdout`. No module in the package opens a listening socket. The only `socket` import is the DevTools client in `cdp.py`, which connects out to 127.0.0.1 on Windows.
-- `mcp_server.py:611-626`: every tool is published with an `annotations.readOnlyHint`. It is `true` for 12 tools. It is `false` for `start_monash_login` and `sync_monash_data` (`mcp_server.py:505-506`) because they open a local login window or start a local sync. Neither writes to Moodle or Ed.
+- `mcp_server.py:693-713`: `main()` reads JSON-RPC lines from `sys.stdin` and writes replies to `sys.stdout`. Default stdio use opens no listening socket. Since 1.4.0, only explicitly invoked `monash library` and `monash remote serve` bind HTTP listeners, both on IPv4 loopback. Importing these modules does not start them. The CDP client still connects out to local DevTools.
+- `mcp_server.py:611-626`: every tool is published with an `annotations.readOnlyHint`. In 1.4.0 it is `true` for 16 query tools. It is `false` for `start_monash_login` and `sync_monash_data` (`mcp_server.py:505-506`) because they open a local login window or start a local sync. Neither writes to Moodle or Ed.
 - `mcp_server.py:681-682`: a tool name that is not in the table is refused. There is no submit, quiz, post or reply tool.
 - Moodle AJAX calls used anywhere in the package are all `*_get_*` methods plus `core_session_touch` and `core_session_time_remaining`. The only POSTs are `/calendar/export.php` (`features.py:154`) and Ed's `/renew_token` (`edlib.py:181`). `moodlelib.multipart` (`moodlelib.py:316`) exists but nothing calls it.
 
@@ -121,7 +121,7 @@ The redirect case was gap G2 and is fixed.
 - `tests/test_mcp.py::test_tools_cover_both_sides_and_only_login_sync_are_not_read_only`
 - `tests/test_mcp.py::test_unknown_tool_and_method`
 - `tests/test_security.py::test_mcp_talks_over_stdin_and_stdout`
-- `tests/test_security.py::test_package_opens_no_listening_socket`
+- `tests/test_security.py::test_only_explicit_opt_in_modules_can_listen`
 - `tests/test_security.py::test_only_read_calls_reach_moodle_and_ed`
 
 ## 6. `read_file` only opens files in the two file folders
@@ -263,3 +263,14 @@ grep -n "add_unredirected_header\|BASE_SCHEME" src/monash_study_kit/*.py
 ```
 
 The real-Chromium test is skipped when no Chromium is installed. When the code changes, re-run the tests above and re-check the line numbers in this file with `grep -n`.
+
+
+## 1.4.0 optional interfaces
+
+The earlier line-numbered audit describes the original local core; it is not a live deployment certification. See [the 1.4.0 guide](panels-library-remote.md) for the new interface boundaries.
+
+- `widgets.py` and packaged `ui/panel.html`: no external scripts or fetches; text results remain intact, course strings render as text, parent-window source is checked, links allow HTTP(S) only, and quiz answers only request an AI explanation. Host capabilities determine rendering. Tests: `tests/test_panels.py`.
+- `library.py`: explicit loopback bind; Host/Origin checks; registered and active file catalog only; read-only database access, output escaping, attachment downloads and path/symlink boundary checks. No upload, login, sync or write route. Local programs on the same machine can access it. Tests: `tests/test_library.py`.
+- `remote.py`: explicit HTTPS origin (loopback HTTP for tests), loopback bind for a reverse proxy, one-time pairing, PKCE S256, exact callback allowlists, resource/client-bound hashed tokens and rotating refresh, private OAuth state and no credential-setting tool. All 16 remote tools are query tools; local login/sync and legacy aliases are rejected. Network exposure, TLS and client end-to-end acceptance remain the self-hosting owner's responsibility. Tests: `tests/test_remote.py`, `tests/test_feature_cli.py`.
+
+Only local OAuth state changes in authorization/revocation; no new operation submits assignments, attempts/submits quizzes, posts or replies on Ed. The three panel views and the local browser consume synced content. All automated test data lives in temporary homes; external socket connections are blocked in the suite.

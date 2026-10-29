@@ -55,6 +55,8 @@ def main() -> None:
             if "__pycache__" not in p.parts}
     if missing := want - set(names):
         fail(f"wheel 里少了 {sorted(missing)}")
+    if "monash_study_kit/ui/panel.html" not in names:
+        fail("wheel 没有打包 ui/panel.html")
     with tarfile.open(sdist) as t:
         sdist_names = [m.name.split("/", 1)[1] for m in t.getmembers() if "/" in m.name]
     for n in names + sdist_names:

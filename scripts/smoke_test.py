@@ -23,6 +23,7 @@ EXPECTED_TOOLS = {
     "list_courses", "list_moodle_due", "list_moodle_assignments", "get_moodle_grades",
     "search_moodle_forum", "get_moodle_messages", "search_content", "list_files", "read_file",
     "list_ed_updates", "search_ed_threads", "read_ed_thread", "get_ed_lessons",
+    "search_moodle_activities",
 }
 
 
@@ -46,7 +47,8 @@ def main() -> None:
         fail("用法：smoke_test.py <monash 可执行文件> <版本号>")
     exe, version = sys.argv[1], sys.argv[2]
     home = tempfile.mkdtemp(prefix="monash-smoke-")
-    env = {**os.environ, "MONASH_KIT_HOME": home, "MONASH_KIT_NO_UPDATE_CHECK": "1",
+    env = {**{k: v for k, v in os.environ.items() if not k.startswith("MONASH_KIT_")},
+           "MONASH_KIT_HOME": home, "MONASH_KIT_NO_UPDATE_CHECK": "1",
            "PYTHONIOENCODING": "utf-8"}
     env.pop("ED_TOKEN", None)
 
@@ -67,6 +69,7 @@ def main() -> None:
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         {"jsonrpc": "2.0", "id": 3, "method": "prompts/list"},
+        {"jsonrpc": "2.0", "id": 4, "method": "resources/read", "params": {"uri": "ui://monash/study-panel.html"}},
     ]
     stdin = "".join(json.dumps(m) + "\n" for m in msgs)
     replies = {}
@@ -74,8 +77,8 @@ def main() -> None:
         if line.strip():
             msg = json.loads(line)
             replies[msg.get("id")] = msg
-    if set(replies) != {1, 2, 3}:
-        fail(f"MCP 回复的 id 是 {sorted(replies)}，应该是 [1, 2, 3]（通知不该有回复）")
+    if set(replies) != {1, 2, 3, 4}:
+        fail(f"MCP 回复的 id 是 {sorted(replies)}，应该是 [1, 2, 3, 4]（通知不该有回复）")
     info = replies[1].get("result", {}).get("serverInfo", {})
     if info.get("version") != version:
         fail(f"serverInfo 版本是 {info.get('version')!r}")
@@ -83,6 +86,9 @@ def main() -> None:
     names = {t.get("name") for t in tools}
     if missing := EXPECTED_TOOLS - names:
         fail(f"tools/list 少了 {sorted(missing)}")
+    contents = replies[4].get("result", {}).get("contents", [])
+    if not contents or "monash/view" not in contents[0].get("text", ""):
+        fail("wheel 没有打包学习面板")
     for t in tools:
         if not t.get("description") or t.get("inputSchema", {}).get("type") != "object":
             fail(f"工具 {t.get('name')} 没有说明或参数格式")

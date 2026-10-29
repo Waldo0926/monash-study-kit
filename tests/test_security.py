@@ -257,10 +257,11 @@ def test_mcp_talks_over_stdin_and_stdout(monkeypatch):
     assert json.loads(out.getvalue()) == {"jsonrpc": "2.0", "id": 7, "result": {}}
 
 
-def test_package_opens_no_listening_socket():
+def test_only_explicit_opt_in_modules_can_listen():
     for f in PKG.glob("*.py"):
         src = f.read_text(encoding="utf-8")
-        assert not re.search(r"http\.server|socketserver|\.listen\(|\.bind\(|asyncio\.start_server", src), f.name
+        if f.name not in {"library.py", "remote.py"}:
+            assert not re.search(r"http\.server|socketserver|\.listen\(|\.bind\(|asyncio\.start_server", src), f.name
         if re.search(r"^import socket|^from socket", src, re.M):
             assert f.name == "cdp.py"                        # 只有 CDP 客户端去连本机的 DevTools
 

@@ -23,7 +23,7 @@ import traceback
 import zipfile
 from datetime import datetime, timedelta, timezone
 
-from . import __version__, edlib, edquery, help_menu, jobs, textextract
+from . import __version__, edlib, edquery, help_menu, jobs, textextract, widgets
 from . import features as F
 from .edlib import EdAuthError
 from .moodlelib import COOKIE_FILE, FILES_DIR, MoodleAuthError, MoodleClient, db_connect
@@ -326,6 +326,14 @@ def _local_course_id(ref: str) -> int:
     return _course(ref)["id"]
 
 
+def t_find_activities(args):
+    c = client()
+    courses = [_course(args["course"])] if args.get("course") else _tracked_or_current()
+    limit = max(1, min(int(args.get("limit", 15)), 50))
+    return [{k: v for k, v in hit.items() if k != "score"}
+            for hit in F.find(c, args["query"], courses, limit=limit)]
+
+
 def t_list_files(args):
     con = db_connect()
     if args.get("links"):
@@ -500,6 +508,8 @@ S, I, B = "string", "integer", "boolean"
 STATUS = ("completed", "attempted", "unattempted")
 
 TOOLS = {
+    "search_moodle_activities": (t_find_activities, "按名称找 Moodle 章节和活动，返回活动标识和链接；搜文件正文用 search_content。",
+                                 {"query": (S, True), "course": (S, False), "limit": (I, False)}),
     "get_study_todo": (t_todo, "综合查看 Moodle/Ed 待办：截止、漏交、Lesson、公告和未读回复；问“这周要做/交什么”用。只查截止用 list_moodle_due；查提交状态用 list_moodle_assignments。返回分类待办。",
                        {"days": (I, False)}),
     "get_monash_status": (t_status, "诊断登录、同步、索引和错误状态；报错或“用不了”时用。只需刷新数据用 sync_monash_data；登录过期且用户同意后用 start_monash_login。返回状态摘要或完整体检。",
@@ -559,6 +569,9 @@ LEGACY_TOOL_ALIASES = {
 
 # 每个参数都给短 schema 说明：让 agent 不必猜参数语义，同时控制上下文开销。
 PARAM_HELP = {
+    ("search_moodle_activities", "query"): "章节或活动名，如 week 7 workshop",
+    ("search_moodle_activities", "course"): "课程号；省略=跟踪的课程",
+    ("search_moodle_activities", "limit"): "结果数，默认15，最多50",
     ("get_study_todo", "days"): "未来天数，默认7",
     ("get_monash_status", "full"): "true=完整诊断；false=简要状态",
     ("list_moodle_due", "course"): "课程号，如 FIT2102；省略=全部",
@@ -625,6 +638,8 @@ def tool_list() -> list[dict]:
         out.append({"name": name, "description": desc,
                     "inputSchema": {"type": "object", "properties": props, "required": required},
                     "annotations": {"readOnlyHint": read_only}})
+        if name in widgets.TOOLS:
+            out[-1]["_meta"] = {"ui": {"resourceUri": widgets.URI}}
     return out
 
 
@@ -632,7 +647,15 @@ def call_tool(name: str, arguments: dict) -> dict:
     try:
         data = TOOLS[name][0](arguments or {})
         text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
-        return {"content": [{"type": "text", "text": _clip(text, MAX_OUT)}]}
+        result = {"content": [{"type": "text", "text": _clip(text, MAX_OUT)}]}
+        # A panel must never turn a successful text query into an error.
+        try:
+            view = widgets.payload(name, arguments or {}, data, _ed)
+            if view is not None and len(json.dumps(view, ensure_ascii=False)) <= MAX_OUT * 2:
+                result["_meta"] = {widgets.VIEW_KEY: view}
+        except Exception:  # presentation is optional; preserve the successful text result
+            log("Study panel unavailable; returning the original text result")
+        return result
     except MoodleAuthError as e:
         hint = "截止日期还能先用 list_moodle_due 查（走日历订阅链接，不需要登录）。" \
             if name != "list_moodle_due" and F.load_calendar_url() else ""
@@ -659,13 +682,22 @@ def handle(msg: dict) -> dict | None:
     try:
         if method == "initialize":
             result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
-                      "capabilities": {"tools": {}, "prompts": {}},
+                      "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
                       "serverInfo": {"name": "monash", "version": __version__},
                       "instructions": INSTRUCTIONS + _update_hint()}
         elif method == "ping":
             result = {}
         elif method == "tools/list":
             result = {"tools": tool_list()}
+        elif method == "resources/list":
+            result = {"resources": [widgets.resource()]}
+        elif method == "resources/templates/list":
+            result = {"resourceTemplates": []}
+        elif method == "resources/read":
+            try:
+                result = widgets.read_resource((msg.get("params") or {}).get("uri", ""))
+            except LookupError as e:
+                return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32002, "message": str(e)}}
         elif method == "prompts/list":
             result = {"prompts": help_menu.prompt_list()}
         elif method == "prompts/get":
