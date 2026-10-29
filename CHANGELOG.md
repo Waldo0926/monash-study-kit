@@ -4,6 +4,11 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## Unreleased
 
+## 1.4.1
+
+- `monash --help` now lists `monash library` and `monash remote` in its summary at the top. They were already in the subcommand list below.
+- The real Chromium pipe test waits longer for google-chrome to start on CI.
+
 ## 1.4.0
 
 - Study todo, Ed Lesson progress and quiz practice now include optional MCP Apps panels. Existing tools keep their arguments and text results; clients without panel support still receive text. Quiz selections stay in the panel and are sent to the AI for explanation only, never submitted to Ed.

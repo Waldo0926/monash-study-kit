@@ -17,9 +17,11 @@
 
     monash media                 # 录播：取 YouTube 字幕、下载 Zoom 录像并转写（要装 [media]）
     monash open                  # 打开课件文件夹
+    monash library --open        # 在浏览器里翻已同步的课件（只在本机）
     monash config                # 看/改设置
     monash update                # 更新到最新版
     monash connect cursor        # 接进别的 AI 软件：codex、cursor、vscode、windsurf、gemini
+    monash remote serve          # 可选：自己托管远程 MCP（要自己的 HTTPS 地址），配对用 monash remote pair
     monash uninstall             # 从 Claude 和其他 AI 软件里移除（可选删除数据）
 
 大部分查询加 --json 输出 JSON（输出被管道接走时自动是 JSON，--text 强制文本）。
