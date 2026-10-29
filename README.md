@@ -18,6 +18,7 @@ Connect Monash **Moodle** and **Ed** to Claude, then just ask Claude:
 - "Anything new on Ed? Has anyone replied to my question?"
 - "Which week of FIT2102 covered monads? Which slide deck, which page?"
 - "What does the A2 spec ask for?", "What's my current grade in FIT2109?"
+- "Quiz me on FIT2109 week 3." In apps that support MCP Apps, to-dos, lesson progress and quiz questions also show up as small panels you can click
 
 By default, everything stays **on your own computer**: course files, login state and the database live locally and never pass through a third-party server.
 All tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed.
@@ -128,14 +129,14 @@ At the end you can choose to sync right away. The first sync downloads all cours
 
 Then open Claude Desktop: under **"+" → Connectors** in the chat box you'll see **monash**. Leave it switched on.
 
-## Panels, a local library, and optional remote access (1.4.0)
+## What's new in 1.4
 
-- **Study panels:** todo cards, Ed Lesson progress and quiz practice render in MCP Apps-capable hosts. Existing tools retain their text results; quiz choices go to the AI for explanation, never to Ed for submission.
-- **Activity finder:** ask for a Moodle section or activity by name with `search_moodle_activities`.
-- **Local file library:** run `monash library --open` to browse synced Moodle and Ed Lesson files by course/week and download originals, without an AI app. It only listens on your computer.
-- **Optional self-hosting:** `monash remote serve --public-url https://your-host.example` starts a single-user OAuth-protected remote MCP server behind your own HTTPS proxy. It exposes 16 read-only query tools; local login/sync maintenance stays on the server terminal. No server starts automatically.
+- **Study panels.** In apps that support MCP Apps, "what do I need to do this week", "show my FIT2109 lesson progress" and "help me practise the week 3 quiz" also come with a small panel: deadline cards, lesson progress by module, and quiz questions you can click through. When you finish a quiz, the **交给 AI 批改** button sends your choices back to the chat and the AI explains them from the lesson. Nothing is submitted to Ed. Apps without panels still get the same text answers as before.
+- **Find a Moodle activity by name.** "Where is the week 7 workshop on Moodle?" now works through the new `search_moodle_activities` tool. It needs a Moodle login.
+- **Browse your files without AI.** `monash library --open` opens a page in your browser with every Moodle and Ed lesson file you have synced. Filter by unit, week or name and download the original. It only listens on `127.0.0.1`, so other devices cannot open it.
+- **Optional remote access.** `monash remote serve` lets ChatGPT, or Claude on the web and phone, reach your own data over HTTPS. Use your own server and domain, or try it with a free Cloudflare quick tunnel on your own computer, which needs no account and no domain. Each app pairs with a one-time code from your terminal, and only the 16 read-only query tools are exposed. Nothing starts unless you run it. Steps are on [Host it yourself](https://docs.secureview.tech/study-kit/remote/).
 
-See [setup, connection modes, security boundaries and validation](docs/panels-library-remote.md). Normal local use still needs no domain, VPS or remote account.
+1.4.1 adds `library` and `remote` to the summary at the top of `monash --help`. Everyday use on your own computer still needs no server, domain or extra account. Technical notes: [docs/panels-library-remote.md](docs/panels-library-remote.md).
 
 ## Everyday use
 
@@ -194,9 +195,9 @@ monash connect cursor     # or codex, vscode, windsurf, gemini
 
 It adds only the `monash` entry to the client's config file with the full path to the program, keeps everything else, and saves a backup first. Codex is set up with `codex mcp add` when the `codex` command exists. `--print` shows the entry without changing anything, and `--remove` takes it out again. `monash uninstall` removes it from every client.
 
-> **Verified:** Claude Desktop and Claude Code with the local server; ChatGPT and Codex through a private remote integration using the same v1.3.0 core. On 30 October 2026, Codex successfully queried Moodle and Ed courses; ChatGPT's course query was also confirmed. The public package's stdio handshake, 17-tool catalog, isolated course query and ping passed an offline smoke test.
+> **Verified:** Claude Desktop and Claude Code with the local server. ChatGPT and Codex through a private remote integration on the v1.3.0 core: on 30 October 2026 Codex queried Moodle and Ed courses and ChatGPT's course query was confirmed. ChatGPT Plus works with the author's own domain and server.
 >
-> The tested private deployment remains separate; 1.4.0 adds an optional [self-hosted remote mode](docs/panels-library-remote.md). These checks do not establish native local Codex, Cursor, VS Code, Windsurf or Gemini CLI connectivity. `monash connect` writes the format from each vendor's official docs (as of 2026-10); the official docs take precedence.
+> On 30 October 2026 the 1.4.0 package from PyPI was also checked in a clean environment with made-up data: the stdio handshake, the 18-tool catalog, the three panels, `monash library`, and the whole `monash remote` sign-in and query flow using the Claude and ChatGPT callback addresses. None of this covers the native local Codex, Cursor, VS Code, Windsurf or Gemini CLI connections. `monash connect` writes the format from each vendor's official docs (as of 2026-10); the official docs take precedence.
 
 To configure a client by hand instead, first find the full path of the `monash` program (many clients don't inherit your terminal's PATH):
 
@@ -215,7 +216,7 @@ Replace `/full/path/monash` in the examples with your path. **In JSON, Windows b
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | Untested |
 | VS Code (Copilot) | Command Palette → `MCP: Open User Configuration` | Untested |
 | Gemini CLI | `~/.gemini/settings.json` | Untested |
-| ChatGPT web / mobile app | Separately hosted remote endpoint | Requires a remote MCP server; the public local package alone does not provide one |
+| ChatGPT, Claude web / mobile app | `monash remote serve` behind your own domain or a Cloudflare quick tunnel | ChatGPT Plus works with the author's domain; see [Host it yourself](https://docs.secureview.tech/study-kit/remote/) |
 
 Codex (`~/.codex/config.toml`), or simply run `codex mcp add monash -- /full/path/monash mcp`:
 
@@ -288,6 +289,8 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
   **Never send the `secrets` folder to anyone.**
 - **What Claude can see**: only what a tool returns when you ask something (e.g. a list of deadlines, the full text of a post, the text of a course file).
   Tokens and cookies are never sent to Claude. **Don't paste your Ed token into a chat either**; it is only entered in the terminal.
+- **Course library page**: `monash library` only listens on `127.0.0.1` and only serves files that sync registered. It has no password, so don't forward it to the internet.
+- **Optional remote mode**: `monash remote` keeps the apps you paired in `secrets/remote-mcp.db`, storing only hashes of their tokens. Access tokens last an hour, refresh tokens 30 days and change on every use. `monash remote revoke --all` cuts every app off.
 - **What it does to Moodle / Ed**: read-only. Requests are spaced out, so it never hammers university systems like a crawler.
 - **Complete removal**:
 
@@ -343,6 +346,7 @@ You can also query directly in the terminal without Claude:
 | `monash login` / `monash login ed` | Log in to Moodle / replace the Ed token |
 | `monash courses` | Re-pick tracked units |
 | `monash open` | Open the course-files folder |
+| `monash library [--open]` | Browse and download synced files in your browser (only on this computer) |
 | `monash moodle grades [FIT2102]` | Grades and feedback |
 | `monash moodle assignments --missing` | Possibly missed assignments |
 | `monash moodle news` / `find` / `get` / `messages` / `calendar` | Announcements / find an activity / download one file / messages / calendar subscription link |
@@ -351,6 +355,7 @@ You can also query directly in the terminal without Claude:
 | `monash ed read FIT2109 "W3 Pre-Class"` | A whole lesson as Markdown: text slides, reading pages and PDFs in order, plus its quiz questions |
 | `monash config` | View / change settings (restart Claude Desktop afterwards) |
 | `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
+| `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |
 | `monash update` | Update to the latest version |
 
 Add `--json` for JSON output (output is JSON automatically when piped; `--text` forces text). Every command has `--help`.
@@ -453,6 +458,10 @@ flowchart LR
     Core -- "API token, read-only" --> Ed["Ed"]
     Core -- "public pages only" --> Notes["Course-notes sites"]
     Login["browser_login + cdp: dedicated login window"] -- "Moodle cookie only" --> Core
+    Web["ChatGPT / Claude on the web (optional)"] -- "HTTPS + OAuth" --> Remote["remote"]
+    Remote --> Core
+    Browser["Your browser"] -- "127.0.0.1 only" --> Library["library"]
+    Library --> Core
 ```
 
 | Module | What it does |
@@ -465,6 +474,9 @@ flowchart LR
 | `content_index`, `textextract`, `webnotes` | Full-text search over PDFs, Office files, course-notes websites and transcripts |
 | `browser_login`, `cdp` | Dedicated login window driven over the Chrome DevTools Protocol (a minimal WebSocket client in the standard library) |
 | `jobs`, `mcp_server`, `cli` | Sync and keep-alive jobs, the MCP server, the command line |
+| `widgets`, `ui/panel.html` | The study panels: what each tool attaches for MCP Apps hosts, and the single HTML page that draws them |
+| `library` | `monash library`: the local, read-only page for browsing synced files |
+| `remote` | `monash remote`: optional single-user remote MCP with pairing codes, OAuth and PKCE |
 | `doctor`, `doctor_deep`, `help_menu`, `update_check`, `claude_setup` | Health check and `--deep` cross-checks, help and preset prompts, new-version notice, adding the server to Claude |
 | `recordings`, `transcribe` | Optional: lecture recordings to timestamped transcripts (`[media]` extra) |
 
