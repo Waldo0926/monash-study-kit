@@ -153,17 +153,19 @@ def test_login_window_uses_its_own_private_profile(tmp_path, monkeypatch):
 def _real_chromium():
     import glob
     import shutil
-    found = glob.glob("/opt/pw-browsers/chromium-*/chrome-linux/chrome")
+    found = glob.glob("/opt/pw-browsers/chromium-*/chrome-linux*/chrome")
     return found[0] if found else shutil.which("chromium") or shutil.which("google-chrome")
 
 
 @pytest.mark.skipif(os.name == "nt" or not _real_chromium(), reason="要一个真的 Chromium")
 def test_pipe_cdp_talks_to_a_real_browser_without_opening_a_port(tmp_path):
     from monash_study_kit.cdp import PipeCDP
+    # CI 上的 google-chrome 偶尔启动很慢（第一次运行、找钥匙串），30 秒不够，多给点时间，能跳过的都跳过
     c = PipeCDP([_real_chromium(), "--headless=new", "--no-sandbox", f"--user-data-dir={tmp_path}",
+                 "--no-first-run", "--no-default-browser-check", "--password-store=basic",
                  "--remote-debugging-pipe", "about:blank"])
     try:
-        assert c.call("Browser.getVersion", timeout=30)["product"].startswith(("Chrome", "HeadlessChrome"))
+        assert c.call("Browser.getVersion", timeout=90)["product"].startswith(("Chrome", "HeadlessChrome"))
         assert c.call("Storage.getCookies") == {"cookies": []}
         assert not (tmp_path / "DevToolsActivePort").exists()      # 开端口的话 Chrome 会写这个文件
     finally:
