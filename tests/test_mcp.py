@@ -27,7 +27,7 @@ def test_tools_cover_both_sides_and_only_login_sync_are_not_read_only():
 
 def test_unknown_tool_and_method():
     assert call("tools/call", {"name": "moodle_submit"})["error"]["code"] == -32602
-    assert call("resources/list")["error"]["code"] == -32601
+    assert call("no/such-method")["error"]["code"] == -32601
 
 
 def test_public_tool_names_are_consistent_and_legacy_aliases_work(monkeypatch):
@@ -93,7 +93,7 @@ def test_catalog_stays_small():
     """工具清单每次对话都整份发给 Claude，不调用也算额度。加工具/改说明时别让它涨回去。"""
     tools = call("tools/list")["result"]["tools"]
     size = len(json.dumps(tools, ensure_ascii=False))
-    assert len(tools) <= 17 and size <= 9200, (len(tools), size)
+    assert len(tools) <= 18 and size <= 9200, (len(tools), size)
     assert len(M.INSTRUCTIONS) <= 400
     enums = tools[[t["name"] for t in tools].index("search_ed_threads")]["inputSchema"]["properties"]["only"]["enum"]
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}

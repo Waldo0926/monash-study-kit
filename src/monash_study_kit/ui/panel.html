@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学习面板</title>
+<style>
+  /* 颜色优先用宿主（AI）给的变量，没有就用下面的默认值；深色跟宿主的 theme 走 */
+  :root {
+    --bg: var(--color-background-primary, #ffffff);
+    --bg2: var(--color-background-secondary, #f5f4ef);
+    --fg: var(--color-text-primary, #1f1e1d);
+    --fg2: var(--color-text-secondary, #6b6a66);
+    --line: var(--color-border-primary, #e3e1da);
+    --accent: var(--color-text-info, #2f6fdf);
+    --warn: var(--color-text-warning, #b45309);
+    --danger: var(--color-text-danger, #c2410c);
+    --ok: var(--color-text-success, #15803d);
+    --radius: var(--border-radius-md, 10px);
+    --font: var(--font-sans, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif);
+  }
+  :root[data-theme="dark"] {
+    --bg: var(--color-background-primary, #262624);
+    --bg2: var(--color-background-secondary, #30302e);
+    --fg: var(--color-text-primary, #f0efea);
+    --fg2: var(--color-text-secondary, #a8a69f);
+    --line: var(--color-border-primary, #3d3d3a);
+    --accent: var(--color-text-info, #7aa7ff);
+    --warn: var(--color-text-warning, #f0a64a);
+    --danger: var(--color-text-danger, #f28b5b);
+    --ok: var(--color-text-success, #5bc27a);
+  }
+  * { box-sizing: border-box; }
+  /* 自己铺底色：宿主 iframe 的底色和主题不一定一致，透明的话深色主题下标题会看不见 */
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font); }
+  #root { padding: 8px 10px 10px; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  h3 { font-size: 13px; margin: 14px 0 6px; color: var(--fg2); font-weight: 600; letter-spacing: .02em; }
+  .muted { color: var(--fg2); }
+  .card { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 6px; }
+  /* 标题至少占一行的 60%：宽屏时日期、按钮排在右边；手机上放不下就整体换到标题下面，
+     而不是把标题挤成一个词一行 */
+  .row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+  .row .grow { flex: 1 1 60%; min-width: 60%; }
+  .row > .chip, .row > button, .acts { flex: none; }
+  .acts { display: inline-flex; gap: 6px; }
+  .title { overflow: hidden; text-overflow: ellipsis; }
+  .chip { display: inline-block; font-size: 12px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg2); white-space: nowrap; }
+  .chip.soon { color: var(--danger); border-color: currentColor; }
+  .chip.warn { color: var(--warn); border-color: currentColor; }
+  .chip.ok { color: var(--ok); border-color: currentColor; }
+  button { font: inherit; font-size: 12px; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; cursor: pointer; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  button:hover { border-color: var(--accent); }
+  button.ask { white-space: normal; text-align: left; border-radius: 10px; padding: 3px 10px; margin-top: 4px; }
+  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); padding: 4px 14px; font-size: 13px; }
+  button:disabled { opacity: .45; cursor: default; }
+  a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 6px 0 2px; }
+  .bar > i { display: block; height: 100%; background: var(--ok); }
+  .opt { display: block; width: 100%; text-align: left; white-space: normal; font-size: 14px; color: var(--fg); padding: 8px 12px; margin: 6px 0; border-radius: var(--radius); background: var(--bg); }
+  .opt.picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .empty { padding: 8px 0; color: var(--fg2); }
+  .note { font-size: 12px; color: var(--warn); margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div id="root"><div class="empty">加载中…</div></div>
+<script>
+(() => {
+  "use strict";
+  // ---------------------------------------------------------------- 和宿主（AI）说话：MCP Apps 的 postMessage JSON-RPC
+  const PROTOCOL = "2026-01-26";
+  let nextId = 1;
+  const pending = new Map();
+  const post = (msg) => window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*");
+  const request = (method, params) => new Promise((resolve, reject) => {
+    const id = nextId++;
+    pending.set(id, { resolve, reject });
+    post({ id, method, params });
+  });
+  const notify = (method, params) => post({ method, params: params || {} });
+
+  window.addEventListener("message", (ev) => {
+    if (ev.source !== window.parent) return;
+    const m = ev.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.id !== undefined && pending.has(m.id) && !m.method) {
+      const p = pending.get(m.id); pending.delete(m.id);
+      m.error ? p.reject(m.error) : p.resolve(m.result);
+      return;
+    }
+    if (m.method === "ui/notifications/tool-result") return onResult(m.params || {});
+    if (m.method === "ui/notifications/host-context-changed") return applyContext(m.params || {});
+    if (m.id !== undefined && m.method) post({ id: m.id, result: {} });   // ping、teardown 等请求一律应答
+  });
+
+  function applyContext(ctx) {
+    if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
+    const vars = ctx.styles && ctx.styles.variables;
+    if (vars) for (const [k, v] of Object.entries(vars)) if (v) document.documentElement.style.setProperty(k, v);
+  }
+
+  const say = (text) => request("ui/message", { role: "user", content: [{ type: "text", text }] }).catch(() => {});
+  const openLink = (url) => { if (typeof url === "string" && /^https?:\/\//i.test(url)) request("ui/open-link", { url }).catch(() => {}); };
+
+  new ResizeObserver(() => notify("ui/notifications/size-changed",
+    { height: Math.ceil(document.documentElement.getBoundingClientRect().height) })).observe(document.body);
+
+  request("ui/initialize", { appInfo: { name: "monash-panel", version: "1.4.0" }, appCapabilities: {}, protocolVersion: PROTOCOL })
+    .then((r) => { applyContext((r && r.hostContext) || {}); notify("ui/notifications/initialized"); })
+    .catch(() => notify("ui/notifications/initialized"));
+  if (matchMedia("(prefers-color-scheme: dark)").matches && !document.documentElement.dataset.theme)
+    document.documentElement.dataset.theme = "dark";
+
+  // ---------------------------------------------------------------- 渲染
+  const root = document.getElementById("root");
+  let view = null;
+  const quiz = { i: 0, picks: {} };
+
+  function onResult(res) {
+    let v = res._meta && res._meta["monash/view"];
+    if (!v && res.structuredContent && res.structuredContent.kind) v = res.structuredContent;
+    if (!v) {
+      const t = (res.content || []).find((c) => c.type === "text");
+      root.replaceChildren(el("div", { class: "empty", style: "white-space:pre-wrap;max-height:40em;overflow:auto" }, t ? t.text : (res.isError ? "出错了" : "没有可显示的内容")));
+      return;
+    }
+    view = v; quiz.i = 0; quiz.picks = {};
+    render();
+  }
+
+  function el(tag, attrs, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "on") for (const [ev, fn] of Object.entries(v)) n.addEventListener(ev, fn);
+      else if (v !== null && v !== undefined && v !== false) n.setAttribute(k, v);
+    }
+    for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) n.append(k.nodeType ? k : String(k));
+    return n;
+  }
+  const link = (text, url) => url ? el("a", { title: url, on: { click: () => openLink(url) } }, text) : el("span", {}, text);
+  const btn = (text, fn, cls) => el("button", { class: cls, on: { click: fn } }, text);
+  const acts = (...b) => el("span", { class: "acts" }, ...b);   // 一组按钮一起换行
+
+  function when(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleString("zh-CN", { month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  function left(iso) {
+    const h = (new Date(iso) - Date.now()) / 36e5;
+    if (h < 0) return ["已过", "warn"];
+    if (h < 48) return [h < 1 ? "不到 1 小时" : `${Math.round(h)} 小时`, "soon"];
+    return [`${Math.round(h / 24)} 天`, ""];
+  }
+
+  function render() {
+    const f = { todo: renderTodo, progress: renderProgress, quiz: renderQuiz, help: renderHelp }[view.kind];
+    root.replaceChildren(...(f ? f(view) : [el("div", { class: "empty" }, "不认识的视图")]));
+  }
+
+  function section(title, items, row) {
+    return items && items.length ? [el("h3", {}, `${title}（${items.length}）`), ...items.map(row)] : [];
+  }
+
+  function renderTodo(v) {
+    const kind = { "due date": "截止", due: "截止", "is due": "截止", closes: "关闭", opens: "开放", "cut-off date": "最终截止" };
+    const out = [el("h2", {}, `接下来 ${v.days} 天`)];
+    (v.notes || []).forEach((n) => out.push(el("div", { class: "note" }, "⚠ " + n)));
+    out.push(...section("要交 / 要做", v.due, (d) => {
+      const [txt, cls] = left(d.due);
+      return el("div", { class: "card" }, el("div", { class: "row" },
+        el("span", { class: "chip " + cls }, txt),
+        el("span", { class: "grow title" }, el("b", {}, d.course, " "), link(d.activity || d.name, d.url)),
+        el("span", { class: "muted" }, `${kind[d.kind] || d.kind} · ${when(d.due)}`)));
+    }));
+    out.push(...section("可能漏交", v.possibly_missing, (a) => el("div", { class: "card" }, el("div", { class: "row" },
+      el("span", { class: "chip warn" }, "没交"), el("span", { class: "grow title" }, el("b", {}, a.course, " "), link(a.name, a.url)),
+      el("span", { class: "muted" }, when(a.due))))));
+    const notStarted = (v.ed_lessons || []).filter((l) => l.status !== "attempted");
+    const half = (v.ed_lessons || []).length - notStarted.length;
+    out.push(...section("Ed 还没开始的 lesson", notStarted, (l) => el("div", { class: "card" }, el("div", { class: "row" },
+      el("span", { class: "grow title" }, el("b", {}, l.course, " "), link(l.title, l.url)),
+      acts(btn("带我过一遍", () => say(`用 get_ed_lessons 带我过一遍 ${l.course} 的 “${l.title}”：先讲要点，再用这节的测验题考考我。`)),
+        l.has_quiz ? btn("练测验", () => say(`用 get_ed_lessons 给我练 ${l.course} “${l.title}” 的测验题，lesson 选这节，quiz=true。`)) : null)))));
+    if (half) out.push(el("div", { class: "muted" }, `另外 ${half} 个 lesson 做了一半。`));
+    out.push(...section("新上的课件", v.new_files, (f) => el("div", { class: "card" }, el("div", { class: "row" },
+      el("span", { class: "grow title" }, el("b", {}, f.course, " "), f.path.split("/").pop()),
+      el("span", { class: "muted" }, when(f.synced_at)),
+      acts(btn("打开", () => say(`用 read_file 打开 ${f.path}：能读的就总结要点，zip 就列出内容，其他文件告诉我本地位置。`)))))));
+    out.push(...section("最近公告", v.announcements, (n) => el("div", { class: "card" }, el("div", { class: "row" },
+      el("span", { class: "grow title" }, el("b", {}, n.course, " "), link(n.title, n.url)),
+      el("span", { class: "muted" }, when(n.time))))));
+    out.push(...section("Ed 上有未读回复", v.ed_unread_replies, (t) => el("div", { class: "card" }, el("div", { class: "row" },
+      el("span", { class: "chip" + (t.mine_or_watched ? " ok" : "") }, `+${t.new}`),
+      el("span", { class: "grow title" }, link(`${t.ref} ${t.title}`, t.url)),
+      btn("看回复", () => say(`用 read_ed_thread 读 ${t.ref}，告诉我新回复说了什么。`))))));
+    if (out.length === 1) out.push(el("div", { class: "empty" }, "这段时间没有要做的事 🎉"));
+    return out;
+  }
+
+  function renderHelp(v) {
+    const out = [el("h2", {}, "能帮你做的事"), el("div", { class: "muted" }, "点示例直接发出去；也可以用自己的话问。")];
+    for (const g of v.groups) {
+      out.push(el("h3", {}, g.name));
+      for (const it of g.items) out.push(el("div", { class: "card" },
+        el("div", { class: "row" }, el("span", { class: "grow" }, el("b", {}, it.title), el("span", { class: "muted" }, " · " + it.what))),
+        el("div", { class: "row" }, btn("“" + it.ask + "”", () => say(it.ask), "ask"))));
+    }
+    (v.notes || []).forEach((n) => out.push(el("div", { class: "muted" }, "· " + n)));
+    return out;
+  }
+
+  function renderProgress(v) {
+    const out = [el("h2", {}, `${v.course} · Ed lesson 进度`)];
+    for (const m of v.modules) {
+      const pct = m.total ? Math.round(100 * m.completed / m.total) : 0;
+      out.push(el("div", { class: "card" },
+        el("div", { class: "row" }, el("span", { class: "grow title" }, el("b", {}, m.name)),
+          el("span", { class: "chip" + (pct === 100 ? " ok" : "") }, `${m.completed}/${m.total}`)),
+        el("div", { class: "bar" }, el("i", { style: `width:${pct}%` })),
+        ...m.unfinished.map((l) => el("div", { class: "row" },
+          el("span", { class: "muted" }, l.status === "attempted" ? "◐" : "○"),
+          el("span", { class: "grow title" }, link(l.title, l.url)),
+          acts(btn("带我过一遍", () => say(`用 get_ed_lessons 带我过一遍 ${v.course} 的 “${l.title}”：先讲要点，再用这节的测验题考考我。`)),
+            l.has_quiz ? btn("练测验", () => say(`用 get_ed_lessons 给我练 ${v.course} “${l.title}” 的测验题，lesson 选这节，quiz=true。`)) : null)))));
+    }
+    if (!v.modules.length) out.push(el("div", { class: "empty" }, "这门课在 Ed 上没有 lesson。"));
+    return out;
+  }
+
+  function renderQuiz(v) {
+    const qs = v.questions;
+    if (!qs.length) return [el("div", { class: "empty" }, "这节没有测验题。")];
+    const q = qs[quiz.i];
+    const picked = quiz.picks[quiz.i] || [];
+    const toggle = (k) => {
+      const cur = new Set(quiz.picks[quiz.i] || []);
+      if (q.multiple) cur.has(k) ? cur.delete(k) : cur.add(k); else { cur.clear(); cur.add(k); }
+      quiz.picks[quiz.i] = [...cur].sort();
+      render();
+    };
+    const answered = Object.values(quiz.picks).filter((p) => p.length).length;
+    const submit = () => {
+      const lines = qs.map((x, i) => `${x.n}. ${x.question}\n   我选：${(quiz.picks[i] || []).map((k) => String.fromCharCode(65 + k)).join("、") || "（没答）"}`);
+      say(`这是我做 ${v.course} “${v.lesson}” 测验的答案。Ed 不公开标准答案，请用 get_ed_lessons 读这节正文，逐题判断对错并简短解释，最后告诉我该回去看哪几部分：\n\n${lines.join("\n")}`);
+    };
+    return [
+      el("h2", {}, `${v.lesson}`),
+      el("div", { class: "row muted" }, el("span", { class: "grow" }, v.quiz_title || "测验"), `第 ${quiz.i + 1} / ${qs.length} 题 · 已答 ${answered}`),
+      el("div", { class: "card" },
+        el("div", {}, el("b", {}, `${q.n}. `), q.multiple ? el("span", { class: "chip" }, "多选") : null, " ", q.question),
+        ...q.options.map((o, k) => el("button", { class: "opt" + (picked.includes(k) ? " picked" : ""), on: { click: () => toggle(k) } },
+          `${String.fromCharCode(65 + k)}. ${o}`))),
+      el("div", { class: "nav" },
+        btn("← 上一题", () => { quiz.i--; render(); }, null),
+        quiz.i < qs.length - 1 ? btn("下一题 →", () => { quiz.i++; render(); }) :
+          btn(`交给 AI 批改（${answered}/${qs.length}）`, submit, "primary")),
+    ].map((n, i, all) => { if (i === all.length - 1) n.firstChild.disabled = quiz.i === 0; return n; });
+  }
+})();
+</script>
+</body>
+</html>

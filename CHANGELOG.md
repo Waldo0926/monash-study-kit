@@ -4,6 +4,14 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## Unreleased
 
+## 1.4.0
+
+- Study todo, Ed Lesson progress and quiz practice now include optional MCP Apps panels. Existing tools keep their arguments and text results; clients without panel support still receive text. Quiz selections stay in the panel and are sent to the AI for explanation only, never submitted to Ed.
+- Add `search_moodle_activities` to locate Moodle sections and activities by name, reusing the existing CLI finder. The local catalog has 18 tools; the original 17 names and schemas are unchanged.
+- Add `monash library [--open]`: a loopback-only, read-only browser for registered Moodle and Ed Lesson files. Filter by course, week or filename and download files without an AI client.
+- Add optional single-user `monash remote serve`, `pair`, `clients` and `revoke`. The remote service binds on loopback behind the owner's HTTPS proxy, uses one-time pairing, PKCE and rotating OAuth tokens, and exposes only the 16 query tools. Local login and sync commands cannot be invoked remotely. The server is never started by setup or the default stdio flow.
+- Package the panel HTML in the wheel and test it from a clean installation. No assignment submission, quiz submission, posting, private server settings or hosted service is added.
+
 ## 1.3.0
 
 - Questions about an assignment now follow a fixed order of sources. The Moodle brief and marking rubric come first. On Ed, only replies from teaching staff and answers they endorsed count; other students' replies are leads, not rules. A later staff correction wins, but when the brief and Ed disagree Claude lists both with their dates and suggests asking staff instead of picking one. Every rule it states names where it came from. This is in the server instructions, so it applies without doing anything.

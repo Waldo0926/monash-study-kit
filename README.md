@@ -19,7 +19,7 @@ Connect Monash **Moodle** and **Ed** to Claude, then just ask Claude:
 - "Which week of FIT2102 covered monads? Which slide deck, which page?"
 - "What does the A2 spec ask for?", "What's my current grade in FIT2109?"
 
-Everything stays **on your own computer**: course files, login state and the database live locally and never pass through a third-party server.
+By default, everything stays **on your own computer**: course files, login state and the database live locally and never pass through a third-party server.
 All tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed.
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
@@ -128,6 +128,15 @@ At the end you can choose to sync right away. The first sync downloads all cours
 
 Then open Claude Desktop: under **"+" → Connectors** in the chat box you'll see **monash**. Leave it switched on.
 
+## Panels, a local library, and optional remote access (1.4.0)
+
+- **Study panels:** todo cards, Ed Lesson progress and quiz practice render in MCP Apps-capable hosts. Existing tools retain their text results; quiz choices go to the AI for explanation, never to Ed for submission.
+- **Activity finder:** ask for a Moodle section or activity by name with `search_moodle_activities`.
+- **Local file library:** run `monash library --open` to browse synced Moodle and Ed Lesson files by course/week and download originals, without an AI app. It only listens on your computer.
+- **Optional self-hosting:** `monash remote serve --public-url https://your-host.example` starts a single-user OAuth-protected remote MCP server behind your own HTTPS proxy. It exposes 16 read-only query tools; local login/sync maintenance stays on the server terminal. No server starts automatically.
+
+See [setup, connection modes, security boundaries and validation](docs/panels-library-remote.md). Normal local use still needs no domain, VPS or remote account.
+
 ## Everyday use
 
 Just ask in Claude. While Claude is open, the tool works in the background:
@@ -187,7 +196,7 @@ It adds only the `monash` entry to the client's config file with the full path t
 
 > **Verified:** Claude Desktop and Claude Code with the local server; ChatGPT and Codex through a private remote integration using the same v1.3.0 core. On 30 October 2026, Codex successfully queried Moodle and Ed courses; ChatGPT's course query was also confirmed. The public package's stdio handshake, 17-tool catalog, isolated course query and ping passed an offline smoke test.
 >
-> The private remote server is not included in this public package. These checks do not establish native local Codex, Cursor, VS Code, Windsurf or Gemini CLI connectivity. `monash connect` writes the format from each vendor's official docs (as of 2026-10); the official docs take precedence.
+> The tested private deployment remains separate; 1.4.0 adds an optional [self-hosted remote mode](docs/panels-library-remote.md). These checks do not establish native local Codex, Cursor, VS Code, Windsurf or Gemini CLI connectivity. `monash connect` writes the format from each vendor's official docs (as of 2026-10); the official docs take precedence.
 
 To configure a client by hand instead, first find the full path of the `monash` program (many clients don't inherit your terminal's PATH):
 
@@ -291,13 +300,13 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
 
 ## Token use
 
-Every MCP tool's name, description and parameters are sent to Claude at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.3.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
+Every MCP tool's name, description and parameters are sent to Claude at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.4.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
 
 | Sent once per conversation | Tokens |
 | --- | ---: |
-| 17 tool definitions | 2,785 |
+| 18 tool definitions | 2,962 |
 | Server instructions | 270 |
-| **Total** | **3,055** |
+| **Total** | **3,232** |
 
 The instructions grew from 187 in 1.2.0 when the rule for assignment questions was added (brief and rubric first, then staff answers on Ed).
 

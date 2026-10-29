@@ -19,7 +19,7 @@
 - “FIT2102 哪一周讲了 monad？在哪份讲义第几页？”
 - “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
 
-所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。
+默认所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
 
@@ -123,6 +123,15 @@ monash setup
 
 完成后打开 Claude Desktop，在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行。
 
+## 学习面板、本地课件页和可选远程接入（1.4.0）
+
+- **三个学习面板：** 待办卡片、Ed Lesson 进度、测验练习，在支持 MCP Apps 的客户端显示。原来的工具文字结果保留；练习答案只发给 AI 讲解，不交给 Ed。
+- **活动查找：** 新增 `search_moodle_activities`，按名称定位 Moodle 章节和活动。
+- **本地课件页：** 运行 `monash library --open`，按课程和周次浏览、下载已同步的 Moodle/Ed Lesson 文件，不用打开 AI，只监听本机。
+- **可选自托管：** `monash remote serve --public-url https://你的域名`，在自己的 HTTPS 代理后运行带 OAuth 的单用户远程 MCP。远程仅开放 16 个只读查询工具，登录和手动同步留在服务器终端。不会自动启动或安装服务。
+
+设置方法、接入方式和验证步骤见[完整指南](docs/panels-library-remote.md)。普通本地使用仍不需要域名、VPS 或远程账号。
+
 ## 平时怎么用
 
 直接在 Claude 里问就行。Claude 开着的时候，工具会在后台：
@@ -176,7 +185,7 @@ monash connect cursor     # 或 codex、vscode、windsurf、gemini
 
 > **已验证：** Claude Desktop、Claude Code 的本地接入，以及 ChatGPT、Codex 通过同一套 v1.3.0 核心的私有远程集成。2026 年 10 月 30 日，Codex 成功查询了 Moodle 和 Ed 课程，ChatGPT 的课程查询也已确认。公开包的 stdio 握手、17 个工具目录、隔离数据下的课程查询和 ping 均通过离线测试。
 >
-> 私有远程服务器不包含在这个公开包里。这些验证不等同于验证 Codex、Cursor、VS Code、Windsurf、Gemini CLI 的原生本地接入。`monash connect` 写的格式照各家官方文档（2026-10），有出入时以官方文档为准。
+> 已验证的私有部署保持独立；1.4.0 新增可选的[自托管远程模式](docs/panels-library-remote.md)。这些验证不等同于验证 Codex、Cursor、VS Code、Windsurf、Gemini CLI 的原生本地接入。`monash connect` 写的格式照各家官方文档（2026-10），有出入时以官方文档为准。
 
 想手动配置的话，先找到 `monash` 程序的完整路径（很多客户端启动时读不到终端的 PATH）：
 
@@ -273,13 +282,13 @@ npx skills add Waldo0926/monash-study-kit
 
 ## Token 用量
 
-每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给 Claude，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.3.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给 Claude，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.4.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
 
 | 每次对话发一次 | Token |
 | --- | ---: |
-| 17 个工具定义 | 2,785 |
+| 18 个工具定义 | 2,962 |
 | 服务说明 | 270 |
-| **合计** | **3,055** |
+| **合计** | **3,232** |
 
 服务说明在 1.2.0 是 187，1.3.0 加了作业问题的规则（作业说明和评分细则优先，再看 Ed 上教职员工的回答）后变成 270。
 

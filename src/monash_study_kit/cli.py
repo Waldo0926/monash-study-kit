@@ -398,6 +398,16 @@ def cmd_mcp(args):
     mcp_server.main()
 
 
+def cmd_library(args):
+    from . import library
+    return library.command(args)
+
+
+def cmd_remote(args):
+    from . import remote
+    return remote.command(args)
+
+
 def cmd_media(args):
     from . import recordings, transcribe
     client, con = MoodleClient(), db_connect()
@@ -761,6 +771,21 @@ def build_parser() -> argparse.ArgumentParser:
     cmd(sub, "uninstall", cmd_uninstall, help="从 Claude 和其他 AI 软件移除，可选删除数据")
     cmd(sub, "update", cmd_update, help="更新到最新版")
     cmd(sub, "mcp", cmd_mcp, help="MCP 服务器（Claude 启动它，不用手动跑）")
+    p = cmd(sub, "library", cmd_library, help="本机课件浏览页（只读，不联网同步）")
+    p.add_argument("--port", type=int, default=8766)
+    p.add_argument("--open", action="store_true", help="同时打开浏览器")
+    r = sub.add_parser("remote", help="可选的单用户自托管远程 MCP").add_subparsers(dest="action", required=True)
+    p = cmd(r, "serve", cmd_remote, help="只监听本机，需自行配置 HTTPS 反向代理")
+    p.add_argument("--public-url", help="HTTPS origin，如 https://study.example.org")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--no-background", action="store_true", help="不运行后台同步和续期")
+    p.add_argument("--redirect-uri", action="append", default=[], help="可选：额外允许的完整 OAuth 回调地址，不支持通配符")
+    cmd(r, "pair", cmd_remote, help="产生有效10分钟的一次性配对码")
+    cmd(r, "clients", cmd_remote, help="列出已注册客户端")
+    p = cmd(r, "revoke", cmd_remote, help="撤销远程授权")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--all", action="store_true")
+    g.add_argument("--client", help="撤销指定客户端")
 
     m = sub.add_parser("moodle", help="Moodle 查询").add_subparsers(dest="mcmd", required=True)
     cmd(m, "overview", cmd_m_overview, json_flag=True, help="近期截止、通知、公告、可能漏交")
@@ -811,7 +836,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     ensure_private_dir(HOME)      # 库里有同学的名字和私密帖，只给自己读
-    quiet = args.cmd in ("mcp", "update", "doctor")   # mcp 的 stdout/stderr 归 Claude；另两个自己会说版本
+    quiet = args.cmd in ("mcp", "update", "doctor", "remote", "library")
     if not quiet:
         from . import update_check
         update_check.refresh_in_background()
