@@ -1,12 +1,12 @@
 [project]
 name = "monash-study-kit"
 dynamic = ["version"]
-description = "Connect Monash Moodle and Ed to Claude via a local MCP server and CLI: deadlines, announcements, grades, full-text search over course materials and Ed posts, all on your own machine."
+description = "Connect Monash Moodle and Ed to Claude, Codex, Cursor or any local MCP client via a local MCP server and CLI: deadlines, announcements, grades, full-text search over course materials and Ed posts, all on your own machine."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "Waldo" }]
-keywords = ["mcp", "model-context-protocol", "claude", "moodle", "edstem", "monash", "cli", "study-tools"]
+keywords = ["mcp", "model-context-protocol", "claude", "codex", "cursor", "moodle", "edstem", "monash", "cli", "study-tools"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",

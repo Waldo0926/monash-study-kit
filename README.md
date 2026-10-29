@@ -12,7 +12,7 @@
 
 **English** · [中文](README.zh-CN.md)
 
-Connect Monash **Moodle** and **Ed** to Claude, then just ask Claude:
+Connect Monash **Moodle** and **Ed** to the AI app on your computer (Claude, Codex, Cursor, VS Code and others), then just ask:
 
 - "What's due this week?": Moodle deadlines, assignments you may have missed, unfinished Ed lessons, latest announcements
 - "Anything new on Ed? Has anyone replied to my question?"
@@ -27,7 +27,7 @@ Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work
 
 ![What monash todo prints: Moodle deadlines, a possibly missed assignment, Ed lessons not started, new course files, announcements and unread replies](docs/screenshots/todo.png)
 
-The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Claude reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
+The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Your AI app reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
 
 ---
 
@@ -35,25 +35,25 @@ The picture is real output of `monash todo` against a database filled with made-
 
 The same core (login, sync, queries) serves two kinds of "users":
 
-**MCP: the interface for Claude.** Moodle and Ed both sit behind Okta + MFA, so Claude cannot get in by itself.
-The MCP server lets Claude look things up mid-conversation (tools such as `get_study_todo`, `search_content`, `list_ed_updates`):
+**MCP: the interface for your AI app.** Moodle and Ed both sit behind Okta + MFA, so the AI cannot get in by itself.
+The MCP server lets it look things up mid-conversation (tools such as `get_study_todo`, `search_content`, `list_ed_updates`):
 
 - **Answers come from real data**: deadlines, announcements and grades are fetched live, with sources such as "Workshop 5 Slides, page 25".
 - **Both platforms at once**: one "what do I need to do this week" checks Moodle deadlines, unfinished Ed lessons and announcements from both.
-- **No manual copying**: no downloading PDFs and re-uploading them. Claude finds the right file and reads only the pages it needs, saving time and usage.
+- **No manual copying**: no downloading PDFs and re-uploading them. The AI finds the right file and reads only the pages it needs, saving time and usage.
 - **Natural follow-ups**: "What does the A2 spec require?" "Explain that week's functor material using the lecture notes."
 
 **CLI (the `monash` command): the interface for humans.**
 
 1. **Things only a person can do**: installation, passing MFA in the login window, pasting the Ed token (tokens should never go through a chat, so they are only entered in the terminal).
-2. **No AI needed**: out of usage or just want a quick look? `monash todo` answers in a second (see [Works without Claude usage](#works-without-claude-usage)).
+2. **No AI needed**: out of usage or just want a quick look? `monash todo` answers in a second (see [Works without AI usage](#works-without-ai-usage)).
 3. **Troubleshooting and maintenance**: `status`, `sync`, `update`, `uninstall`.
 
-In short: MCP turns Claude into a TA who knows your units; the CLI handles setup, login and fallback. Ask in Claude day to day, open the terminal occasionally.
+In short: MCP turns your AI app into a TA who knows your units; the CLI handles setup, login and fallback. Ask in your AI app day to day, open the terminal occasionally.
 
 ## Requirements
 
-- **Claude Desktop** ([download](https://claude.ai/download)) or **Claude Code**
+- An AI app that supports local MCP: **Claude Desktop** ([download](https://claude.ai/download)) or **Claude Code** are set up automatically; **Codex** (including Codex in the ChatGPT desktop app), **Cursor**, **VS Code**, **Windsurf** and **Gemini CLI** take one more command (see [Other AI clients](#other-ai-clients))
 - **Chrome, Edge or Brave** (the Edge that ships with Windows is fine), used to log in to Moodle
 - A Monash account
 
@@ -121,13 +121,14 @@ Follow the prompts. There are four steps:
    This window has its own profile and is completely isolated from your everyday browser: the tool only takes the Moodle session from this window
    and never reads anything from your normal browser.
 3. **Units**: tracks this semester's units by default, or pick your own.
-4. **Connect to Claude**: adds `monash` to Claude Desktop and Claude Code automatically.
+4. **Connect your AI app**: adds `monash` to Claude Desktop and Claude Code automatically.
    - On macOS it quits Claude Desktop first (Claude overwrites config edits made while it is running), then reopens it.
    - On Windows it asks you to **fully quit** Claude Desktop first: tray icon at the bottom right → right-click → Quit.
+   - Using Codex, Cursor, VS Code, Windsurf or Gemini CLI? If this step says Claude Desktop is not found, ignore it. After setup, run `monash connect codex` (or `cursor`, `vscode`, `windsurf`, `gemini`) and restart that app.
 
 At the end you can choose to sync right away. The first sync downloads all course files and takes a few minutes to around a quarter of an hour.
 
-Then open Claude Desktop: under **"+" → Connectors** in the chat box you'll see **monash**. Leave it switched on.
+Then open your AI app. In Claude Desktop, **"+" → Connectors** in the chat box lists **monash**; leave it switched on. For other apps, `monash connect` shows which ones are connected.
 
 ## What's new in 1.4
 
@@ -140,23 +141,23 @@ Then open Claude Desktop: under **"+" → Connectors** in the chat box you'll se
 
 ## Everyday use
 
-Just ask in Claude. While Claude is open, the tool works in the background:
+Just ask in your AI app. While it is open, the tool works in the background:
 
 - syncs Ed and Moodle every hour (new posts, replies, course files) and refreshes the full-text index;
 - refreshes the Moodle session every 20 minutes (Moodle logs you out after 4 idle hours).
 
 ### Not sure what to ask?
 
-Use your own words: Claude picks tools by meaning, not keywords, so both "anything due this week" and "did I forget to submit something" reach the to-do tool.
+Use your own words: the AI picks tools by meaning, not keywords, so both "anything due this week" and "did I forget to submit something" reach the to-do tool.
 To see everything it can do:
 
-- Ask Claude "what can you do", or choose one of monash's preset prompts from the **"+" menu**: feature overview, this week's to-dos,
+- Ask your AI "what can you do". In Claude you can also pick one of monash's preset prompts from the **"+" menu** (other apps show MCP prompts in their own place, or not at all): feature overview, this week's to-dos,
   Ed updates, find a topic, quiz review, assignment requirements, grades and feedback. Presets are only sent when you click them, so they cost nothing otherwise.
 - Run `monash help` in the terminal: every feature with an example question and the matching command.
 
 ### When the Moodle login expires
 
-After shutdown or a long sleep, the Moodle session expires. Claude will tell you and ask whether to log in.
+After shutdown or a long sleep, the Moodle session expires. The AI will tell you and ask whether to log in.
 If you agree, it opens the login window on your computer; if Okta still remembers you, it logs in silently without even showing the window.
 You can also run it yourself:
 
@@ -166,7 +167,7 @@ monash login
 
 While the login is expired, **deadlines still work** (they come from Moodle's calendar subscription link, which needs no login), and Ed features are unaffected.
 
-### Works without Claude usage
+### Works without AI usage
 
 The CLI doesn't use AI and consumes no usage. Run `monash sync` first, then:
 
@@ -180,8 +181,8 @@ The CLI doesn't use AI and consumes no usage. Run `monash sync` first, then:
 | Read a full post | `monash ed show FIT2102#42` |
 | Grades / possibly missed assignments | `monash moodle grades FIT2102` / `monash moodle assignments --missing` |
 
-The difference is that nobody summarises for you; you get the raw information. Background sync and Moodle session refresh run alongside Claude Desktop:
-while Claude is open they keep running even if your usage is exhausted; if Claude is closed, run `monash sync` before querying and `monash login` if Moodle has expired.
+The difference is that nobody summarises for you; you get the raw information. Background sync and Moodle session refresh run while your AI app is open, because that is when the MCP server runs:
+they keep running even if your usage is exhausted; if the app is closed, run `monash sync` before querying and `monash login` if Moodle has expired.
 
 ## Other AI clients
 
@@ -253,7 +254,7 @@ If the file already lists other servers, add the `monash` entry rather than over
 - Login and unit selection are still done with `monash setup`. Without Claude installed, the last step reports "Claude Desktop not found"; just ignore it.
 - Background sync and Moodle session refresh only run while the client is open and the MCP server is running.
 - Tool descriptions are written with Claude in mind. Other models usually follow them fine, but this hasn't been verified.
-- If you'd rather not bother, the CLI works with no AI at all (see [Works without Claude usage](#works-without-claude-usage)); you can paste the output of `monash todo` and friends into any AI.
+- If you'd rather not bother, the CLI works with no AI at all (see [Works without AI usage](#works-without-ai-usage)); you can paste the output of `monash todo` and friends into any AI.
 
 ### Agent skill
 
@@ -267,7 +268,7 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
 
 ### What can be searched
 
-`monash grep` and Claude's course-material search cover:
+`monash grep` and the AI's course-material search cover:
 
 - Moodle course files (PDF, Word, PowerPoint, text and code)
 - PDFs in Ed Lessons, plus content pages written directly in Ed
@@ -287,8 +288,8 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
   Run `monash open` to open the course-files folder.
 - **Stored credentials**: the Moodle session cookie, the Ed API token and the Moodle calendar subscription link. They stay on your computer and are only used to talk to Moodle / Ed.
   **Never send the `secrets` folder to anyone.**
-- **What Claude can see**: only what a tool returns when you ask something (e.g. a list of deadlines, the full text of a post, the text of a course file).
-  Tokens and cookies are never sent to Claude. **Don't paste your Ed token into a chat either**; it is only entered in the terminal.
+- **What the AI can see**: only what a tool returns when you ask something (e.g. a list of deadlines, the full text of a post, the text of a course file).
+  Tokens and cookies are never sent to the AI. **Don't paste your Ed token into a chat either**; it is only entered in the terminal.
 - **Course library page**: `monash library` only listens on `127.0.0.1` and only serves files that sync registered. It has no password, so don't forward it to the internet.
 - **Optional remote mode**: `monash remote` keeps the apps you paired in `secrets/remote-mcp.db`, storing only hashes of their tokens. Access tokens last an hour, refresh tokens 30 days and change on every use. `monash remote revoke --all` cuts every app off.
 - **What it does to Moodle / Ed**: read-only. Requests are spaced out, so it never hammers university systems like a crawler.
@@ -303,7 +304,7 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
 
 ## Token use
 
-Every MCP tool's name, description and parameters are sent to Claude at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.4.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
+Every MCP tool's name, description and parameters are sent to the model at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.4.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
 
 | Sent once per conversation | Tokens |
 | --- | ---: |
@@ -331,7 +332,7 @@ To measure your own answers (what a "what's due this week" or a course-file sear
 
 ## Command reference
 
-You can also query directly in the terminal without Claude:
+You can also query directly in the terminal without any AI:
 
 | Command | What it does |
 |---|---|
@@ -353,7 +354,7 @@ You can also query directly in the terminal without Claude:
 | `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed updates / new replies to my posts / search / read a post |
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed lesson progress / quiz questions (for revision) |
 | `monash ed read FIT2109 "W3 Pre-Class"` | A whole lesson as Markdown: text slides, reading pages and PDFs in order, plus its quiz questions |
-| `monash config` | View / change settings (restart Claude Desktop afterwards) |
+| `monash config` | View / change settings (restart your AI app afterwards) |
 | `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
 | `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |
 | `monash update` | Update to the latest version |
@@ -365,7 +366,7 @@ Exit codes (for scripts): 0 success, 1 bad arguments, 2 login required (`monash 
 
 ## Lecture-recording transcripts (optional)
 
-To let Claude know what was said in class, recordings can be turned into timestamped transcripts:
+To let your AI know what was said in class, recordings can be turned into timestamped transcripts:
 
 - **YouTube** links in Ed "Week N … Recording" posts: YouTube captions are fetched directly, which is fast;
 - **Zoom** recordings: downloaded with the passcode from the post, then transcribed on your computer with Whisper (a two-hour lecture takes 20–30 minutes on an ordinary laptop).
@@ -390,17 +391,19 @@ Videos uploaded directly to Moodle aren't downloaded by default either (often hu
 monash update
 ```
 
-Restart Claude Desktop afterwards. On Windows it tells you to quit Claude first and which command to run next (a running program can't be overwritten).
+Restart your AI app afterwards. On Windows it tells you to quit Claude first and which command to run next (a running program can't be overwritten); close Codex, Cursor or whichever app you use before updating.
 
-You'll be told when a new version is out: an extra line after terminal commands, and a short mention when you ask Claude for your to-dos. It checks GitHub at most once a day
+You'll be told when a new version is out: an extra line after terminal commands, and a short mention when you ask your AI for your to-dos. It checks GitHub at most once a day
 and sends no personal information; to turn it off: `monash config update_check false`.
 
 ## FAQ
 
-### monash doesn't show up in Claude
+### monash doesn't show up in your AI app
 
-Run `monash setup claude` to reconnect. On Windows, **fully quit** Claude from the tray first.
+Claude Desktop or Claude Code: run `monash setup claude` to reconnect. On Windows, **fully quit** Claude from the tray first.
 If it still fails, check for errors under Claude Desktop → Settings → Developer.
+
+Codex, Cursor, VS Code, Windsurf or Gemini CLI: run `monash connect` to see whether the app is connected, then `monash connect <app>` and restart the app.
 
 ### The login window won't open / "no browser found"
 
@@ -424,7 +427,7 @@ Most Ed lessons have no due date; Moodle is the source of truth for deadlines. T
 ### Something is broken
 
 Run `monash doctor` and follow the → after each item. If you need help, send the whole output; it contains no tokens, cookies or similar.
-You can also just tell Claude "monash isn't working" and it will run the same checks. The MCP background log is `mcp.log` in the data directory.
+You can also just tell your AI "monash isn't working" and it will run the same checks. The MCP background log is `mcp.log` in the data directory.
 
 ## Development
 
@@ -445,7 +448,7 @@ Every PR also builds the wheel, checks what went into it (`scripts/check_dist.py
 
 ```mermaid
 flowchart LR
-    Claude["Claude Desktop / Claude Code"] -- "stdio (JSON-RPC)" --> MCP["mcp_server"]
+    Claude["Claude, Codex, Cursor and other local MCP apps"] -- "stdio (JSON-RPC)" --> MCP["mcp_server"]
     You["You, in a terminal"] --> CLI["cli / cli_ed"]
     MCP --> Core
     CLI --> Core

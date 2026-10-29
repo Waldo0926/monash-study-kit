@@ -12,7 +12,7 @@
 
 [English](README.md) · **中文**
 
-把 Monash 的 **Moodle** 和 **Ed** 接进 Claude，在 Claude 里直接问：
+把 Monash 的 **Moodle** 和 **Ed** 接进你电脑上的 AI 软件（Claude、Codex、Cursor、VS Code 等），直接问：
 
 - “这周我有什么要交的？”：Moodle 截止日期、可能漏交的作业、Ed 上还没做的 lesson、最新公告
 - “Ed 上有什么新消息？我上次问的问题有人回了吗？”
@@ -26,7 +26,7 @@
 
 ![monash todo 的输出：Moodle 截止、可能漏交的作业、Ed 还没开始的 lesson、新上的课件、公告和未读回复](docs/screenshots/todo.png)
 
-图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的。Claude 通过 MCP 工具读到的是同样的数据。带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)。
+图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的。AI 软件通过 MCP 工具读到的是同样的数据。带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)。
 
 ---
 
@@ -34,24 +34,24 @@
 
 同一套底层代码（登录、同步、查询），给两种“用户”用：
 
-**MCP：给 Claude 用的接口。** Moodle 和 Ed 都要 Okta + MFA 登录，Claude 自己进不去。MCP 让 Claude 在聊天中途自己去查（`get_study_todo`、`search_content`、`list_ed_updates` 等工具）：
+**MCP：给 AI 软件用的接口。** Moodle 和 Ed 都要 Okta + MFA 登录，AI 自己进不去。MCP 让它在聊天中途自己去查（`get_study_todo`、`search_content`、`list_ed_updates` 等工具）：
 
 - **答案来自真实数据**：截止时间、公告、成绩都是当下查到的，还能给出处，比如“Workshop 5 Slides 第 25 页”。
 - **两边合起来看**：一句“这周要做什么”，同时查 Moodle 截止、Ed 没做完的 lesson、两边的公告。
-- **不用手动搬资料**：不用下载 PDF 再上传。Claude 按需找到那份课件、只读需要的几页，省事也省额度。
+- **不用手动搬资料**：不用下载 PDF 再上传。AI 按需找到那份课件、只读需要的几页，省事也省额度。
 - **可以接着追问**：“A2 spec 要求什么？”“那周讲的 functor 结合讲义解释一下”。
 
 **CLI（`monash` 命令）：给人用的接口。**
 
 1. **只有人能做的事**：安装配置、在登录窗口里过 MFA、粘贴 Ed 令牌（令牌不该经过聊天，所以只在终端输入）。
-2. **不依赖 AI**：没额度或只想快速看一眼时，`monash todo` 一秒出结果（见[没额度了也能用](#claude-没额度了也能用)）。
+2. **不依赖 AI**：没额度或只想快速看一眼时，`monash todo` 一秒出结果（见[没额度了也能用](#ai-没额度了也能用)）。
 3. **排错和维护**：`status`、`sync`、`update`、`uninstall`。
 
-简单说：MCP 让 Claude 变成懂你课程的助教，CLI 负责装好、登录和兜底。平时在 Claude 里问，偶尔用终端。
+简单说：MCP 让你的 AI 软件变成懂你课程的助教，CLI 负责装好、登录和兜底。平时在 AI 软件里问，偶尔用终端。
 
 ## 需要什么
 
-- **Claude Desktop**（[下载](https://claude.ai/download)）或 **Claude Code**
+- 支持本地 MCP 的 AI 软件：**Claude Desktop**（[下载](https://claude.ai/download)）和 **Claude Code** 会自动接好；**Codex**（含 ChatGPT 桌面版里的 Codex）、**Cursor**、**VS Code**、**Windsurf**、**Gemini CLI** 多运行一条命令就行（见[接入其他 AI 客户端](#接入其他-ai-客户端)）
 - **Chrome、Edge 或 Brave** 其中一个（Windows 自带 Edge 就行），用来登录 Moodle
 - Monash 账号
 
@@ -116,13 +116,14 @@ monash setup
 1. **Ed**：会帮你打开 Ed 的 [API 令牌页面](https://edstem.org/au/settings/api-tokens)。点 **Create Token**，名字随便写，把生成的令牌复制，粘贴回终端（粘贴时不显示，正常）。这个令牌不会过期，不想用了在同一个页面删掉就作废。
 2. **Moodle**：会打开一个**单独的浏览器窗口**，在里面照常登录 Monash（Okta + MFA）。登录成功后窗口自动关闭。这个窗口有自己独立的配置，和你平时用的浏览器互不影响。工具只从这个窗口里拿 Moodle 的登录状态，不会去读你日常浏览器里的任何东西。
 3. **选课**：默认跟踪本学期的课，也可以自己挑。
-4. **接进 Claude**：自动把 `monash` 加进 Claude Desktop 和 Claude Code。
+4. **接进 AI 软件**：自动把 `monash` 加进 Claude Desktop 和 Claude Code。
    - macOS 上会先帮你退出 Claude Desktop（开着的时候改配置会被它覆盖），改完再打开。
    - Windows 上会请你先**完全退出** Claude Desktop：右下角托盘里的 Claude 图标 → 右键 → Quit。
+   - 用的是 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI？这一步提示没找到 Claude Desktop 的话，忽略就行。设置完再运行 `monash connect codex`（或 `cursor`、`vscode`、`windsurf`、`gemini`），然后重启那个软件。
 
 最后可以选择马上同步一次。第一次同步会下载所有课件，要几分钟到十几分钟。
 
-完成后打开 Claude Desktop，在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行。
+完成后打开你的 AI 软件。Claude Desktop 在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行；其他软件可以运行 `monash connect` 看哪些已经接上。
 
 ## 1.4 新增了什么
 
@@ -135,21 +136,21 @@ monash setup
 
 ## 平时怎么用
 
-直接在 Claude 里问就行。Claude 开着的时候，工具会在后台：
+直接在 AI 软件里问就行。软件开着的时候，工具会在后台：
 
 - 每小时同步一次 Ed 和 Moodle（新帖、新回复、新课件），并更新全文索引；
 - 每 20 分钟给 Moodle 续一次期（Moodle 空闲 4 小时就会把你登出）。
 
 ### 不知道能问什么
 
-直接用自己的话问就行：Claude 按意思挑工具，不是靠关键词触发，“这周有啥要交的”和“我是不是漏交了什么”都能用到待办。想看都能做什么：
+直接用自己的话问就行：AI 按意思挑工具，不是靠关键词触发，“这周有啥要交的”和“我是不是漏交了什么”都能用到待办。想看都能做什么：
 
-- 在 Claude 里问“你能做什么”，或者从输入框的 **“+” 菜单**里选 monash 的预设提示：功能大全、本周待办、Ed 新消息、找知识点、测验题复习、作业要求、成绩和反馈。预设提示点了才发给 Claude，平时不占额度。
+- 问 AI “你能做什么”。在 Claude 里还可以从输入框的 **“+” 菜单**选 monash 的预设提示（其他软件放在自己的位置，有的不显示）：功能大全、本周待办、Ed 新消息、找知识点、测验题复习、作业要求、成绩和反馈。预设提示点了才发给 Claude，平时不占额度。
 - 终端里运行 `monash help`：每项功能附一句示例问法和对应的命令。
 
 ### Moodle 登录过期了怎么办
 
-电脑关机、睡眠久了，Moodle 会话会过期。这时 Claude 会告诉你，并问要不要登录，同意的话它会在你电脑上打开登录窗口；如果 Okta 还记得你，会在后台自动登录，连窗口都不用弹。也可以自己在终端运行：
+电脑关机、睡眠久了，Moodle 会话会过期。这时 AI 会告诉你，并问要不要登录，同意的话它会在你电脑上打开登录窗口；如果 Okta 还记得你，会在后台自动登录，连窗口都不用弹。也可以自己在终端运行：
 
 ```bash
 monash login
@@ -157,7 +158,7 @@ monash login
 
 登录过期期间，**截止日期照样能查**（用的是 Moodle 的日历订阅链接，不需要登录）；Ed 的功能完全不受影响。
 
-### Claude 没额度了也能用
+### AI 没额度了也能用
 
 命令行工具不需要 AI，不耗任何额度。先 `monash sync` 同步一下，然后：
 
@@ -171,7 +172,7 @@ monash login
 | 读某个帖子全文 | `monash ed show FIT2102#42` |
 | 成绩 / 可能漏交的作业 | `monash moodle grades FIT2102` / `monash moodle assignments --missing` |
 
-区别是没人帮你总结，只列出原始信息。另外，后台同步和 Moodle 续期是跟着 Claude Desktop 跑的：Claude 开着时，就算额度用完也照常进行；Claude 关掉的话，查之前先 `monash sync`，Moodle 过期了 `monash login`。
+区别是没人帮你总结，只列出原始信息。另外，后台同步和 Moodle 续期是跟着 AI 软件跑的，因为软件开着时 MCP 服务器才在运行：就算额度用完也照常进行；软件关掉的话，查之前先 `monash sync`，Moodle 过期了 `monash login`。
 
 ## 接入其他 AI 客户端
 
@@ -241,7 +242,7 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 - 登录、选课还是用 `monash setup` 做。没装 Claude 的话，最后一步会提示“没找到 Claude Desktop”，忽略就行。
 - 后台同步和 Moodle 续期只在客户端开着、MCP 在运行时进行。
 - 工具说明是按 Claude 写的，别的模型一般也能照着用，但效果没验证过。
-- 不想折腾的话，命令行本身跟任何 AI 都无关（见[没额度了也能用](#claude-没额度了也能用)），可以把 `monash todo` 之类的输出直接复制给任何 AI。
+- 不想折腾的话，命令行本身跟任何 AI 都无关（见[没额度了也能用](#ai-没额度了也能用)），可以把 `monash todo` 之类的输出直接复制给任何 AI。
 
 ### 给 AI 用的技能包
 
@@ -255,7 +256,7 @@ npx skills add Waldo0926/monash-study-kit
 
 ### 搜得到哪些内容
 
-`monash grep` 和 Claude 里的课件搜索覆盖：
+`monash grep` 和 AI 的课件搜索覆盖：
 
 - Moodle 上的课件（PDF、Word、PowerPoint、文本和代码）
 - Ed Lessons 里的 PDF，以及直接写在 Ed 里的正文页
@@ -270,7 +271,7 @@ npx skills add Waldo0926/monash-study-kit
 
   里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）。运行 `monash open` 可以打开课件文件夹。
 - **存了哪些凭据**：Moodle 的会话 cookie、Ed 的 API 令牌、Moodle 日历订阅链接。都只在你电脑上，只用来访问 Moodle / Ed 本身。**别把 `secrets` 文件夹发给别人。**
-- **Claude 能看到什么**：只有你提问时 Claude 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字）。令牌和 cookie 永远不会发给 Claude。**也不要把 Ed 令牌贴进聊天里**，令牌只在终端里输入。
+- **AI 能看到什么**：只有你提问时 AI 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字）。令牌和 cookie 永远不会发给 AI。**也不要把 Ed 令牌贴进聊天里**，令牌只在终端里输入。
 - **课件浏览页**：`monash library` 只监听 `127.0.0.1`，只提供同步时登记过的文件。页面没有密码，不要把它转发到公网。
 - **可选的远程模式**：`monash remote` 把配对过的软件记在 `secrets/remote-mcp.db`，只存令牌的哈希。访问令牌有效 1 小时，刷新令牌 30 天，每用一次就换新的。`monash remote revoke --all` 可以一次全部撤销。
 - **会对 Moodle / Ed 做什么**：只读。请求之间有间隔，不会像爬虫一样猛打学校的系统。
@@ -285,7 +286,7 @@ npx skills add Waldo0926/monash-study-kit
 
 ## Token 用量
 
-每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给 Claude，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.4.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给模型，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.4.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
 
 | 每次对话发一次 | Token |
 | --- | ---: |
@@ -313,7 +314,7 @@ npx skills add Waldo0926/monash-study-kit
 
 ## 命令速查
 
-不用 Claude 也可以直接在终端里查：
+不用任何 AI 也可以直接在终端里查：
 
 | 命令 | 作用 |
 |---|---|
@@ -335,7 +336,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed 新动态 / 我的帖子有没有新回复 / 搜索 / 读帖子 |
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
 | `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
-| `monash config` | 看/改设置（改完重启 Claude Desktop） |
+| `monash config` | 看/改设置（改完重启 AI 软件） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
 | `monash update` | 更新到最新版 |
@@ -346,7 +347,7 @@ npx skills add Waldo0926/monash-study-kit
 
 ## 录播字幕（可选）
 
-想让 Claude 知道“老师上课讲了什么”，可以把录播转成带时间戳的字幕稿：
+想让 AI 知道“老师上课讲了什么”，可以把录播转成带时间戳的字幕稿：
 
 - Ed 上 “Week N … Recording” 帖子里的 **YouTube** 链接：直接取 YouTube 字幕，很快；
 - **Zoom** 录像：用帖子里的 Passcode 下载，再在你电脑上用 Whisper 转写（普通笔记本上一节两小时的课要二三十分钟）。
@@ -371,15 +372,17 @@ Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成�
 monash update
 ```
 
-更新后重启一下 Claude Desktop。Windows 上它会告诉你先退出 Claude、再运行哪条命令（正在运行的程序没法被覆盖）。
+更新后重启一下你用的 AI 软件。Windows 上它会告诉你先退出 Claude、再运行哪条命令（正在运行的程序没法被覆盖）；用 Codex、Cursor 等的话，更新前先把它们关掉。
 
-有新版本时会提醒你：终端里运行命令后多一行提示，Claude 里问待办时也会顺带说一句。每天最多查一次 GitHub，不带任何个人信息；不想要的话 `monash config update_check false`。
+有新版本时会提醒你：终端里运行命令后多一行提示，在 AI 里问待办时也会顺带说一句。每天最多查一次 GitHub，不带任何个人信息；不想要的话 `monash config update_check false`。
 
 ## 常见问题
 
-### Claude 里看不到 monash
+### AI 软件里看不到 monash
 
-运行 `monash setup claude` 重新接一次。Windows 上一定要先从托盘**完全退出** Claude 再运行。还不行的话看 Claude Desktop → Settings → Developer 里有没有报错。
+Claude Desktop 或 Claude Code：运行 `monash setup claude` 重新接一次。Windows 上一定要先从托盘**完全退出** Claude 再运行。还不行的话看 Claude Desktop → Settings → Developer 里有没有报错。
+
+Codex、Cursor、VS Code、Windsurf 或 Gemini CLI：运行 `monash connect` 看这个软件接上没有，没接上就 `monash connect <软件名>`，再重启软件。
 
 ### 登录窗口打不开 / 提示没找到浏览器
 
@@ -399,7 +402,7 @@ Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`get_st
 
 ### 出问题了
 
-运行 `monash doctor`，照着每项后面的 → 去修。需要别人帮忙时把整段输出发过去，里面不含令牌、cookie 之类的东西。在 Claude 里也可以直接说“monash 用不了了”，它会跑同一套检查。MCP 的后台日志在数据目录的 `mcp.log`。
+运行 `monash doctor`，照着每项后面的 → 去修。需要别人帮忙时把整段输出发过去，里面不含令牌、cookie 之类的东西。在 AI 软件里也可以直接说“monash 用不了了”，它会跑同一套检查。MCP 的后台日志在数据目录的 `mcp.log`。
 
 ## 开发
 
@@ -420,7 +423,7 @@ uv run monash --help
 
 ```mermaid
 flowchart LR
-    Claude["Claude Desktop / Claude Code"] -- "stdio（JSON-RPC）" --> MCP["mcp_server"]
+    Claude["Claude、Codex、Cursor 等本地 MCP 软件"] -- "stdio（JSON-RPC）" --> MCP["mcp_server"]
     You["你，在终端里"] --> CLI["cli / cli_ed"]
     MCP --> Core
     CLI --> Core
