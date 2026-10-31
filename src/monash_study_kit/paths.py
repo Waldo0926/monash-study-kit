@@ -38,6 +38,9 @@ SETTINGS_FILE = HOME / "settings.json"
 
 DEFAULTS = {
     "gmail_enabled": False,      # 完成本机 Gmail OAuth 后启用本地 MCP 邮件工具
+    "gmail_manage_enabled": False,  # 本地 MCP 可以起草、发草稿、改标签（每次先预览，用户确认才执行）；要先用 --manage 授权
+    "attendance_enabled": False,  # 登录考勤门户后启用本地 MCP 只读考勤工具
+    "attendance_submit_enabled": False,  # 本地 MCP 可以准备签到提交（先预览，用户确认才执行）
     "download_videos": False,     # 录像动辄几百 MB；没装 [media] 转不了字幕，下下来 Claude 也看不了
     "auto_sync_hours": 1,         # MCP 在跑的时候，多久在后台同步一次
     "keepalive_minutes": 20,      # MCP 在跑的时候，多久给 Moodle 会话续一次期（空闲 4 小时就过期）

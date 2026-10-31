@@ -83,13 +83,19 @@ def test_initial_pagination_resumes_with_original_baseline(store):
     assert store.status()["cached_messages"] == 2
 
 
-def test_failure_rolls_back_data_and_cursor(store):
+def test_failure_inside_a_page_saves_nothing_from_it_and_retry_resumes(store):
+    # 每页和它的游标一起提交：失败那页一封都不存，游标停在那页开头，下次从这里接着下。
     client = Fake({"profile": {"emailAddress": "me@example.edu", "historyId": "h1"},
                    "messages": {"messages": [{"id": "a"}, {"id": "b"}]},
                    "messages/a": message(), "messages/b": gmail.GmailHTTPError(503)})
     with pytest.raises(gmail.GmailHTTPError):
         gmail.sync(client, store)
-    assert store.status()["cached_messages"] == 0 and store.state("account") is None
+    assert store.status()["cached_messages"] == 0
+    assert store.state("page_token") == "" and store.state("initial_pending") == "1"
+    assert not store.state("history_id")
+    client.routes["messages/b"] = message("b")
+    assert gmail.sync(client, store)["status"] == "ok"
+    assert store.status()["cached_messages"] == 2 and store.state("history_id") == "h1"
 
 
 def seed(store):

@@ -339,6 +339,8 @@ npx skills add Waldo0926/monash-study-kit
 | `monash config` | 看/改设置（改完重启 AI 软件） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
+| `monash gmail todo` / `sync` / `search` / `thread` | 可选：学校邮箱的邮件待办 / 同步 / 离线搜索 / 读对话（[设置](#可选gmail-与考勤)） |
+| `monash attendance login` / `status` / `sync` | 可选：考勤门户登录 / 状态 / 读取最近的班次 |
 | `monash update` | 更新到最新版 |
 
 加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
@@ -365,6 +367,29 @@ monash media
 ```
 
 Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成链接。想下载：`monash config download_videos true`。
+
+## 可选：Gmail 与考勤
+
+这部分还没发布到 PyPI（见[更新日志](CHANGELOG.md)里的 Unreleased）。两部分默认都不开，只在你自己的电脑上运行。
+
+- **学校邮箱（Gmail）。** 在本机保存一份 Monash 邮箱的私有副本。问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话。默认只申请只读权限，邮箱里什么都不会变，连未读状态都不动。
+- **考勤。** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”。只在马来西亚校区的门户上验证过。
+
+Gmail 要用你自己的 Google Cloud OAuth 客户端。完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)。简单来说：
+
+```bash
+uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://github.com/Waldo0926/monash-study-kit"
+monash gmail login --client /私有路径/google-client.json
+monash gmail sync
+monash attendance login
+monash attendance sync
+```
+
+登录完重启 AI 软件。AI 读的是本地副本，想要最新的就运行 `monash gmail sync` 或 `monash attendance sync`，这两部分暂时没有后台自动同步。
+
+起草、发送草稿、改标签和考勤签到提交，默认在 AI 软件里是关着的，要你自己打开：`monash config gmail_manage_enabled true`（先用 `monash gmail login --manage` 授权）或 `monash config attendance_submit_enabled true`。打开以后 AI 也必须先把完整预览给你看，你确认了这一项才会执行。不会彻底删除邮件。远程 MCP（`monash remote`）不提供任何邮件和考勤工具。
+
+还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户。
 
 ## 更新
 

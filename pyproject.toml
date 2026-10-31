@@ -25,7 +25,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gmail = ["google-auth-oauthlib>=1.2,<2"]
-attendance = ["playwright>=1.49,<2", "Pillow>=10,<13"]
+# Windows 没有系统时区库，考勤按马来西亚时间算日期，要靠 tzdata
+attendance = ["playwright>=1.49,<2", "Pillow>=10,<13", "tzdata; sys_platform == 'win32'"]
 # 录播字幕：下载 Zoom 录像并用 whisper 转写、取 YouTube 字幕。依赖大（约 1 GB），想要才装。
 media = [
     "faster-whisper>=1.0",
@@ -42,7 +43,8 @@ Changelog = "https://github.com/Waldo0926/monash-study-kit/blob/main/CHANGELOG.m
 monash = "monash_study_kit.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+# tzdata：Windows 上跑考勤相关的测试要它
+dev = ["pytest>=8", "tzdata; sys_platform == 'win32'"]
 
 [build-system]
 requires = ["hatchling"]

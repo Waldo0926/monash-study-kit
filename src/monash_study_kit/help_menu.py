@@ -2,7 +2,7 @@
 
 工具不是靠关键词触发的（Claude 按意思挑工具），但人不知道有什么功能就想不到去问。所以：
   * FEATURES：按类别列出能做的事，每条一句示例问法和对应的命令。`monash help` 打印它，
-    MCP 的“功能大全”提示也用它，两边不会对不上。
+    MCP 的“功能大全”提示也用它，两边不会对不上。Gmail 和考勤在 OPTIONAL 里，开了才列。
   * PROMPTS：MCP 预设提示。它们只在用户从 Claude 的“+”菜单里选中时才发给 Claude，
     平时不占额度，这是它们比多加一个 help 工具划算的地方（工具清单每次对话都要整份发）。
 """
@@ -35,11 +35,6 @@ FEATURES = [
         ("Moodle 公告", "FIT2102 最近有什么公告？", "monash moodle news FIT2102"),
         ("Moodle 私信（只读）", "Moodle 上有人给我发消息吗？", "monash moodle messages"),
     ]),
-    ("Gmail（可选安装和授权）", [
-        ("下载邮件正文与消息数据到私有镜像，离线全文搜索", "搜索已同步的交换申请邮件", "monash gmail search 交换"),
-        ("下载并保存指定邮件附件", "查看邮件对话和附件列表", "monash gmail thread THREAD_ID"),
-        ("可选邮箱管理：草稿、发信、归档、标签；先预览再确认", "预览将要发送的邮件草稿", "monash gmail send-draft DRAFT_ID"),
-    ]),
     ("维护", [
         ("在本机网页浏览已同步课件", "打开本地课件浏览页", "monash library --open"),
         ("登录 / 重新登录 Moodle", "帮我重新登录 Moodle", "monash login"),
@@ -49,14 +44,48 @@ FEATURES = [
 ]
 
 
-def render(cli: bool = True) -> str:
+# 可选功能：设置里打开了才列出来，没装没授权的人看到也用不了。键是对应的设置项。
+# 写操作那几条在 AI 里先给预览，用户确认后才执行；命令行留空的只能在 AI 里用。
+OPTIONAL = {
+    "gmail_enabled": ("学校邮箱（Gmail）", [
+        ("邮件待办：最近几天收件箱里没读的学校邮件，去掉推广和社交类", "我邮箱里有什么要处理的？", "monash gmail todo"),
+        ("离线全文搜索已同步的邮件，带日期、未读、星标和附件数", "找一下交换申请的邮件", "monash gmail search 交换"),
+        ("读整个邮件对话和附件列表", "把那封交换申请的邮件全文给我看", "monash gmail thread THREAD_ID"),
+    ]),
+    "gmail_manage_enabled": ("邮箱操作（先预览，确认后才执行）", [
+        ("起草回复、发送草稿", "帮我给老师起草一封请假邮件", "monash gmail draft --file reply.eml"),
+        ("改标签：归档、标已读、加星标", "把这封邮件归档并标成已读", "monash gmail labels MESSAGE_ID --remove INBOX"),
+    ]),
+    "attendance_enabled": ("考勤", [
+        ("最近的班次：哪些已签到、哪些还没签、哪些还没到时间", "这周还有哪节课没签到？", "monash attendance sync"),
+        ("考勤登录和上次读取的时间", "考勤数据是什么时候的？", "monash attendance status"),
+    ]),
+    "attendance_submit_enabled": ("签到提交（先预览，确认后才执行）", [
+        ("你确认自己到课了，再用签到码帮你提交", "我刚上完 FIT2102 的 workshop，签到码是 ABCDE", ""),
+    ]),
+}
+# 写操作要先开对应的只读功能
+REQUIRES = {"gmail_manage_enabled": "gmail_enabled", "attendance_submit_enabled": "attendance_enabled"}
+
+
+def features(settings: dict | None = None) -> list:
+    """FEATURES 加上已开启的可选功能（放在“维护”前面）。"""
+    if settings is None:
+        from .paths import load_settings
+        settings = load_settings()
+    extra = [OPTIONAL[key] for key in OPTIONAL
+             if settings.get(key) and settings.get(REQUIRES.get(key, key))]
+    return FEATURES[:-1] + extra + FEATURES[-1:]
+
+
+def render(cli: bool = True, settings: dict | None = None) -> str:
     """cli=True 给终端看（带命令）；False 给 Claude 看（只有功能和问法）。"""
     out = ["能做的事（直接用自己的话问就行，下面只是例子）：" if not cli else "monash 能做的事：", ""]
-    for cat, items in FEATURES:
+    for cat, items in features(settings):
         out.append(f"■ {cat}")
         for what, ask, cmd in items:
             out.append(f"  · {what}")
-            out.append(f"      问：“{ask}”" + (f"   命令：{cmd}" if cli else ""))
+            out.append(f"      问：“{ask}”" + (f"   命令：{cmd}" if cli and cmd else ""))
         out.append("")
     out.append("不能做的：交作业、做测验、在 Ed 上发帖，这些要自己去网页上操作。")
     if cli:

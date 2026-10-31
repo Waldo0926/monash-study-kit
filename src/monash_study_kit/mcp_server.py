@@ -3,7 +3,8 @@
     monash mcp          # 由 Claude 启动，不用自己跑；monash setup 会帮你把它加进 Claude
 
 只读：不交作业、不做测验、不发帖。唯一会“动”的是 start_monash_login（在你电脑上打开登录窗口）
-和 sync_monash_data（在后台同步）。
+和 sync_monash_data（在后台同步）。可选的 Gmail 和考勤工具在 student_tools 里，默认不注册；
+其中改邮箱、提交签到的写操作要在设置里单独打开，每次也要用户看过预览、确认后才执行。
 
 服务器开着的时候（也就是 Claude 开着的时候）在后台做两件事：
   * 每 20 分钟给 Moodle 会话续一次期，因为 Moodle 空闲 4 小时就把你踢出去；
@@ -142,6 +143,22 @@ def _safe_sync():
         log(f"同步完成：{json.dumps(st.get('errors') or {}, ensure_ascii=False)}")
     except Exception:  # noqa: BLE001
         log("同步出错：\n" + traceback.format_exc())
+
+
+def _student_hint(tools: dict) -> str:
+    """开了 Gmail 或考勤时补几句：查学校邮件用本服务，写操作先预览再确认。"""
+    out = ""
+    if "get_gmail_inbox_todo" in tools:
+        out += ("本服务连着用户的 Monash 学校邮箱。用户问“我的邮箱/邮件/有什么要处理的/学校发的邮件”时，"
+                "优先用本服务的 get_gmail_inbox_todo 和 search_gmail_cache，不要改用其他通用 Gmail 连接器，"
+                "除非用户明确说的是别的邮箱。邮件来自本地镜像，要最新的请用户在终端运行 monash gmail sync。")
+    if "attendance_overview" in tools:
+        out += ("问签到/考勤用 attendance_overview；数据来自用户上次运行的 monash attendance sync，"
+                "登录过期请用户在终端运行 monash attendance login。")
+    if "execute_student_action" in tools:
+        out += ("邮箱操作和签到提交先用对应的 prepare 工具拿到完整预览，原样给用户看；用户明确确认这一项后才调 "
+                "execute_student_action（user_confirmed=true）。不能自己替用户确认，结果未知时不要重试，先去核对实际状态。")
+    return out
 
 
 def _update_hint() -> str:
@@ -621,13 +638,16 @@ PARAM_HELP = {
     ("get_ed_lessons", "quiz"): "true=返回测验而非 Lesson 列表",
     ("get_ed_lessons", "offset"): "正文字符起点，默认0",
     ("get_ed_lessons", "max_chars"): "最大字符数，默认30000，最高100000",
+    ("get_gmail_inbox_todo", "days"): "最近几天，默认7",
+    ("get_gmail_inbox_todo", "limit"): "最多列几封，默认10",
+    ("attendance_overview", "days"): "往前看几天，默认14；未来已排的班次总会列出",
 }
 
 def available_tools() -> dict:
-    if load_settings().get("gmail_enabled"):
-        from .gmail_tools import TOOLS as gmail_tools
-        return {**TOOLS, **gmail_tools}
-    return TOOLS
+    """Gmail 和考勤是可选的，按设置决定加不加（student_tools），默认只有 Moodle 和 Ed。"""
+    from . import student_tools
+    extra = student_tools.tools(load_settings())
+    return {**TOOLS, **extra} if extra else TOOLS
 
 
 def tool_list() -> list[dict]:
@@ -673,7 +693,7 @@ def call_tool(name: str, arguments: dict) -> dict:
         return {"isError": True, "content": [{"type": "text", "text":
                 f"Ed 令牌没设置或失效了（{e}）。请用户在终端运行 `monash login ed`，"
                 "按提示在 Ed 设置页新建令牌后粘贴进去（不要把令牌发到聊天里）。"}]}
-    except (LookupError, ValueError) as e:
+    except (LookupError, ValueError, PermissionError) as e:
         return {"isError": True, "content": [{"type": "text", "text": str(e)}]}
 
 
@@ -691,7 +711,7 @@ def handle(msg: dict) -> dict | None:
             result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
                       "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
                       "serverInfo": {"name": "monash", "version": __version__},
-                      "instructions": INSTRUCTIONS + _update_hint()}
+                      "instructions": INSTRUCTIONS + _student_hint(available_tools()) + _update_hint()}
         elif method == "ping":
             result = {}
         elif method == "tools/list":

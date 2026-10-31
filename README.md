@@ -357,6 +357,8 @@ You can also query directly in the terminal without any AI:
 | `monash config` | View / change settings (restart your AI app afterwards) |
 | `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
 | `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |
+| `monash gmail todo` / `sync` / `search` / `thread` | Optional school Gmail: unread inbox mail / sync / offline search / read a thread ([setup](#optional-gmail-and-attendance)) |
+| `monash attendance login` / `status` / `sync` | Optional attendance portal: log in / status / read recent classes |
 | `monash update` | Update to the latest version |
 
 Add `--json` for JSON output (output is JSON automatically when piped; `--text` forces text). Every command has `--help`.
@@ -384,6 +386,29 @@ monash media
 ```
 
 Videos uploaded directly to Moodle aren't downloaded by default either (often hundreds of MB); they are recorded as links. To download them: `monash config download_videos true`.
+
+## Optional: Gmail and attendance
+
+Not on PyPI yet (see Unreleased in the [changelog](CHANGELOG.md)). Both parts are off by default and only run on your own computer.
+
+- **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline and reads whole threads. The default permission is read-only, so nothing in the mailbox changes, not even unread status.
+- **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?". Only checked against the Malaysia campus portal.
+
+You need your own Google Cloud OAuth client for Gmail. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). In short:
+
+```bash
+uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://github.com/Waldo0926/monash-study-kit"
+monash gmail login --client /private/path/google-client.json
+monash gmail sync
+monash attendance login
+monash attendance sync
+```
+
+Restart your AI app after logging in. The AI reads the local copy, so run `monash gmail sync` or `monash attendance sync` when you want fresh data; there is no background sync for these yet.
+
+Drafting, sending a draft, changing labels and submitting attendance stay off in the AI app until you turn them on with `monash config gmail_manage_enabled true` (after `monash gmail login --manage`) or `monash config attendance_submit_enabled true`. Even then the AI has to show you the full preview first and only runs it after you confirm that exact action. Mail is never permanently deleted. The remote MCP (`monash remote`) does not offer any mail or attendance tools.
+
+Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
 
 ## Updating
 

@@ -13,7 +13,10 @@ def call(method, params=None):
     return M.handle({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}})
 
 
-@pytest.mark.parametrize("cmd", [c for _, items in H.FEATURES for *_, c in items])
+ALL_FEATURES = H.FEATURES + list(H.OPTIONAL.values())
+
+
+@pytest.mark.parametrize("cmd", [c for _, items in ALL_FEATURES for *_, c in items if c])
 def test_every_listed_command_parses(cmd):
     """帮助里写的命令改名/删掉时，这里会失败，免得教朋友用不存在的命令。"""
     argv = shlex.split(cmd)

@@ -4,6 +4,14 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## Unreleased
 
+- Optional school Gmail, installed with `[gmail]`. `monash gmail login` uses your own Google Cloud Desktop OAuth client and asks for read-only access by default. `monash gmail sync` keeps a private local copy; each page is saved with its cursor, so a failed run keeps the pages it finished and the next run picks up from the failed page. `monash gmail todo` lists recent unread inbox mail without promotions and social updates. Search results now carry the date, unread, inbox, starred, important, category and attachment count.
+- Optional attendance, installed with `[attendance]`: `monash attendance login`, `status` and `sync` read your classes and check-in status from the attendance portal. Checked only against the Malaysia campus portal; `MONASH_ATTENDANCE_ORIGIN` and `MONASH_ATTENDANCE_TZ` point it elsewhere.
+- Local MCP: logging in turns on the read-only tools (`gmail_enabled`, `attendance_enabled`). Mail tools add `get_gmail_inbox_todo`, and the server instructions tell the AI app to use them for questions about "my email" instead of a general Gmail connector. `monash help` and the help prompt list mail and attendance only when they are on.
+- Drafting, sending a draft, changing labels and submitting attendance are not registered in the local MCP unless you set `gmail_manage_enabled` or `attendance_submit_enabled`. Each one returns a full preview and a single-use ticket bound to that payload, and runs only with the user's explicit confirmation of that action. Nothing permanently deletes mail.
+- The remote MCP still lists none of the mail or attendance tools and rejects direct calls to them.
+- Setup guide in [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md) (Chinese), design notes in [docs/gmail-foundation.md](docs/gmail-foundation.md), and a privacy policy in [PRIVACY.md](PRIVACY.md). The core still depends only on pypdf.
+- Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
+
 ## 1.4.1
 
 - `monash --help` now lists `monash library` and `monash remote` in its summary at the top. They were already in the subcommand list below.

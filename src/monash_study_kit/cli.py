@@ -15,6 +15,9 @@
     monash moodle …              # 更多 Moodle 查询：grades、news、assignments、find、get、messages…
     monash ed …                  # Ed 查询：new、threads、search、show、following、lessons、quiz
 
+    monash gmail …               # 可选：学校邮箱同步、邮件待办、离线搜索（要装 [gmail]）
+    monash attendance …          # 可选：考勤门户 login、status、sync（要装 [attendance]）
+
     monash media                 # 录播：取 YouTube 字幕、下载 Zoom 录像并转写（要装 [media]）
     monash open                  # 打开课件文件夹
     monash library --open        # 在浏览器里翻已同步的课件（只在本机）
@@ -724,7 +727,7 @@ class _Parser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from . import cli_ed, cli_gmail
+    from . import cli_attendance, cli_ed, cli_gmail
     ap = _Parser(prog="monash", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"monash-study-kit {__version__}")
     sub = ap.add_subparsers(dest="cmd")
@@ -817,6 +820,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     cli_ed.add_commands(sub.add_parser("ed", help="Ed 查询").add_subparsers(dest="ecmd", required=True))
     cli_gmail.add_commands(sub.add_parser("gmail", help="Gmail 同步、离线搜索与可选邮箱操作").add_subparsers(dest="gcmd", required=True))
+    cli_attendance.add_commands(sub.add_parser("attendance", help="考勤门户：登录、状态、读取签到记录（要装 [attendance]）")
+                                .add_subparsers(dest="acmd", required=True))
     return ap
 
 

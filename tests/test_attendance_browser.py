@@ -10,7 +10,7 @@ from monash_study_kit import attendance
 def page():
     if not os.environ.get("PLAYWRIGHT_BROWSERS_PATH"):
         pytest.skip("Set PLAYWRIGHT_BROWSERS_PATH to run the isolated DOM fixtures")
-    from playwright.sync_api import sync_playwright
+    sync_playwright = pytest.importorskip("playwright.sync_api").sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
