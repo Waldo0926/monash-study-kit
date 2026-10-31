@@ -444,6 +444,10 @@ Install Chrome or Edge. If your browser lives somewhere unusual, point to it:
 By default Windows limits full paths to 260 characters, and unit name + week name + file name can exceed that. Store course files somewhere shorter:
 `monash config files_dir C:\Monash`, then `monash sync`.
 
+### My units don't use Ed
+
+That's fine: deadlines, grades, course files, search, mail and attendance work without it. When `monash setup` asks for the Ed token, press Enter to skip and answer yes to "not using Ed". Or run `monash config use_ed false` at any time. After that sync, the to-do list and `monash doctor` stop mentioning Ed, and your AI app no longer lists the Ed tools. `monash login ed` turns it back on.
+
 ### Australian campuses
 
 Moodle shows times in your account's time zone; the default is Malaysia (UTC+8). For Australian campuses: `monash config tz_offset 10` (11 during daylight saving).

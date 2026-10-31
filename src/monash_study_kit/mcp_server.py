@@ -147,6 +147,12 @@ def _safe_sync():
         log("同步出错：\n" + traceback.format_exc())
 
 
+def _ed_hint() -> str:
+    if load_settings().get("use_ed", True):
+        return ""
+    return "这位用户的课不用 Ed，Ed 的工具没有注册；回答时不要提 Ed，也不要建议设置 Ed 令牌。"
+
+
 def _student_hint(tools: dict) -> str:
     """开了 Gmail 或考勤时补几句：查学校邮件用本服务，写操作先预览再确认。"""
     out = ""
@@ -743,11 +749,16 @@ PARAM_HELP = {
     ("gmail_read_attachment", "part_id"): "read_gmail_cached_thread 里附件的 part_id",
 }
 
+ED_TOOLS = ("list_ed_updates", "search_ed_threads", "read_ed_thread", "get_ed_lessons")
+
+
 def available_tools() -> dict:
-    """Gmail 和考勤是可选的，按设置决定加不加（student_tools），默认只有 Moodle 和 Ed。"""
+    """Gmail 和考勤是可选的，按设置决定加不加（student_tools）。不用 Ed 的人不列 Ed 的工具。"""
     from . import student_tools
-    extra = student_tools.tools(load_settings())
-    return {**TOOLS, **extra} if extra else TOOLS
+    settings = load_settings()
+    extra = student_tools.tools(settings)
+    base = TOOLS if settings.get("use_ed", True) else {k: v for k, v in TOOLS.items() if k not in ED_TOOLS}
+    return {**base, **extra} if extra else base
 
 
 def tool_list() -> list[dict]:
@@ -811,7 +822,7 @@ def handle(msg: dict) -> dict | None:
             result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
                       "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
                       "serverInfo": {"name": "monash", "version": __version__},
-                      "instructions": INSTRUCTIONS + _student_hint(available_tools()) + _update_hint()}
+                      "instructions": INSTRUCTIONS + _ed_hint() + _student_hint(available_tools()) + _update_hint()}
         elif method == "ping":
             result = {}
         elif method == "tools/list":

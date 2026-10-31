@@ -79,7 +79,8 @@ def features(settings: dict | None = None) -> list:
         settings = load_settings()
     extra = [OPTIONAL[key] for key in OPTIONAL
              if settings.get(key) and settings.get(REQUIRES.get(key, key))]
-    return FEATURES[:-1] + extra + FEATURES[-1:]
+    base = FEATURES if settings.get("use_ed", True) else [f for f in FEATURES if f[0] != "Ed 论坛"]
+    return base[:-1] + extra + base[-1:]
 
 
 def render(cli: bool = True, settings: dict | None = None) -> str:

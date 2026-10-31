@@ -421,6 +421,10 @@ Codex、Cursor、VS Code、Windsurf 或 Gemini CLI：运行 `monash connect` 看
 
 Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + 文件名叠起来可能超。把课件放到短一点的地方：`monash config files_dir C:\Monash`，然后 `monash sync`。
 
+### 我的课不用 Ed
+
+没关系：截止日期、成绩、课件、全文搜索、邮件和考勤都不依赖 Ed。`monash setup` 问 Ed 令牌时直接回车跳过，再在“不用 Ed 吗”那里选是；或者随时运行 `monash config use_ed false`。之后同步、待办和 `monash doctor` 都不会再提 Ed，AI 软件里也不再列 Ed 的工具。以后要用了，运行 `monash login ed` 就会重新打开。
+
 ### 澳洲校区
 
 Moodle 页面上的时间按账号时区显示，默认按马来西亚（UTC+8）。澳洲校区：`monash config tz_offset 10`（夏令时 11）。

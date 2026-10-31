@@ -94,6 +94,7 @@ def login_ed() -> bool:
             print(f"Ed 不认这个令牌（{getattr(e, 'code', e)}），再试一次")
             continue
         edlib.save_token(token)
+        save_settings({"use_ed": True})
         print(f"✓ Ed 已登录：{user.get('name')} <{user.get('email')}>")
         return True
     return False
@@ -182,8 +183,9 @@ def cmd_setup(args):
     print("== 1/4 Ed ==")
     if jobs.have_ed_token():
         print("✓ 已经有 Ed 令牌（要换就运行 monash login ed）")
-    else:
-        login_ed()
+    elif not login_ed() and _yes("你的课不用 Ed 吗？选是的话以后不再提醒 Ed，AI 里也不显示 Ed 的功能", default=False):
+        save_settings({"use_ed": False})
+        print("好的，不用 Ed。以后要用的话运行 monash login ed")
     print("\n== 2/4 Moodle ==")
     from .browser_login import session_ok
     if session_ok():

@@ -37,6 +37,7 @@ HOME = Path(os.environ.get("MONASH_KIT_HOME") or _default_home())
 SETTINGS_FILE = HOME / "settings.json"
 
 DEFAULTS = {
+    "use_ed": True,               # 不用 Ed 就设 false：同步、待办、体检不再提醒 Ed，AI 里也不列 Ed 的工具
     "gmail_enabled": False,      # monash gmail login 成功后自动打开：本地 MCP 的邮件工具
     "gmail_sync_minutes": 30,     # 开了 Gmail 时，MCP 在跑的时候多久在后台同步一次邮件；0 = 不自动同步
     "gmail_manage_enabled": False,  # 登录时自动打开（--read-only 除外）：起草、发草稿、改标签，每次先预览、用户确认才执行

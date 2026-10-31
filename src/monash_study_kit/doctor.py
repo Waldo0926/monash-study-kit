@@ -86,7 +86,9 @@ def check_moodle() -> dict:
 
 def check_ed() -> dict:
     if not jobs.have_ed_token():
-        return _check("Ed 令牌", FAIL, "还没设置", "monash login ed")
+        if not load_settings().get("use_ed", True):
+            return _check("Ed 令牌", OK, "不用 Ed（要用的话运行 monash login ed）")
+        return _check("Ed 令牌", FAIL, "还没设置（课不用 Ed 的话：monash config use_ed false）", "monash login ed")
     try:
         user = edlib.EdClient().me().get("user", {})
     except edlib.EdAuthError:
