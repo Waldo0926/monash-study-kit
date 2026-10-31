@@ -1,4 +1,5 @@
 """Durable, payload-bound review tickets for optional upstream writes."""
+
 import hashlib
 import json
 import os
@@ -7,6 +8,12 @@ import sqlite3
 import time
 
 from .paths import DATA_DIR, ensure_private_dir
+
+RETENTION = 30 * 86400  # finished tickets and jobs older than this are deleted
+
+
+class Rejected(ValueError):
+    """A check failed before anything was sent upstream, so the action is safely not done."""
 
 
 def connect():
@@ -29,14 +36,26 @@ def prepare(owner, kind, payload):
     action_id = secrets.token_urlsafe(24)
     con = connect()
     try:
-        con.execute("INSERT INTO actions VALUES (?,?,?,?,?,?,?,NULL)", (
-            action_id, owner, kind, body, digest, int(time.time()) + 600, "pending"))
+        # Tickets still 'executing' or 'unknown' are kept: they record a write whose outcome needs checking.
+        con.execute(
+            "DELETE FROM actions WHERE expires<? AND state IN ('pending','done','rejected')",
+            (int(time.time()) - RETENTION,),
+        )
+        con.execute(
+            "INSERT INTO actions VALUES (?,?,?,?,?,?,?,NULL)",
+            (action_id, owner, kind, body, digest, int(time.time()) + 600, "pending"),
+        )
         con.commit()
     finally:
         con.close()
-    return {"action_id": action_id, "review_digest": digest, "expires_in": 600,
-            "action": kind, "review": {key:value for key,value in payload.items() if key!="raw"},
-            "instruction": "Show the complete review to the user. Execute only after explicit confirmation of this exact action."}
+    return {
+        "action_id": action_id,
+        "review_digest": digest,
+        "expires_in": 600,
+        "action": kind,
+        "review": {key: value for key, value in payload.items() if key != "raw"},
+        "instruction": "Show the complete review to the user. Execute only after explicit confirmation of this exact action.",
+    }
 
 
 def execute(owner, action_id, digest, user_confirmed, perform):
@@ -49,12 +68,22 @@ def execute(owner, action_id, digest, user_confirmed, perform):
         if not row or row["expires"] < time.time() or not secrets.compare_digest(row["digest"], digest):
             raise ValueError("Review expired or does not match this client and payload; prepare again")
         if row["state"] != "pending":
-            return {"state": row["state"], "result": json.loads(row["result"]) if row["result"] else None,
-                    "instruction": "Do not retry an ambiguous upstream write; verify its actual state first."}
+            return {
+                "state": row["state"],
+                "result": json.loads(row["result"]) if row["result"] else None,
+                "instruction": "Do not retry an ambiguous upstream write; verify its actual state first.",
+            }
         con.execute("UPDATE actions SET state='executing' WHERE id=?", (action_id,))
         con.commit()  # Claim before contacting the upstream; concurrent calls cannot duplicate a send.
         try:
             result = perform(row["kind"], json.loads(row["payload"]))
+        except Rejected as error:
+            con.execute(
+                "UPDATE actions SET state='rejected',result=? WHERE id=?",
+                (json.dumps({"reason": str(error)}), action_id),
+            )
+            con.commit()
+            raise
         except Exception:
             con.execute("UPDATE actions SET state='unknown' WHERE id=?", (action_id,))
             con.commit()

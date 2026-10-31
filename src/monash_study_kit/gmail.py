@@ -3,6 +3,7 @@
 Google libraries are optional and loaded only for OAuth. Cache queries work offline.
 No passwords or browser cookies are used, and no email content is logged.
 """
+
 from __future__ import annotations
 
 import base64
@@ -25,6 +26,11 @@ MANAGE_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
 API = "https://gmail.googleapis.com/gmail/v1/users/me/"
 TOKEN_FILE = SECRETS_DIR / "gmail-token.json"
 DB_FILE = DATA_DIR / "gmail" / "gmail.db"
+# New projects get 6,000 quota units per user per minute; messages.get costs 5.
+# Spacing requests keeps a full sync near half of that, leaving room for live tools.
+MIN_REQUEST_INTERVAL = 0.1
+RATE_LIMIT_REASONS = {"rateLimitExceeded", "userRateLimitExceeded"}
+_last_request = [0.0]
 
 
 class GmailError(RuntimeError):
@@ -36,9 +42,18 @@ class GmailAuthError(GmailError):
 
 
 class GmailHTTPError(GmailError):
-    def __init__(self, status: int):
+    def __init__(self, status: int, reason: str = ""):
         self.status = status
-        super().__init__(f"Gmail API returned HTTP {status}")
+        self.reason = reason
+        super().__init__(f"Gmail API returned HTTP {status}" + (f" ({reason})" if reason else ""))
+
+
+def _error_reason(error) -> str:
+    try:
+        body = json.loads(error.read(65536) or b"{}").get("error", {})
+        return next((item.get("reason", "") for item in body.get("errors", []) if item.get("reason")), "")
+    except Exception:
+        return ""
 
 
 def _google():
@@ -60,10 +75,16 @@ def login(client_file: Path, *, manage: bool = False, token_file: Path = TOKEN_F
     scopes = [MANAGE_SCOPE if manage else READ_SCOPE]
     flow = Flow.from_client_config(config, scopes=scopes)
     credentials = flow.run_local_server(
-        host="127.0.0.1", port=0, open_browser=True, access_type="offline",
-        timeout_seconds=600, login_hint=os.environ.get("MONASH_KIT_GMAIL_ACCOUNT"),
-        prompt="consent", authorization_prompt_message="Authorize Gmail in your browser.",
-        success_message="Gmail connected. You can close this window.")
+        host="127.0.0.1",
+        port=0,
+        open_browser=True,
+        access_type="offline",
+        timeout_seconds=600,
+        login_hint=os.environ.get("MONASH_KIT_GMAIL_ACCOUNT"),
+        prompt="consent",
+        authorization_prompt_message="Authorize Gmail in your browser.",
+        success_message="Gmail connected. You can close this window.",
+    )
     if not credentials.refresh_token:
         raise GmailAuthError("Google did not issue an offline refresh token; reconnect Gmail")
     granted = credentials.granted_scopes or credentials.scopes or []
@@ -72,8 +93,10 @@ def login(client_file: Path, *, manage: bool = False, token_file: Path = TOKEN_F
     # Validate the mailbox before replacing a previously working token.
     profile = Client(credentials=credentials).get("profile")
     expected = os.environ.get("MONASH_KIT_GMAIL_ACCOUNT")
-    if expected and profile["emailAddress"].lower()!=expected.lower():
-        raise GmailAuthError("The selected Gmail account does not match the requested account; authorize the Monash mailbox")
+    if expected and profile["emailAddress"].lower() != expected.lower():
+        raise GmailAuthError(
+            "The selected Gmail account does not match the requested account; authorize the Monash mailbox"
+        )
     write_secret(token_file, credentials.to_json())
     return {"account": profile["emailAddress"], "mode": "manage" if manage else "sync"}
 
@@ -91,7 +114,11 @@ class Client:
     def _credentials(self):
         if self.credentials is None:
             if not self.token_file.is_file():
-                raise GmailAuthError(os.environ.get("MONASH_KIT_GMAIL_LOGIN_HINT","Run monash gmail login --client <desktop-client.json>"))
+                raise GmailAuthError(
+                    os.environ.get(
+                        "MONASH_KIT_GMAIL_LOGIN_HINT", "Run monash gmail login --client <desktop-client.json>"
+                    )
+                )
             _, Credentials, _ = _google()
             try:
                 self.credentials = Credentials.from_authorized_user_file(str(self.token_file))
@@ -102,7 +129,9 @@ class Client:
             try:
                 self.credentials.refresh(Request())
             except Exception as e:
-                raise GmailAuthError("Gmail authorization expired or refresh failed; check connectivity and reconnect if needed") from e
+                raise GmailAuthError(
+                    "Gmail authorization expired or refresh failed; check connectivity and reconnect if needed"
+                ) from e
             write_secret(self.token_file, self.credentials.to_json())
         return self.credentials
 
@@ -116,10 +145,18 @@ class Client:
         if params:
             url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(url, data=data, method=method, headers={
-            "Authorization": "Bearer " + credentials.token, "Content-Type": "application/json"})
+        req = urllib.request.Request(
+            url,
+            data=data,
+            method=method,
+            headers={"Authorization": "Bearer " + credentials.token, "Content-Type": "application/json"},
+        )
         opener = urllib.request.build_opener(_NoRedirect())
-        for attempt in range(3):
+        for attempt in range(5):
+            wait = _last_request[0] + MIN_REQUEST_INTERVAL - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            _last_request[0] = time.monotonic()
             try:
                 with opener.open(req, timeout=45) as response:
                     raw = response.read(64 * 1024 * 1024 + 1)
@@ -128,27 +165,39 @@ class Client:
                     return json.loads(raw) if raw else {}
             except urllib.error.HTTPError as e:
                 status = e.code
+                reason = _error_reason(e) if status in {403, 429} else ""
                 e.close()
+                rate_limited = status == 429 or reason in RATE_LIMIT_REASONS
                 # Never automatically retry a write: the server may have applied it.
-                if method == "GET" and status in {429, 500, 502, 503, 504} and attempt < 2:
-                    time.sleep(2 ** attempt)
-                    continue
+                if method == "GET" and attempt < 4:
+                    if rate_limited:
+                        time.sleep(min(60, 15 * (attempt + 1)))  # per-minute quota window
+                        continue
+                    if status in {500, 502, 503, 504} and attempt < 2:
+                        time.sleep(2**attempt)
+                        continue
                 if status == 401:
                     raise GmailAuthError("Gmail rejected authorization; reconnect Gmail") from None
-                raise GmailHTTPError(status) from None
+                raise GmailHTTPError(status, reason) from None
 
     def get(self, endpoint: str, **params):
         return self.request("GET", endpoint, params=params)
 
     def modify_labels(self, message_id: str, *, add=(), remove=()):
-        return self.request("POST", f"messages/{message_id}/modify",
-                            body={"addLabelIds": list(add), "removeLabelIds": list(remove)})
+        return self.request(
+            "POST", f"messages/{message_id}/modify", body={"addLabelIds": list(add), "removeLabelIds": list(remove)}
+        )
+
+    def modify_thread_labels(self, thread_id: str, *, add=(), remove=()):
+        return self.request(
+            "POST", f"threads/{thread_id}/modify", body={"addLabelIds": list(add), "removeLabelIds": list(remove)}
+        )
 
     def create_draft(self, raw: bytes, *, thread_id=None):
-        message = {"raw":base64.urlsafe_b64encode(raw).decode()}
+        message = {"raw": base64.urlsafe_b64encode(raw).decode()}
         if thread_id:
-            message["threadId"]=thread_id
-        return self.request("POST", "drafts", body={"message":message})
+            message["threadId"] = thread_id
+        return self.request("POST", "drafts", body={"message": message})
 
     def send_draft(self, draft_id: str):
         return self.request("POST", "drafts/send", body={"id": draft_id})
@@ -172,10 +221,10 @@ def live_search(client, store, query, *, limit=20, page_token=None):
     except Exception:
         store.con.rollback()
         raise
-    rows = []
-    for mid in ids:
-        row = store.con.execute("SELECT id,thread_id,subject,sender,body FROM messages WHERE id=?", (mid,)).fetchone()
-        rows.append({k: (v[:400] if k == "body" else v) for k, v in dict(row).items()})
+    rows = [
+        store.summary(store.con.execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone(), body_chars=400)
+        for mid in ids
+    ]
     return {"items": rows, "next_page_token": page.get("nextPageToken"), "query": query, "live": True}
 
 
@@ -187,8 +236,10 @@ def live_thread(client, store, thread_id):
     thread = client.get(f"threads/{thread_id}", format="full")
     try:
         store.set_state("account", account)
-        remote_ids = {message["id"] for message in thread.get("messages",[])}
-        cached_ids = [row[0] for row in store.con.execute("SELECT id FROM messages WHERE thread_id=? AND deleted=0",(thread_id,))]
+        remote_ids = {message["id"] for message in thread.get("messages", [])}
+        cached_ids = [
+            row[0] for row in store.con.execute("SELECT id FROM messages WHERE thread_id=? AND deleted=0", (thread_id,))
+        ]
         for message_id in cached_ids:
             if message_id not in remote_ids:
                 store.tombstone(message_id)
@@ -200,6 +251,12 @@ def live_thread(client, store, thread_id):
         store.con.rollback()
         raise
     return {"thread_id": thread_id, "downloaded_messages": len(thread.get("messages", [])), "live": True}
+
+
+def _iso(seconds) -> str:
+    from datetime import datetime
+
+    return datetime.fromtimestamp(seconds).astimezone().isoformat(timespec="minutes")
 
 
 def _decode(data: str) -> bytes:
@@ -238,10 +295,16 @@ def message_content(message: dict) -> dict:
         mime = part.get("mimeType", "")
         filename = part.get("filename", "")
         if filename or body.get("attachmentId"):
-            attachments.append({"part_id": part.get("partId", ""), "filename": filename,
-                                "mime_type": mime, "size": body.get("size", 0),
-                                "attachment_id": body.get("attachmentId"),
-                                "inline_data": body.get("data")})
+            attachments.append(
+                {
+                    "part_id": part.get("partId", ""),
+                    "filename": filename,
+                    "mime_type": mime,
+                    "size": body.get("size", 0),
+                    "attachment_id": body.get("attachmentId"),
+                    "inline_data": body.get("data"),
+                }
+            )
         elif body.get("data") and mime in {"text/plain", "text/html"}:
             part_headers = {h["name"].lower(): h.get("value", "") for h in part.get("headers", [])}
             charset = re.search(r'charset=["\s]*([^;"\s]+)', part_headers.get("content-type", ""), re.I)
@@ -260,9 +323,14 @@ def message_content(message: dict) -> dict:
         parser = _HTMLText()
         parser.feed("\n".join(html))
         text = "".join(parser.parts)
-    return {"subject": headers.get("subject", ""), "sender": headers.get("from", ""),
-            "recipients": headers.get("to", ""), "date": headers.get("date", ""),
-            "body": text, "attachments": attachments}
+    return {
+        "subject": headers.get("subject", ""),
+        "sender": headers.get("from", ""),
+        "recipients": headers.get("to", ""),
+        "date": headers.get("date", ""),
+        "body": text,
+        "attachments": attachments,
+    }
 
 
 class Store:
@@ -309,36 +377,121 @@ class Store:
 
     def put(self, message):
         content = message_content(message)
-        self.con.execute("DELETE FROM attachment_meta WHERE message_id=?",(message["id"],))
+        self.con.execute("DELETE FROM attachment_meta WHERE message_id=?", (message["id"],))
         for attachment in content["attachments"]:
-            self.con.execute("INSERT OR REPLACE INTO attachment_meta VALUES (?,?,?,?,?)",(
-                message["id"],attachment["part_id"],attachment["filename"],attachment["mime_type"],attachment["size"]))
-        self.con.execute("""INSERT OR REPLACE INTO messages
+            self.con.execute(
+                "INSERT OR REPLACE INTO attachment_meta VALUES (?,?,?,?,?)",
+                (
+                    message["id"],
+                    attachment["part_id"],
+                    attachment["filename"],
+                    attachment["mime_type"],
+                    attachment["size"],
+                ),
+            )
+        self.con.execute(
+            """INSERT OR REPLACE INTO messages
             (id,thread_id,internal_date,subject,sender,recipients,body,labels,payload,deleted,synced_at)
-            VALUES (?,?,?,?,?,?,?,?,?,0,?)""", (
-                message["id"], message.get("threadId", message["id"]), int(message.get("internalDate", 0)),
-                content["subject"], content["sender"], content["recipients"], content["body"],
-                json.dumps(message.get("labelIds", [])), json.dumps(message), int(time.time())))
+            VALUES (?,?,?,?,?,?,?,?,?,0,?)""",
+            (
+                message["id"],
+                message.get("threadId", message["id"]),
+                int(message.get("internalDate", 0)),
+                content["subject"],
+                content["sender"],
+                content["recipients"],
+                content["body"],
+                json.dumps(message.get("labelIds", [])),
+                json.dumps(message),
+                int(time.time()),
+            ),
+        )
         self.con.execute("DELETE FROM message_fts WHERE id=?", (message["id"],))
-        attachments = "\n".join(row[0] for row in self.con.execute("SELECT text FROM attachment_text WHERE message_id=?",(message["id"],)))
-        self.con.execute("INSERT INTO message_fts VALUES (?,?,?,?)", (
-            message["id"], content["subject"], content["sender"], content["body"]+"\n"+attachments))
+        attachments = "\n".join(
+            row[0] for row in self.con.execute("SELECT text FROM attachment_text WHERE message_id=?", (message["id"],))
+        )
+        self.con.execute(
+            "INSERT INTO message_fts VALUES (?,?,?,?)",
+            (message["id"], content["subject"], content["sender"], content["body"] + "\n" + attachments),
+        )
 
     def tombstone(self, message_id):
         self.con.execute("UPDATE messages SET deleted=1 WHERE id=?", (message_id,))
         self.con.execute("DELETE FROM message_fts WHERE id=?", (message_id,))
 
+    def update_labels(self, message_id, labels) -> bool:
+        """Apply a label change from history without downloading the message again."""
+        row = self.con.execute("SELECT payload FROM messages WHERE id=? AND deleted=0", (message_id,)).fetchone()
+        if not row:
+            return False
+        message = json.loads(row[0])
+        message["labelIds"] = list(labels)
+        self.con.execute(
+            "UPDATE messages SET labels=?, payload=?, synced_at=? WHERE id=?",
+            (json.dumps(message["labelIds"]), json.dumps(message), int(time.time()), message_id),
+        )
+        return True
+
+    def summary(self, row, *, body_chars=350) -> dict:
+        """What a client needs to decide whether a message needs attention."""
+        labels = set(json.loads(row["labels"] or "[]"))
+        category = next(
+            (label.removeprefix("CATEGORY_").lower() for label in labels if label.startswith("CATEGORY_")), None
+        )
+        attachments = self.con.execute(
+            "SELECT count(*) FROM attachment_meta WHERE message_id=?", (row["id"],)
+        ).fetchone()[0]
+        return {
+            "id": row["id"],
+            "thread_id": row["thread_id"],
+            "subject": row["subject"],
+            "sender": row["sender"],
+            "date": _iso(row["internal_date"] / 1000) if row["internal_date"] else None,
+            "unread": "UNREAD" in labels,
+            "in_inbox": "INBOX" in labels,
+            "starred": "STARRED" in labels,
+            "important": "IMPORTANT" in labels,
+            "category": category,
+            "attachments": attachments,
+            "snippet": (row["body"] or "")[:body_chars],
+            "source": f"https://mail.google.com/mail/#all/{row['thread_id']}",
+        }
+
+    def inbox_todo(self, *, days=7, limit=10) -> dict:
+        """Unread inbox mail from the last few days, without promotions or social updates. Reads only the cache."""
+        since = int((time.time() - days * 86400) * 1000)
+        rows = self.con.execute(
+            """SELECT * FROM messages WHERE deleted=0 AND internal_date>=?
+            AND labels LIKE '%"UNREAD"%' AND labels LIKE '%"INBOX"%'
+            AND labels NOT LIKE '%"CATEGORY_PROMOTIONS"%' AND labels NOT LIKE '%"CATEGORY_SOCIAL"%'
+            ORDER BY internal_date DESC""",
+            (since,),
+        ).fetchall()
+        return {
+            "days": days,
+            "unread_count": len(rows),
+            "items": [self.summary(r, body_chars=200) for r in rows[:limit]],
+            "as_of": self.status()["last_success"],
+            "note": "Read from the synced cache; labels are as of the last background sync",
+        }
+
     def status(self):
-        return {"account": self.state("account"), "query": self.state("query"), "configured":TOKEN_FILE.is_file(),
-                "last_success": self.state("last_success"), "history_id": self.state("history_id"),
-                "initial_sync_pending": self.state("initial_pending") == "1",
-                "cached_messages": self.con.execute("SELECT count(*) FROM messages WHERE deleted=0").fetchone()[0],
-                "attachments": "Metadata, downloaded bytes and indexed text are counted separately",
-                "deletion_reconciliation_pending": self.state("needs_reconcile")=="1",
-                "indexed_attachments": self.con.execute("SELECT count(*) FROM attachment_text").fetchone()[0],
-                "attachment_metadata": self.con.execute("SELECT count(*) FROM attachment_meta").fetchone()[0],
-                "downloaded_attachments": self.con.execute("SELECT count(*) FROM attachments").fetchone()[0],
-                "cache_path": str(self.path)}
+        last = self.state("last_success")
+        return {
+            "account": self.state("account"),
+            "query": self.state("query"),
+            "configured": TOKEN_FILE.is_file(),
+            "last_success": _iso(int(last)) if last and last.isdigit() else last,
+            "history_id": self.state("history_id"),
+            "initial_sync_pending": self.state("initial_pending") == "1",
+            "cached_messages": self.con.execute("SELECT count(*) FROM messages WHERE deleted=0").fetchone()[0],
+            "attachments": "Metadata, downloaded bytes and indexed text are counted separately",
+            "deletion_reconciliation_pending": self.state("needs_reconcile") == "1",
+            "indexed_attachments": self.con.execute("SELECT count(*) FROM attachment_text").fetchone()[0],
+            "attachment_metadata": self.con.execute("SELECT count(*) FROM attachment_meta").fetchone()[0],
+            "downloaded_attachments": self.con.execute("SELECT count(*) FROM attachments").fetchone()[0],
+            "cache_path": str(self.path),
+        }
 
     def search(self, query: str = "", *, limit=20, offset=0):
         limit, offset = max(1, min(int(limit), 100)), max(0, int(offset))
@@ -351,36 +504,59 @@ class Store:
             params.append(match)
         else:
             sql = "SELECT * FROM messages WHERE deleted=0"
-        rows = self.con.execute(sql + " ORDER BY internal_date DESC LIMIT ? OFFSET ?", (*params, limit + 1, offset)).fetchall()
-        return {"items": [{"id": r["id"], "thread_id": r["thread_id"], "subject": r["subject"],
-                           "sender": r["sender"], "snippet": r["body"][:350], "internal_date": r["internal_date"],
-                           "source": f"https://mail.google.com/mail/#all/{r['thread_id']}"} for r in rows[:limit]],
-                "next_offset": offset + limit if len(rows) > limit else None, "coverage": self.status()}
+        rows = self.con.execute(
+            sql + " ORDER BY internal_date DESC LIMIT ? OFFSET ?", (*params, limit + 1, offset)
+        ).fetchall()
+        return {
+            "items": [self.summary(r) for r in rows[:limit]],
+            "next_offset": offset + limit if len(rows) > limit else None,
+            "coverage": self.status(),
+        }
 
     def read_thread(self, thread_id: str, *, offset=0, max_chars=20000):
-        rows = self.con.execute("SELECT * FROM messages WHERE thread_id=? AND deleted=0 ORDER BY internal_date", (thread_id,)).fetchall()
+        rows = self.con.execute(
+            "SELECT * FROM messages WHERE thread_id=? AND deleted=0 ORDER BY internal_date", (thread_id,)
+        ).fetchall()
         if not rows:
             raise LookupError("Thread is not cached; sync Gmail or use live search first")
-        text = "\n\n".join(f"From: {r['sender']}\nTo: {r['recipients']}\nSubject: {r['subject']}\n\n{r['body']}" for r in rows)
+        text = "\n\n".join(
+            f"From: {r['sender']}\nTo: {r['recipients']}\nSubject: {r['subject']}\n\n{r['body']}" for r in rows
+        )
         offset, max_chars = max(0, int(offset)), max(1, min(50000, int(max_chars)))
-        return {"thread_id": thread_id, "text": text[offset:offset + max_chars],
-                "next_offset": offset + max_chars if len(text) > offset + max_chars else None,
-                "messages": [{"id": r["id"], "attachments": [
-                    {k: v for k, v in a.items() if k != "inline_data"}
-                    for a in message_content(json.loads(r["payload"]))["attachments"]]} for r in rows],
-                "coverage": "Cached messages only; a thread may have older or newer messages outside sync coverage"}
+        return {
+            "thread_id": thread_id,
+            "text": text[offset : offset + max_chars],
+            "next_offset": offset + max_chars if len(text) > offset + max_chars else None,
+            "messages": [
+                {
+                    "id": r["id"],
+                    "attachments": [
+                        {k: v for k, v in a.items() if k != "inline_data"}
+                        for a in message_content(json.loads(r["payload"]))["attachments"]
+                    ],
+                }
+                for r in rows
+            ],
+            "coverage": "Cached messages only; a thread may have older or newer messages outside sync coverage",
+        }
 
 
 def _materialize_bodies(client: Client, message: dict):
     """Gmail can move even a text body into the attachment API when it is large."""
+
     def visit(part):
         body = part.get("body", {})
-        if not part.get("filename") and part.get("mimeType") in {"text/plain", "text/html"} and body.get("attachmentId"):
+        if (
+            not part.get("filename")
+            and part.get("mimeType") in {"text/plain", "text/html"}
+            and body.get("attachmentId")
+        ):
             data = client.get(f"messages/{message['id']}/attachments/{body['attachmentId']}")
             part["body"] = {**body, "data": data["data"]}
             part["body"].pop("attachmentId", None)
         for child in part.get("parts", []):
             visit(child)
+
     visit(message.get("payload", {}))
 
 
@@ -389,86 +565,155 @@ def sync(client: Client, store: Store, *, query="newer_than:90d", page_limit=5) 
     if not 1 <= page_limit <= 100:
         raise ValueError("page_limit must be between 1 and 100")
     con = store.con
-    con.execute("BEGIN IMMEDIATE")
-    try:
-        profile = client.get("profile")
-        account = profile["emailAddress"].lower()
+    profile = client.get("profile")
+    account = profile["emailAddress"].lower()
+    with _write(con):
         if store.state("account") not in (None, account):
             raise GmailError("This cache belongs to another mailbox; choose a separate MONASH_KIT_HOME")
         store.set_state("account", account)
-        initial = store.state("query") != query or not store.state("history_id") or store.state("initial_pending") == "1"
+        initial = (
+            store.state("query") != query or not store.state("history_id") or store.state("initial_pending") == "1"
+        )
         if initial and (store.state("query") != query or store.state("initial_pending") != "1"):
             store.set_state("query", query)
             store.set_state("initial_pending", "1")
             store.set_state("page_token", "")
             store.set_state("baseline", profile["historyId"])
-        changed = 0
-        for _ in range(page_limit):
-            try:
-                if initial:
-                    page = client.get("messages", q=query, maxResults=100, pageToken=store.state("page_token") or None)
-                    ids = {m["id"] for m in page.get("messages", [])}
-                else:
-                    page = client.get("history", startHistoryId=store.state("history_id"), maxResults=100,
-                                      pageToken=store.state("page_token") or None)
-                    ids = set()
-                    for record in page.get("history", []):
-                        for event in ("messagesAdded", "labelsAdded", "labelsRemoved", "messagesDeleted"):
-                            ids.update(item["message"]["id"] for item in record.get(event, []))
-            except GmailHTTPError as e:
-                if e.status == 404 and not initial:
+    changed, next_page = 0, ""
+    for _ in range(page_limit):
+        # Network work happens outside the write lock; each page is then committed together
+        # with its cursor, so a failure later in the run keeps the pages already saved.
+        try:
+            if initial:
+                page = client.get("messages", q=query, maxResults=100, pageToken=store.state("page_token") or None)
+                changes = {m["id"]: ("fetch", None) for m in page.get("messages", [])}
+            else:
+                page = client.get(
+                    "history",
+                    startHistoryId=store.state("history_id"),
+                    maxResults=100,
+                    pageToken=store.state("page_token") or None,
+                )
+                changes = _history_changes(page.get("history", []))
+        except GmailHTTPError as e:
+            if e.status == 404 and not initial:
+                with _write(con):
                     store.set_state("history_id", "")
                     store.set_state("page_token", "")
                     store.set_state("needs_reconcile", "1")
                     store.set_state("reconcile_cursor", "")
-                    con.commit()
-                    return {"status": "resync_required", "reason": "Gmail history expired; run sync again", **store.status()}
-                raise
-            for message_id in sorted(ids):
-                try:
-                    message = client.get(f"messages/{message_id}", format="full")
-                except GmailHTTPError as e:
-                    if e.status != 404:
-                        raise
+                return {
+                    "status": "resync_required",
+                    "reason": "Gmail history expired; run sync again",
+                    **store.status(),
+                }
+            raise
+        fetched = {}
+        for message_id, (kind, labels) in sorted(changes.items()):
+            if (
+                kind == "labels"
+                and store.con.execute("SELECT 1 FROM messages WHERE id=? AND deleted=0", (message_id,)).fetchone()
+            ):
+                continue
+            if kind == "deleted":
+                continue
+            try:
+                message = client.get(f"messages/{message_id}", format="full")
+            except GmailHTTPError as e:
+                if e.status != 404:
+                    raise
+                fetched[message_id] = None
+            else:
+                _materialize_bodies(client, message)
+                fetched[message_id] = message
+        next_page = page.get("nextPageToken", "")
+        with _write(con):
+            for message_id, (kind, labels) in sorted(changes.items()):
+                if message_id in fetched:
+                    if fetched[message_id] is None:
+                        store.tombstone(message_id)
+                    else:
+                        store.put(fetched[message_id])
+                elif kind == "deleted":
                     store.tombstone(message_id)
                 else:
-                    _materialize_bodies(client, message)
-                    store.put(message)
-                changed += 1
-            next_page = page.get("nextPageToken", "")
+                    store.update_labels(message_id, labels)
             store.set_state("page_token", next_page)
             if not next_page:
                 store.set_state("history_id", store.state("baseline") if initial else page["historyId"])
                 store.set_state("initial_pending", "0")
                 store.set_state("last_success", int(time.time()))
-                break
-        if not next_page and store.state("needs_reconcile")=="1":
-            reconcile_cache(client,store)
-        con.commit()
-        return {"status": "more_pending" if next_page else "ok", "processed": changed, **store.status()}
-    except Exception:
-        con.rollback()
-        raise
+        changed += len(changes)
+        if not next_page:
+            break
+    if not next_page and store.state("needs_reconcile") == "1":
+        with _write(con):
+            reconcile_cache(client, store)
+    return {"status": "more_pending" if next_page else "ok", "processed": changed, **store.status()}
 
 
-def reconcile_cache(client,store,limit=50):
+def _history_changes(records) -> dict:
+    """Collapse history records into the final change per message.
+
+    Label events carry the message's current labels, and deletions need no download,
+    so only newly added (or uncached) messages cost a messages.get call.
+    """
+    changes = {}
+    for record in records:
+        for item in record.get("messagesAdded", []):
+            changes[item["message"]["id"]] = ("fetch", None)
+        for event in ("labelsAdded", "labelsRemoved"):
+            for item in record.get(event, []):
+                message = item["message"]
+                if changes.get(message["id"], ("",))[0] == "fetch":
+                    continue
+                # Without the full label list, applying the event could wipe labels; download instead.
+                changes[message["id"]] = ("labels", message["labelIds"]) if "labelIds" in message else ("fetch", None)
+        for item in record.get("messagesDeleted", []):
+            changes[item["message"]["id"]] = ("deleted", None)
+    return changes
+
+
+class _write:
+    """A short IMMEDIATE transaction: commit on success, roll back on error."""
+
+    def __init__(self, con):
+        self.con = con
+
+    def __enter__(self):
+        if self.con.in_transaction:
+            self.con.commit()
+        self.con.execute("BEGIN IMMEDIATE")
+        return self.con
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None:
+            self.con.commit()
+        else:
+            self.con.rollback()
+        return False
+
+
+def reconcile_cache(client, store, limit=50):
     """After an expired history cursor, verify old cached IDs in bounded batches."""
-    rows = store.con.execute("SELECT id,payload FROM messages WHERE deleted=0 AND id>? ORDER BY id LIMIT ?",
-                             (store.state("reconcile_cursor",""),limit)).fetchall()
-    for message_id,payload in rows:
+    rows = store.con.execute(
+        "SELECT id,payload FROM messages WHERE deleted=0 AND id>? ORDER BY id LIMIT ?",
+        (store.state("reconcile_cursor", ""), limit),
+    ).fetchall()
+    for message_id, payload in rows:
         try:
-            current = client.get(f"messages/{message_id}",format="minimal")
+            current = client.get(f"messages/{message_id}", format="minimal")
         except GmailHTTPError as error:
-            if error.status!=404:
+            if error.status != 404:
                 raise
             store.tombstone(message_id)
         else:
             cached = json.loads(payload)
-            cached["labelIds"] = current.get("labelIds",cached.get("labelIds",[]))
+            cached["labelIds"] = current.get("labelIds", cached.get("labelIds", []))
             store.put(cached)
-        store.set_state("reconcile_cursor",message_id)
-    if len(rows)<limit:
-        store.set_state("needs_reconcile","0")
+        store.set_state("reconcile_cursor", message_id)
+    if len(rows) < limit:
+        store.set_state("needs_reconcile", "0")
 
 
 def cache_attachment(client: Client, store: Store, message_id: str, part_id: str, *, max_bytes=25 * 1024 * 1024):
@@ -481,14 +726,21 @@ def cache_attachment(client: Client, store: Store, message_id: str, part_id: str
         raise LookupError("Attachment part not found")
     if attachment["size"] > max_bytes:
         raise GmailError("Attachment exceeds the configured size limit")
-    cached = store.con.execute("SELECT * FROM attachments WHERE message_id=? AND part_id=?", (message_id, part_id)).fetchone()
+    cached = store.con.execute(
+        "SELECT * FROM attachments WHERE message_id=? AND part_id=?", (message_id, part_id)
+    ).fetchone()
     if cached:
         target = store.path.parent / "attachments" / cached["sha256"]
         if target.is_file():
             if cached["size"] > max_bytes:
                 raise GmailError("Attachment exceeds the configured size limit")
-            return {"filename": cached["filename"], "path": str(target), "size": cached["size"],
-                    "sha256": cached["sha256"], "cached": True}
+            return {
+                "filename": cached["filename"],
+                "path": str(target),
+                "size": cached["size"],
+                "sha256": cached["sha256"],
+                "cached": True,
+            }
     # OAuth identity must match the cache even if the attachment is downloaded later.
     if client.get("profile")["emailAddress"].lower() != store.state("account"):
         raise GmailError("Gmail authorization belongs to another mailbox")
@@ -510,42 +762,63 @@ def cache_attachment(client: Client, store: Store, message_id: str, part_id: str
         os.replace(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
-    store.con.execute("INSERT OR REPLACE INTO attachments VALUES (?,?,?,?,?)", (
-        message_id, part_id, digest, len(raw), attachment["filename"]))
+    store.con.execute(
+        "INSERT OR REPLACE INTO attachments VALUES (?,?,?,?,?)",
+        (message_id, part_id, digest, len(raw), attachment["filename"]),
+    )
     store.con.commit()
-    return {"filename": attachment["filename"], "path": str(target), "size": len(raw), "sha256": digest, "cached": False}
+    return {
+        "filename": attachment["filename"],
+        "path": str(target),
+        "size": len(raw),
+        "sha256": digest,
+        "cached": False,
+    }
 
 
-def read_attachment(client,store,message_id,part_id,*,offset=0,max_chars=20000):
+def read_attachment(client, store, message_id, part_id, *, offset=0, max_chars=20000):
     from .attendance_evidence import extract_file
-    saved = cache_attachment(client,store,message_id,part_id)
-    row = store.con.execute("SELECT text FROM attachment_text WHERE message_id=? AND part_id=?",(message_id,part_id)).fetchone()
-    text = row[0] if row else extract_file(saved["path"],saved["filename"])
+
+    saved = cache_attachment(client, store, message_id, part_id)
+    row = store.con.execute(
+        "SELECT text FROM attachment_text WHERE message_id=? AND part_id=?", (message_id, part_id)
+    ).fetchone()
+    text = row[0] if row else extract_file(saved["path"], saved["filename"])
     if not row:
-        store.con.execute("INSERT OR REPLACE INTO attachment_text VALUES (?,?,?)",(message_id,part_id,text))
-        payload = store.con.execute("SELECT payload FROM messages WHERE id=?",(message_id,)).fetchone()
+        store.con.execute("INSERT OR REPLACE INTO attachment_text VALUES (?,?,?)", (message_id, part_id, text))
+        payload = store.con.execute("SELECT payload FROM messages WHERE id=?", (message_id,)).fetchone()
         store.put(json.loads(payload[0]))
         store.con.commit()
-    offset,max_chars=max(0,int(offset)),max(1,min(int(max_chars),50000))
-    return {**saved,"text":text[offset:offset+max_chars],"next_offset":offset+max_chars if len(text)>offset+max_chars else None,
-            "extraction":"available" if text else "No text extracted for this file type; use the original attachment"}
+    offset, max_chars = max(0, int(offset)), max(1, min(int(max_chars), 50000))
+    return {
+        **saved,
+        "text": text[offset : offset + max_chars],
+        "next_offset": offset + max_chars if len(text) > offset + max_chars else None,
+        "extraction": "available" if text else "No text extracted for this file type; use the original attachment",
+    }
 
 
-def sync_attachments(client,store,limit=5):
-    rows = store.con.execute("""SELECT a.message_id,a.part_id FROM attachment_meta a
+def sync_attachments(client, store, limit=5):
+    rows = store.con.execute(
+        """SELECT a.message_id,a.part_id FROM attachment_meta a
         JOIN messages m ON m.id=a.message_id
         LEFT JOIN attachment_text t ON t.message_id=a.message_id AND t.part_id=a.part_id
         LEFT JOIN attachment_failures f ON f.message_id=a.message_id AND f.part_id=a.part_id
         WHERE m.deleted=0 AND t.message_id IS NULL AND COALESCE(f.attempts,0)<3
-        ORDER BY m.internal_date DESC LIMIT ?""",(max(1,min(int(limit),20)),)).fetchall()
-    processed,errors=0,[]
-    for mid,part in rows:
+        ORDER BY m.internal_date DESC LIMIT ?""",
+        (max(1, min(int(limit), 20)),),
+    ).fetchall()
+    processed, errors = 0, []
+    for mid, part in rows:
         try:
-            read_attachment(client,store,mid,part,max_chars=1)
-            processed+=1
+            read_attachment(client, store, mid, part, max_chars=1)
+            processed += 1
         except Exception as e:
-            store.con.execute("INSERT INTO attachment_failures VALUES (?,?,1,?) "
-                "ON CONFLICT(message_id,part_id) DO UPDATE SET attempts=attempts+1,error=excluded.error",(mid,part,type(e).__name__))
+            store.con.execute(
+                "INSERT INTO attachment_failures VALUES (?,?,1,?) "
+                "ON CONFLICT(message_id,part_id) DO UPDATE SET attempts=attempts+1,error=excluded.error",
+                (mid, part, type(e).__name__),
+            )
             store.con.commit()
-            errors.append({"message_id":mid,"part_id":part,"error":type(e).__name__})
-    return {"processed":processed,"errors":errors,"coverage":store.status()}
+            errors.append({"message_id": mid, "part_id": part, "error": type(e).__name__})
+    return {"processed": processed, "errors": errors, "coverage": store.status()}
