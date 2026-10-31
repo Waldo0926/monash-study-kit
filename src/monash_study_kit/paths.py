@@ -37,6 +37,15 @@ HOME = Path(os.environ.get("MONASH_KIT_HOME") or _default_home())
 SETTINGS_FILE = HOME / "settings.json"
 
 DEFAULTS = {
+    "use_ed": True,               # 不用 Ed 就设 false：同步、待办、体检不再提醒 Ed，AI 里也不列 Ed 的工具
+    "gmail_enabled": False,      # monash gmail login 成功后自动打开：本地 MCP 的邮件工具
+    "gmail_sync_minutes": 30,     # 开了 Gmail 时，MCP 在跑的时候多久在后台同步一次邮件；0 = 不自动同步
+    "gmail_manage_enabled": False,  # 登录时自动打开（--read-only 除外）：起草、发草稿、改标签，每次先预览、用户确认才执行
+    "attendance_enabled": False,  # monash attendance login 成功后自动打开：本地 MCP 的考勤工具
+    "attendance_auto_sync": True,  # 开了考勤时按课表自动读：工作日早上 8 点，每节没签到的课开始 15 分钟后
+    "attendance_fast_read": True,   # 不开浏览器直接请求门户页面（结构对不上会自动改用浏览器）；monash attendance probe 可以对照
+    "attendance_keepalive_minutes": 0,  # 多久用一次轻量请求给考勤登录续期；0 = 不续期，先测出登录能维持多久再定
+    "attendance_submit_enabled": False,  # 考勤登录时自动打开：签到提交，每次先预览、用户确认才执行
     "download_videos": False,     # 录像动辄几百 MB；没装 [media] 转不了字幕，下下来 Claude 也看不了
     "auto_sync_hours": 1,         # MCP 在跑的时候，多久在后台同步一次
     "keepalive_minutes": 20,      # MCP 在跑的时候，多久给 Moodle 会话续一次期（空闲 4 小时就过期）

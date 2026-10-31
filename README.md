@@ -21,7 +21,7 @@ Connect Monash **Moodle** and **Ed** to the AI app on your computer (Claude, Cod
 - "Quiz me on FIT2109 week 3." In apps that support MCP Apps, to-dos, lesson progress and quiz questions also show up as small panels you can click
 
 By default, everything stays **on your own computer**: course files, login state and the database live locally and never pass through a third-party server.
-All tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed.
+All Moodle and Ed tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed. The optional school mail and attendance parts can draft mail, change labels or check you in, and only after you confirm each action.
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
 
@@ -129,6 +129,16 @@ Follow the prompts. There are four steps:
 At the end you can choose to sync right away. The first sync downloads all course files and takes a few minutes to around a quarter of an hour.
 
 Then open your AI app. In Claude Desktop, **"+" → Connectors** in the chat box lists **monash**; leave it switched on. For other apps, `monash connect` shows which ones are connected.
+
+## What's new in 1.5
+
+- **School mail (optional).** Ask "anything in my email I need to deal with?" and get recent unread school mail, offline search, whole threads and attachment text. The AI can draft a reply, send a draft or archive mail, and only after you confirm each action.
+- **Attendance (optional).** "Which classes this week haven't I checked in to?" and "what's the code for today's workshop?", with each code's source. Reads follow your timetable and take a few seconds without opening a browser. Checked against the Malaysia campus portal.
+- **No terminal needed to connect them.** Say "connect my school email" or "connect my attendance" in your AI app; it installs what is missing and opens the sign-in window. No Google Cloud setup either.
+- **Remote apps choose.** With `monash remote`, each app you pair ticks which of these it may use.
+- **Units without Ed** can turn Ed off: `monash config use_ed false`.
+
+Details: [Optional: Gmail and attendance](#optional-gmail-and-attendance) and the [changelog](CHANGELOG.md).
 
 ## What's new in 1.4
 
@@ -304,13 +314,15 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
 
 ## Token use
 
-Every MCP tool's name, description and parameters are sent to the model at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.4.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
+Every MCP tool's name, description and parameters are sent to the model at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.5.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
 
 | Sent once per conversation | Tokens |
 | --- | ---: |
-| 18 tool definitions | 2,962 |
+| 19 tool definitions | 3,107 |
 | Server instructions | 270 |
-| **Total** | **3,232** |
+| **Total** | **3,377** |
+
+1.5.0 added `start_school_service_setup` (145), which lets you connect school mail or attendance by asking your AI app. It is hidden again once both are connected; with both connected the total is 5,132. In 1.4.0 the total was 3,232.
 
 The instructions grew from 187 in 1.2.0 when the rule for assignment questions was added (brief and rubric first, then staff answers on Ed).
 
@@ -357,6 +369,8 @@ You can also query directly in the terminal without any AI:
 | `monash config` | View / change settings (restart your AI app afterwards) |
 | `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
 | `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |
+| `monash gmail todo` / `sync` / `search` / `thread` | Optional school Gmail: unread inbox mail / sync / offline search / read a thread ([setup](#optional-gmail-and-attendance)) |
+| `monash attendance login` / `status` / `sync` / `overview` / `codes` | Optional attendance: log in / status / read the portal / saved classes / find check-in codes |
 | `monash update` | Update to the latest version |
 
 Add `--json` for JSON output (output is JSON automatically when piped; `--text` forces text). Every command has `--help`.
@@ -384,6 +398,33 @@ monash media
 ```
 
 Videos uploaded directly to Moodle aren't downloaded by default either (often hundreds of MB); they are recorded as links. To download them: `monash config download_videos true`.
+
+## Optional: Gmail and attendance
+
+New in 1.5.0. Both parts are off until you connect them and only run on your own computer.
+
+- **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline, reads whole threads and the text of attachments (PDF, Office, images). Reading never marks mail as read.
+- **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?" or "what's the code for today's FIT2102 workshop?". Codes are looked up in synced Moodle, Ed and school mail and shown with where they came from, for you to check. Only checked against the Malaysia campus portal.
+
+If you only want to ask about your inbox in Claude or ChatGPT, their built-in Gmail connectors are the easiest way. The Gmail part here is for linking mail with attendance codes, searching mail and attachments offline, and using it in apps without a Gmail connector such as Codex or Cursor. No Google Cloud setup is needed: the package includes a Google app, and Google will show "this app isn't verified" (click Advanced, then continue). Using your own Google app instead is optional. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). The easiest way is to ask your AI app: "connect my school email" or "connect my attendance". It installs what is missing, opens the sign-in window on your computer, and you only sign in; nothing is typed in a terminal and no password goes into the chat. The same steps in a terminal:
+
+```bash
+uv tool install --reinstall "monash-study-kit[gmail,attendance]"
+monash gmail login
+monash gmail sync
+monash attendance login
+monash attendance sync
+```
+
+Restart your AI app after logging in. While it is open, mail syncs in the background every 30 minutes (`monash config gmail_sync_minutes`, 0 turns it off); `monash gmail sync` updates it right away. Attendance follows your timetable instead of the clock: once on weekday mornings at 8 and 15 minutes after each class you have not checked in to yet, so nothing runs at night, at weekends or between classes (`monash config attendance_auto_sync false` turns it off). You or the AI can also ask for a read any time. A read is one plain request to the portal (about 5 KB, a few seconds, no browser); if the page ever looks different from what is expected it falls back to one headless browser page. On the Malaysia portal both ways gave the same result for all 15 days the portal offers, and `monash attendance probe` repeats that check on yours. `monash status` and `monash doctor` show both parts once they are on, and `monash update` keeps the extras you installed.
+
+Logging in turns everything on in your AI app, including drafting, sending a draft, changing labels (archive, mark as read, star) and checking in to a class. The AI has to show you the full preview first and only runs it after you confirm that exact action; a check-in is only prepared when you say you attended. Mail is never permanently deleted. To keep mail read-only, log in with `monash gmail login --read-only`; to switch an action off, `monash config gmail_manage_enabled false` or `monash config attendance_submit_enabled false`.
+
+With `monash remote serve`, each app you pair chooses on the pairing page which of these features it may use. Only features turned on on the server are offered, read-only ones start ticked and the write ones start unticked. So Claude on your phone can have attendance only and ChatGPT mail only, or neither. Apps paired earlier keep Moodle and Ed only until you pair them again, and `monash remote clients` shows what each app has.
+
+Each part adds tool descriptions to every conversation: with both logged in it is about 1,900 tokens more (5,132 in total instead of 3,232); without logging in nothing changes.
+
+Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
 
 ## Updating
 
@@ -414,6 +455,10 @@ Install Chrome or Edge. If your browser lives somewhere unusual, point to it:
 
 By default Windows limits full paths to 260 characters, and unit name + week name + file name can exceed that. Store course files somewhere shorter:
 `monash config files_dir C:\Monash`, then `monash sync`.
+
+### My units don't use Ed
+
+That's fine: deadlines, grades, course files, search, mail and attendance work without it. When `monash setup` asks for the Ed token, press Enter to skip and answer yes to "not using Ed". Or run `monash config use_ed false` at any time. After that sync, the to-do list and `monash doctor` stop mentioning Ed, and your AI app no longer lists the Ed tools. `monash login ed` turns it back on.
 
 ### Australian campuses
 

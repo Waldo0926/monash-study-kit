@@ -104,7 +104,7 @@ The redirect case was gap G2 and is fixed.
 
 ## 5. MCP server: stdio by default, read-only tools
 
-**Risk.** A network listener would let other programs or other machines call the tools with the student's session. A write tool would let a model submit work or post on Ed because it misread a request. The design decision is in [ADR 0002](adr/0002-read-only-public-package.md).
+**Risk.** A network listener would let other programs or other machines call the tools with the student's session. A write tool would let a model submit work or post on Ed because it misread a request. The design decision is in [ADR 0002](adr/0002-read-only-public-package.md). The optional Gmail and Attendance actions, which never touch Moodle or Ed, go through a preview and confirmation step instead; see [ADR 0004](adr/0004-confirmed-mail-and-attendance-actions.md).
 
 **What the code does.**
 - `mcp_server.py:693-713`: `main()` reads JSON-RPC lines from `sys.stdin` and writes replies to `sys.stdout`. Default stdio use opens no listening socket. Since 1.4.0, only explicitly invoked `monash library` and `monash remote serve` bind HTTP listeners, both on IPv4 loopback. Importing these modules does not start them. The CDP client still connects out to local DevTools.

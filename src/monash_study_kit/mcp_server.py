@@ -3,11 +3,14 @@
     monash mcp          # 由 Claude 启动，不用自己跑；monash setup 会帮你把它加进 Claude
 
 只读：不交作业、不做测验、不发帖。唯一会“动”的是 start_monash_login（在你电脑上打开登录窗口）
-和 sync_monash_data（在后台同步）。
+和 sync_monash_data（在后台同步）。可选的 Gmail 和考勤工具在 student_tools 里，默认不注册；
+其中改邮箱、提交签到的写操作要在设置里单独打开，每次也要用户看过预览、确认后才执行。
 
-服务器开着的时候（也就是 Claude 开着的时候）在后台做两件事：
+服务器开着的时候（也就是 Claude 开着的时候）在后台做这几件事：
   * 每 20 分钟给 Moodle 会话续一次期，因为 Moodle 空闲 4 小时就把你踢出去；
-  * 每小时同步一次 Ed 和 Moodle，再更新全文索引。
+  * 每小时同步一次 Ed 和 Moodle，再更新全文索引；
+  * 开了 Gmail 的话，每 30 分钟同步一次邮件（gmail_sync_minutes）；
+  * 开了考勤的话，按课表读考勤（attendance_auto），不是每小时都开浏览器。
 后台的输出写进 mcp.log，绝不能写 stdout（stdout 是给 Claude 的协议通道）。
 
 MCP 本身不消耗额度，只有工具返回的内容进上下文才算，所以每个工具的返回都有长度上限。
@@ -48,6 +51,23 @@ INSTRUCTIONS = (
 
 
 # ---------------------------------------------------------------- 日志
+
+_out_lock = threading.Lock()
+_stdio = {"on": False}     # 只有真在 stdio 上跑时才往 stdout 发通知，测试里直接调 handle 不发
+
+
+def _write(message: dict) -> None:
+    """stdout 是协议通道；后台线程也会发通知，所以写的时候要加锁，免得两条消息搅在一起。"""
+    with _out_lock:
+        sys.stdout.write(json.dumps(message, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+
+
+def notify_tools_changed() -> None:
+    """接上邮箱或考勤以后工具变多了，告诉 AI 软件重新拉一次工具列表。"""
+    if _stdio["on"]:
+        _write({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+
 
 def log(msg: str) -> None:
     try:
@@ -144,6 +164,32 @@ def _safe_sync():
         log("同步出错：\n" + traceback.format_exc())
 
 
+def _ed_hint() -> str:
+    if load_settings().get("use_ed", True):
+        return ""
+    return "这位用户的课不用 Ed，Ed 的工具没有注册；回答时不要提 Ed，也不要建议设置 Ed 令牌。"
+
+
+def _student_hint(tools: dict) -> str:
+    """开了 Gmail 或考勤时补几句：查学校邮件用本服务，写操作先预览再确认。"""
+    out = ""
+    if "get_gmail_inbox_todo" in tools:
+        out += ("本服务连着用户的 Monash 学校邮箱。用户问“我的邮箱/邮件/有什么要处理的/学校发的邮件”时，"
+                "优先用本服务的 get_gmail_inbox_todo 和 search_gmail_cache（附件用 gmail_read_attachment 读），"
+                "不要改用其他通用 Gmail 连接器，"
+                "除非用户明确说的是别的邮箱。邮件来自本地镜像，后台定时同步，as_of/last_success 是上次同步时间。")
+    if "attendance_overview" in tools:
+        out += ("问签到/考勤先用 attendance_overview 看已保存的记录；要最新的用 attendance_sync，"
+                "找签到码用 attendance_find_codes（从 Moodle、Ed"
+                + ("、学校邮件" if "get_gmail_inbox_todo" in tools else "")
+                + " 里找，候选码要给用户核对）。这几个返回 job_id，用 student_job_status 查结果。"
+                "登录过期请用户在终端运行 monash attendance login。")
+    if "execute_student_action" in tools:
+        out += ("邮箱操作和签到提交先用对应的 prepare 工具拿到完整预览，原样给用户看；用户明确确认这一项后才调 "
+                "execute_student_action（user_confirmed=true）。不能自己替用户确认，结果未知时不要重试，先去核对实际状态。")
+    return out
+
+
 def _update_hint() -> str:
     from . import update_check
     msg = update_check.notice()
@@ -173,6 +219,8 @@ def _background_tick(every_sync: float, every_touch: float, last_touch: float) -
         update_check.refresh()          # 自己控制频率：一天最多真查一次
     if jobs.hours_since_sync() * 3600 >= every_sync:
         start_sync()
+    start_mail_sync()
+    start_attendance_work()
     if time.time() - last_touch >= every_touch:
         last_touch = time.time()
         try:
@@ -182,6 +230,93 @@ def _background_tick(every_sync: float, every_touch: float, last_touch: float) -
         except Exception as e:  # noqa: BLE001
             log(f"续期失败：{e}")
     return last_touch
+
+
+_mail = {"thread": None, "next": 0.0, "auth_logged": False}
+
+
+def start_mail_sync() -> bool:
+    """开了 Gmail 就定时同步邮件（gmail_sync_minutes，0=不同步）。另开线程，不耽误 Moodle 续期。"""
+    settings = load_settings()
+    minutes = float(settings.get("gmail_sync_minutes") or 0)
+    if not settings.get("gmail_enabled") or minutes <= 0 or time.time() < _mail["next"]:
+        return False
+    if _mail["thread"] and _mail["thread"].is_alive():
+        return False
+    _mail["next"] = time.time() + minutes * 60
+    _mail["thread"] = threading.Thread(target=_sync_mail, name="gmail-sync", daemon=True)
+    _mail["thread"].start()
+    return True
+
+
+def _sync_mail():
+    from . import gmail
+    store = gmail.Store()
+    try:
+        client = gmail.Client()
+        # 沿用上次的范围：换了 query 会被当成新的初次下载
+        result = gmail.sync(client, store, query=store.state("query") or "newer_than:90d", page_limit=3)
+        if result["status"] == "more_pending":
+            _mail["next"] = 0.0     # 初次下载还没完，下一轮（约一分钟后）接着下
+        elif result["status"] == "ok":
+            gmail.sync_attachments(client, store, limit=5)   # 附件正文进全文搜索，每轮几封
+        _mail["auth_logged"] = False
+        log(f"邮件同步：{result['status']}，处理 {result.get('processed', 0)} 条")
+    except gmail.GmailAuthError as e:
+        # 授权失效时每轮都会失败，日志只记第一次，等用户重新 monash gmail login
+        if not _mail["auth_logged"]:
+            log(f"邮件同步要重新授权：{e}")
+            _mail["auth_logged"] = True
+    except Exception as e:  # noqa: BLE001
+        log(f"邮件同步失败（已下载的页都保存了，下一轮接着下）：{e}")
+    finally:
+        store.close()
+
+
+_attendance = {"thread": None, "last_keepalive": 0.0, "auth_logged": False}
+
+
+def start_attendance_work() -> str | None:
+    """开了考勤时：到了课表上的时间点就读一次（attendance_auto.due），否则按设置轻量续期。"""
+    settings = load_settings()
+    if not settings.get("attendance_enabled"):
+        return None
+    if _attendance["thread"] and _attendance["thread"].is_alive():
+        return None
+    from datetime import datetime as _dt
+    from . import attendance, attendance_auto
+    work = None
+    if settings.get("attendance_auto_sync", True):
+        found = attendance_auto.due(attendance._load()["records"], attendance_auto.last_auto_run(),
+                                    _dt.now(attendance.TZ))
+        if found:
+            attendance_auto.mark_auto_run()   # 先记下，失败了也不会每分钟重试
+            reason, days = found
+            work = ("sync", lambda: attendance.sync(days), reason)
+    minutes = float(settings.get("attendance_keepalive_minutes") or 0)
+    if work is None and minutes > 0 and time.time() - _attendance["last_keepalive"] >= minutes * 60:
+        _attendance["last_keepalive"] = time.time()
+        from . import attendance_http
+        work = ("keepalive", attendance_http.keepalive, "keepalive")
+    if work is None:
+        return None
+    _attendance["thread"] = threading.Thread(target=_attendance_job, args=work, name="attendance", daemon=True)
+    _attendance["thread"].start()
+    return work[0]
+
+
+def _attendance_job(kind, fn, reason):
+    from .attendance import AttendanceAuthError
+    try:
+        result = fn()
+        _attendance["auth_logged"] = False
+        log(f"考勤{'读取' if kind == 'sync' else '续期'}（{reason}）：{result.get('method', '')} 成功")
+    except AttendanceAuthError as e:
+        if not _attendance["auth_logged"]:
+            log(f"考勤要重新登录：{e}")
+            _attendance["auth_logged"] = True
+    except Exception as e:  # noqa: BLE001
+        log(f"考勤{'读取' if kind == 'sync' else '续期'}失败：{e}")
 
 
 # ---------------------------------------------------------------- 管理工具
@@ -227,6 +362,42 @@ def t_login(args):
     return ("正在用户电脑上打开 Moodle 登录窗口（如果 Okta 还记得登录，会在后台自动完成、不弹窗）。"
             "请用户在窗口里登录 Monash，完成后窗口会自动关闭，并开始同步。"
             "告诉用户登录好之后说一声，再调用 get_monash_status 确认。")
+
+
+def t_connect_service(args):
+    """在 AI 里接上学校邮箱或考勤：装组件、打开登录窗口都在后台做，用户不用开终端。"""
+    from . import service_setup
+    service = args.get("service")
+    if service not in service_setup.NAMES:
+        raise ValueError("service 只能是 gmail（学校邮箱）或 attendance（考勤）")
+    name = service_setup.NAMES[service]
+    current = service_setup.status()
+    if current.get("service") == service and (current["running"] or current.get("result") or current.get("error")):
+        if current["running"]:
+            return f"{name}正在接入：{current['step']}。请用户按提示操作，过一会儿再调用本工具看进度。"
+        if current.get("error"):
+            return f"{name}没接上：{current['error']}。可以再调用一次重试。"
+        return (f"{name}已经接好了，第一次同步在后台进行。新功能如果还没出现，请用户重启一下 AI 软件。")
+    if service_setup.already_connected(service, load_settings()):
+        return f"{name}已经接好了，不用重新登录。"
+    service_setup.start(service, bool(args.get("read_only")), after=_after_connect)
+    return (f"正在用户电脑上接入{name}：缺的组件会自动安装（第一次要几分钟），然后会打开登录窗口，"
+            "请用户在窗口里登录 Monash 账号（Okta + MFA），授权页提示“未经验证的应用”时点“高级”再点“继续”。"
+            "告诉用户登录好之后说一声，再调用本工具看进度。不要让用户把密码或验证码发到聊天里。")
+
+
+def _after_connect(service: str) -> None:
+    """接好以后马上同步一次，再告诉 AI 软件工具列表变了。"""
+    if service == "gmail":
+        _mail["next"] = 0.0
+        start_mail_sync()
+    else:
+        try:
+            from . import attendance
+            attendance.sync(7)
+        except Exception as e:  # noqa: BLE001
+            log(f"考勤第一次读取失败：{e}")
+    notify_tools_changed()
 
 
 def t_sync(args):
@@ -515,6 +686,10 @@ TOOLS = {
     "get_monash_status": (t_status, "诊断登录、同步、索引和错误状态；报错或“用不了”时用。只需刷新数据用 sync_monash_data；登录过期且用户同意后用 start_monash_login。返回状态摘要或完整体检。",
                           {"full": (B, False)}),
     "start_monash_login": (t_login, "仅在用户明确同意重新登录后使用：打开本机 Moodle 登录窗口；已登录则不重复打开，成功后自动同步。诊断请用 get_monash_status。", {}, False),
+    "start_school_service_setup": (t_connect_service, "用户要接入学校邮箱或考勤时用：自动装组件，在用户电脑上打开登录窗口；"
+                                   "再调用看进度。",
+                               {"service": ("string", True, ("gmail", "attendance")), "read_only": ("boolean", False)},
+                               False),
     "sync_monash_data": (t_sync, "刷新 Moodle/Ed 本地数据和全文索引；用户要求刷新或数据过旧时用。诊断错误用 get_monash_status；已在同步时不会重复启动。", {}, False),
     "list_courses": (t_courses, "列出 Moodle/Ed 课程；问有哪些课或其他工具需要先确定课程时用。Moodle 未登录时回退本地课程表。返回课程代码、名称和标识。", {}),
     "list_moodle_due": (t_due, "列 Moodle 未来截止和日历事件；需要提交状态/作业详情用 list_moodle_assignments，需要成绩用 get_moodle_grades。未登录可回退 iCal。返回截止事件和时间。",
@@ -621,11 +796,37 @@ PARAM_HELP = {
     ("get_ed_lessons", "quiz"): "true=返回测验而非 Lesson 列表",
     ("get_ed_lessons", "offset"): "正文字符起点，默认0",
     ("get_ed_lessons", "max_chars"): "最大字符数，默认30000，最高100000",
+    ("start_school_service_setup", "service"): "gmail=学校邮箱，attendance=考勤",
+    ("start_school_service_setup", "read_only"): "true=邮箱只读，不让 AI 起草或改标签",
+    ("get_gmail_inbox_todo", "days"): "最近几天，默认7",
+    ("get_gmail_inbox_todo", "limit"): "最多列几封，默认10",
+    ("attendance_overview", "days"): "往前看几天，默认14；未来已排的班次总会列出",
+    ("attendance_sync", "days"): "往前读几天，默认7，最多14；本周还没到的班次也会读",
+    ("attendance_find_codes", "days"): "找最近几天没签到的班次，默认7",
+    ("student_job_status", "job_id"): "同步、找码、导出返回的 job_id",
+    ("gmail_read_attachment", "message_id"): "邮件 ID，来自搜索结果或对话",
+    ("gmail_read_attachment", "part_id"): "read_gmail_cached_thread 里附件的 part_id",
 }
+
+ED_TOOLS = ("list_ed_updates", "search_ed_threads", "read_ed_thread", "get_ed_lessons")
+
+
+def available_tools() -> dict:
+    """Gmail 和考勤是可选的，按设置决定加不加（student_tools）。不用 Ed 的人不列 Ed 的工具；
+    邮箱和考勤都接好以后，接入用的 start_school_service_setup 也不再列，省 token。"""
+    from . import student_tools
+    settings = load_settings()
+    extra = student_tools.tools(settings)
+    hide = set() if settings.get("use_ed", True) else set(ED_TOOLS)
+    if settings.get("gmail_enabled") and settings.get("attendance_enabled"):
+        hide.add("start_school_service_setup")
+    base = {k: v for k, v in TOOLS.items() if k not in hide} if hide else TOOLS
+    return {**base, **extra} if extra else base
+
 
 def tool_list() -> list[dict]:
     out = []
-    for name, spec in TOOLS.items():
+    for name, spec in available_tools().items():
         _, desc, params = spec[:3]
         read_only = spec[3] if len(spec) > 3 else True
         props = {}
@@ -645,7 +846,7 @@ def tool_list() -> list[dict]:
 
 def call_tool(name: str, arguments: dict) -> dict:
     try:
-        data = TOOLS[name][0](arguments or {})
+        data = available_tools()[name][0](arguments or {})
         text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
         result = {"content": [{"type": "text", "text": _clip(text, MAX_OUT)}]}
         # A panel must never turn a successful text query into an error.
@@ -666,7 +867,7 @@ def call_tool(name: str, arguments: dict) -> dict:
         return {"isError": True, "content": [{"type": "text", "text":
                 f"Ed 令牌没设置或失效了（{e}）。请用户在终端运行 `monash login ed`，"
                 "按提示在 Ed 设置页新建令牌后粘贴进去（不要把令牌发到聊天里）。"}]}
-    except (LookupError, ValueError) as e:
+    except (LookupError, ValueError, PermissionError) as e:
         return {"isError": True, "content": [{"type": "text", "text": str(e)}]}
 
 
@@ -682,9 +883,9 @@ def handle(msg: dict) -> dict | None:
     try:
         if method == "initialize":
             result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
-                      "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
+                      "capabilities": {"tools": {"listChanged": True}, "prompts": {}, "resources": {}},
                       "serverInfo": {"name": "monash", "version": __version__},
-                      "instructions": INSTRUCTIONS + _update_hint()}
+                      "instructions": INSTRUCTIONS + _ed_hint() + _student_hint(available_tools()) + _update_hint()}
         elif method == "ping":
             result = {}
         elif method == "tools/list":
@@ -712,7 +913,7 @@ def handle(msg: dict) -> dict | None:
             p = msg.get("params") or {}
             name = p.get("name")
             canonical = LEGACY_TOOL_ALIASES.get(name, name)
-            if canonical not in TOOLS:
+            if canonical not in available_tools():
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"没有工具 {name}"}}
             result = call_tool(canonical, p.get("arguments") or {})
         else:
@@ -729,6 +930,7 @@ def main(background: bool = True) -> None:
     sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     ensure_private_dir(HOME)
+    _stdio["on"] = True
     log(f"MCP 启动（{__version__}）")
     if background:
         threading.Thread(target=_background, name="background", daemon=True).start()
@@ -743,5 +945,4 @@ def main(background: bool = True) -> None:
         else:
             reply = handle(msg)
         if reply is not None:
-            sys.stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
+            _write(reply)

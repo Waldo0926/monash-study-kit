@@ -33,6 +33,12 @@ Talk to the student in the language they use with you. Command output is in Chin
 | Read an Ed lesson | `monash ed read FIT2109 "W3 Pre-Class"` |
 | Revise with Ed lesson quiz questions | `monash ed quiz FIT2109 --module "Week 3"` |
 | Something doesn't work | `monash doctor` |
+| Anything in my school email to deal with (optional, only if set up) | `monash gmail todo` |
+| Find a school email (optional) | `monash gmail search exchange` |
+| Which classes I haven't checked in to (optional) | `monash attendance overview` |
+| Attendance code for a class (optional) | `monash attendance codes` |
+
+The Gmail and attendance rows only work if the student set them up; `monash help` lists them once they are on. If not, the command says what to install or log in to: pass that on and stop. School mail lives in this tool, so for "my email" questions prefer it over a general Gmail connector unless the student means another mailbox. Attendance codes from `monash attendance codes` are candidates found in course posts and mail: show where each came from and let the student check.
 
 `monash grep` searches slides, PDFs, course web pages, Ed lessons and lecture transcripts (`.transcript.md`, with timestamps). Each hit has a file path under the student's Study Kit folder. Read that file to quote the original. No hit can mean the data is not synced yet: suggest `monash sync`. `monash help` lists every feature with an example question.
 
@@ -51,6 +57,8 @@ Help the student understand the requirements. The work they hand in has to be th
 
 - **Logging in.** Exit code 2 means a login is needed. Moodle: ask the student to run `monash login` (it opens a browser window for Okta and MFA). Ed: `monash login ed` in their own terminal. Never ask for, accept or repeat an Ed token, password or MFA code. If the student pastes a token into the chat, tell them to delete it at https://edstem.org/au/settings/api-tokens and make a new one.
 - **Submitting, quizzes and posting.** Study Kit cannot do these, and you should not try through other means. They do it on the website.
+- **Changing the mailbox.** `monash gmail draft`, `send-draft` and `labels` only preview by default. Show the student the whole preview. Add `--confirm` only after they confirm that exact action, and never retry a write that failed without checking the mailbox first. Attendance check-in is only done through the MCP tools, after the student says they actually attended and confirms the preview.
+- **Gmail and attendance logins.** `monash gmail login` and `monash attendance login` open a browser for the student. Never read or print the OAuth client JSON or token files.
 - **Setup and settings.** Do not run `monash setup`, `monash courses`, `monash config` or `monash uninstall` yourself; they are interactive or change the student's setup. Never print anything from the `secrets` folder in the Study Kit data folder.
 
 ## Exit codes

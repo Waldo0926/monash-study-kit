@@ -43,4 +43,4 @@ Users on an older version see the update notice within a day and run `monash upd
 | Script | Runs in | Checks |
 | --- | --- | --- |
 | `scripts/check_dist.py dist <version>` | every PR, release | one wheel and one sdist with the right version; every module in `src/` is in the wheel; no `__pycache__`, tests, databases, cookies, tokens or `.env` files; the `monash` entry point and README are in the metadata |
-| `scripts/smoke_test.py <monash> <version>` | every PR (built wheel), release (wheel from PyPI) | `monash --version` and `monash help` work; `monash mcp` answers `initialize`, `tools/list` and `prompts/list`, all 17 tools are listed with a description and input schema, and notifications get no reply. It uses an empty temporary data folder, so it needs no login and no network. |
+| `scripts/smoke_test.py <monash> <version>` | every PR (built wheel), release (wheel from PyPI) | `monash --version` and `monash help` work; `monash mcp` answers `initialize`, `tools/list` and `prompts/list`, every listed tool has a description and input schema, and notifications get no reply. It uses an empty temporary data folder, so it needs no login and no network. |

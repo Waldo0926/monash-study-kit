@@ -131,8 +131,8 @@ def sync_all(log=print) -> dict:
                 status["errors"]["ed"] = str(e)
             except Exception as e:  # noqa: BLE001  网络问题之类，下次再试
                 status["errors"]["ed"] = f"{type(e).__name__}: {e}"
-        else:
-            status["errors"]["ed"] = "还没设置 Ed 令牌（monash login ed）"
+        elif load_settings().get("use_ed", True):
+            status["errors"]["ed"] = "还没设置 Ed 令牌（monash login ed；不用 Ed 就 monash config use_ed false）"
         try:
             status["moodle"] = {**sync_moodle(log), "at": now_iso()}
         except MoodleAuthError as e:

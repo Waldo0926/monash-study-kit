@@ -18,6 +18,7 @@ import urllib.error
 from datetime import datetime, timedelta, timezone
 
 from . import features as F
+from .paths import load_settings
 from .edlib import DB_PATH as ED_DB
 from .moodlelib import MoodleAuthError, MoodleClient, MoodleError, db_connect
 from .syncer import course_code
@@ -162,7 +163,8 @@ def build(client: MoodleClient | None, courses: list[dict], days: int = 7) -> di
 
     con = _ed_conn()
     if con is None:
-        notes.append("还没同步过 Ed（没设置令牌，或者第一次同步还没跑完）：Ed 部分缺失")
+        if load_settings().get("use_ed", True):      # 不用 Ed 的人不提醒
+            notes.append("还没同步过 Ed（没设置令牌，或者第一次同步还没跑完）：Ed 部分缺失")
         out.update(ed_lessons=[], ed_unread_replies=[])
     else:
         with con:

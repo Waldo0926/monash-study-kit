@@ -17,7 +17,7 @@ Depending on which parts you set up, the software signs in as you and reads:
 - **Gmail** (optional): if you connect a Google account, messages, threads, labels and attachments, through the Gmail API.
 - **Attendance** (optional): your attendance records on the university attendance portal.
 
-Gmail access is requested only when you choose to connect it. The default permission is read-only (`gmail.readonly`). The broader permission (`gmail.modify`) is requested only if you opt in to mailbox actions such as creating drafts, sending a draft or changing labels. Those actions run only after you review and confirm the specific change. The software never permanently deletes email.
+Gmail access is requested only when you choose to connect it. The package includes a Google OAuth client (a "desktop app" registered in the maintainer's Google Cloud project) so you can sign in without creating your own. It only tells Google which app is asking; your mail goes from Google straight to your own computer and never passes through the maintainer, who cannot see your tokens or messages. You can use your own client instead with `--client`. By default the software asks for `gmail.modify`, which lets it read mail and, when you ask for it, create drafts, send a draft you reviewed or change labels (archive, mark as read, star). It cannot permanently delete email. If you only want reading, log in with `--read-only` and it asks for `gmail.readonly` instead. Every mailbox action and every attendance check-in runs only after you review the full preview and confirm that specific action.
 
 ## How the data is used
 
@@ -36,7 +36,7 @@ The software does not use your data for advertising, does not sell it, and does 
 The software sends data to:
 
 - the services you connected (Moodle, Ed, Google, the attendance portal), to read your data and, only after you confirm, to carry out an action you asked for;
-- the AI app you connect to your instance (for example Claude or Codex), and only the results of the queries that app makes on your behalf. That app's own privacy policy applies to what it receives.
+- the AI app you connect to your instance (for example Claude or Codex), and only the results of the queries that app makes on your behalf. That app's own privacy policy applies to what it receives. With the optional remote mode, an app receives mail or attendance results only if you ticked that feature when pairing it.
 
 No other party receives your data.
 

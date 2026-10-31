@@ -20,7 +20,7 @@
 - “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
 - “用 FIT2109 第 3 周的测验题考考我。”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
 
-默认所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。
+默认所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。Moodle 和 Ed 的工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。可选的学校邮箱和考勤可以帮你起草邮件、改标签、签到，每一项都要你确认才执行。
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
 
@@ -124,6 +124,16 @@ monash setup
 最后可以选择马上同步一次。第一次同步会下载所有课件，要几分钟到十几分钟。
 
 完成后打开你的 AI 软件。Claude Desktop 在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行；其他软件可以运行 `monash connect` 看哪些已经接上。
+
+## 1.5 新增了什么
+
+- **学校邮箱（可选）。** 问“我邮箱里有什么要处理的？”，列出最近没读的学校邮件，也能离线搜索、读整个对话和附件里的文字。AI 可以帮你起草回复、发送草稿、归档邮件，每一项都要你确认才执行。
+- **考勤（可选）。** 问“这周还有哪节课没签到？”“今天 workshop 的签到码是多少？”，每个签到码都标出处。按课表自动读，不开浏览器，几秒钟就完。在马来西亚校区门户上验证过。
+- **不用开终端就能接上。** 在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”，缺的组件自动安装，然后打开登录窗口。也不用自己去 Google Cloud 设置。
+- **远程的软件各自选。** 用 `monash remote` 时，每个配对的软件自己勾选能用哪些功能。
+- **课不用 Ed 的话**可以关掉 Ed：`monash config use_ed false`。
+
+详细见[可选：Gmail 与考勤](#可选gmail-与考勤)和[更新日志](CHANGELOG.md)。
 
 ## 1.4 新增了什么
 
@@ -286,13 +296,15 @@ npx skills add Waldo0926/monash-study-kit
 
 ## Token 用量
 
-每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给模型，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.4.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给模型，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.5.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
 
 | 每次对话发一次 | Token |
 | --- | ---: |
-| 18 个工具定义 | 2,962 |
+| 19 个工具定义 | 3,107 |
 | 服务说明 | 270 |
-| **合计** | **3,232** |
+| **合计** | **3,377** |
+
+1.5.0 加了 `start_school_service_setup`（145），让你在 AI 里说一声就能接上学校邮箱或考勤；两样都接好以后它就不再列出。两样都接上时合计 5,132。1.4.0 的合计是 3,232。
 
 服务说明在 1.2.0 是 187，1.3.0 加了作业问题的规则（作业说明和评分细则优先，再看 Ed 上教职员工的回答）后变成 270。
 
@@ -339,6 +351,8 @@ npx skills add Waldo0926/monash-study-kit
 | `monash config` | 看/改设置（改完重启 AI 软件） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
+| `monash gmail todo` / `sync` / `search` / `thread` | 可选：学校邮箱的邮件待办 / 同步 / 离线搜索 / 读对话（[设置](#可选gmail-与考勤)） |
+| `monash attendance login` / `status` / `sync` / `overview` / `codes` | 可选：考勤登录 / 状态 / 读门户 / 已保存的班次 / 找签到码 |
 | `monash update` | 更新到最新版 |
 
 加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
@@ -366,6 +380,33 @@ monash media
 
 Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成链接。想下载：`monash config download_videos true`。
 
+## 可选：Gmail 与考勤
+
+1.5.0 新增。两部分在你接上之前都不会打开，只在你自己的电脑上运行。
+
+- **学校邮箱（Gmail）。** 在本机保存一份 Monash 邮箱的私有副本。问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话和附件里的文字（PDF、Office、图片）。读邮件不会把它标成已读。
+- **考勤。** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”“今天 FIT2102 workshop 的签到码是多少？”。签到码从已同步的 Moodle、Ed 和学校邮件里找，每个都标出处让你核对。只在马来西亚校区的门户上验证过。
+
+如果只是想在 Claude 或 ChatGPT 里问问邮箱里有什么，用它们自带的 Gmail 连接器最简单。这里的 Gmail 适合想把邮件和考勤签到码连在一起、离线搜邮件和附件，或者在 Codex、Cursor 这些没有自带 Gmail 的软件里用的人。不用自己去 Google Cloud 设置：安装包里自带一个 Google 应用，授权页会提示“Google 尚未验证此应用”，点“高级”再点“继续”就行。也可以用你自己建的应用。完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)。最简单的是直接在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”：缺的组件会自动安装，然后在你电脑上打开登录窗口，你只要登录就行，不用开终端，密码也不经过聊天。用终端的话是这几步：
+
+```bash
+uv tool install --reinstall "monash-study-kit[gmail,attendance]"
+monash gmail login
+monash gmail sync
+monash attendance login
+monash attendance sync
+```
+
+登录完重启 AI 软件。AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`。考勤按课表读，不是按钟点：工作日早上 8 点一次，每节还没签到的课开始 15 分钟后再一次，晚上、周末和课间都不跑（`monash config attendance_auto_sync false` 关掉）。你或 AI 也可以随时让它读一次。每次读只是向门户发一次普通请求（约 5 KB，几秒钟，不开浏览器）；页面要是和预期不一样，会自动改用一个无头浏览器页面。在马来西亚校区的门户上，两种读法对门户提供的 15 天结果完全一致；`monash attendance probe` 可以在你的门户上再对照一次。开了以后 `monash status` 和 `monash doctor` 都会显示这两部分，`monash update` 也会保留你装的可选依赖。
+
+登录以后 AI 软件里全部功能都打开，包括起草邮件、发送草稿、改标签（归档、标已读、加星标）和签到。AI 必须先把完整预览给你看，你确认了这一项才会执行；签到只有在你说自己到课了才会准备。不会彻底删除邮件。只想让它读邮件，就用 `monash gmail login --read-only` 登录；想关掉某一项，`monash config gmail_manage_enabled false` 或 `monash config attendance_submit_enabled false`。
+
+用 `monash remote serve` 远程接入时，每个软件在配对页上自己勾选能用哪些功能：只列服务器上已经开了的，只读的默认勾上，写操作默认不勾。比如手机上的 Claude 只开考勤，ChatGPT 只开邮箱，或者都不开。之前已经配对的软件还是只有 Moodle 和 Ed，重新配对才会多出来；`monash remote clients` 能看到每个软件拿到了什么。
+
+每次对话开头都要多发一些工具说明：两部分都登录后约多 1,900 token（总共 5,132，不登录时是 3,232）；不登录就没有任何变化。
+
+还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户。
+
 ## 更新
 
 ```bash
@@ -391,6 +432,10 @@ Codex、Cursor、VS Code、Windsurf 或 Gemini CLI：运行 `monash connect` 看
 ### Windows 上课件同步报“路径太长”
 
 Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + 文件名叠起来可能超。把课件放到短一点的地方：`monash config files_dir C:\Monash`，然后 `monash sync`。
+
+### 我的课不用 Ed
+
+没关系：截止日期、成绩、课件、全文搜索、邮件和考勤都不依赖 Ed。`monash setup` 问 Ed 令牌时直接回车跳过，再在“不用 Ed 吗”那里选是；或者随时运行 `monash config use_ed false`。之后同步、待办和 `monash doctor` 都不会再提 Ed，AI 软件里也不再列 Ed 的工具。以后要用了，运行 `monash login ed` 就会重新打开。
 
 ### 澳洲校区
 
