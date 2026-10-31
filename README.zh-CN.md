@@ -5,7 +5,7 @@
 [![版本](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=%E7%89%88%E6%9C%AC&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
 [![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![许可证](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-16a34a?style=for-the-badge)](LICENSE)
-[![访问](https://img.shields.io/badge/%E8%AE%BF%E9%97%AE-%E5%8F%AA%E8%AF%BB-475569?style=for-the-badge)](#隐私和安全)
+[![Moodle和Ed只读](https://img.shields.io/badge/Moodle%2FEd-%E5%8F%AA%E8%AF%BB-475569?style=for-the-badge)](#隐私和安全)
 [![文档](https://img.shields.io/badge/%E6%96%87%E6%A1%A3-docs.secureview.tech-1e5eff?style=for-the-badge)](https://docs.secureview.tech/zh-cn/study-kit/)
 
 [![CI](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml/badge.svg)](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml) [![Monash Study Kit MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit/badges/score.svg)](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit)
@@ -20,7 +20,9 @@
 - “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
 - “用 FIT2109 第 3 周的测验题考考我。”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
 
-默认所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。Moodle 和 Ed 的工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。可选的学校邮箱和考勤可以帮你起草邮件、改标签、签到，每一项都要你确认才执行。
+默认把课件、登录状态和数据库保存在**你自己的电脑上**。但你用AI软件查询时，工具返回的课程、邮件或考勤信息会交给你连接的AI服务，具体如何处理由该服务的隐私政策决定。可选远程模式由你自行托管，不经过本项目维护者的服务器。
+
+Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选的学校邮箱和考勤可以帮你起草邮件、改标签、签到，每一项都要先由你确认。
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
 
@@ -29,6 +31,8 @@
 图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的。AI 软件通过 MCP 工具读到的是同样的数据。带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)。
 
 ---
+
+之前的[1.1安全审计](docs/security.md)只覆盖当时的功能；新增的远程连接、邮箱与考勤另列有[1.5审查清单](docs/SECURITY-REVIEW-1.5-SCOPE.md)，不能直接沿用旧版结论。
 
 ## 它由两部分组成
 
