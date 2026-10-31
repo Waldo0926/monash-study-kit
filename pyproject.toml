@@ -24,6 +24,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gmail = ["google-auth-oauthlib>=1.2,<2"]
+attendance = ["playwright>=1.49,<2", "Pillow>=10,<13"]
 # 录播字幕：下载 Zoom 录像并用 whisper 转写、取 YouTube 字幕。依赖大（约 1 GB），想要才装。
 media = [
     "faster-whisper>=1.0",

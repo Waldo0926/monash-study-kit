@@ -73,6 +73,7 @@ def configure(public_url: str, redirects: list[str] | None = None) -> None:
 
 def handle_remote(msg: dict) -> dict | None:
     from . import mcp_server as mcp
+    from .gmail_tools import TOOLS as gmail_tools
     params = msg.get("params", {})
     if not isinstance(params, dict):
         return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32602, "message": "params must be an object"}}
@@ -81,6 +82,9 @@ def handle_remote(msg: dict) -> dict | None:
         if not isinstance(name, str) or not isinstance(params.get("arguments", {}), dict):
             return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32602, "message": "Invalid tool arguments"}}
         name = mcp.LEGACY_TOOL_ALIASES.get(name, name)
+        if name in gmail_tools:
+            return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {
+                "code": -32602, "message": "Gmail requires separate remote client authorization; this transport does not grant it yet"}}
         spec = mcp.TOOLS.get(name)
         if spec and len(spec) > 3 and not spec[3]:
             return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {
@@ -90,7 +94,7 @@ def handle_remote(msg: dict) -> dict | None:
         if msg.get("method") == "tools/list":
             reply["result"]["tools"] = [
                 {**t, "securitySchemes": [{"type": "oauth2", "scopes": ["monash"]}]}
-                for t in reply["result"]["tools"] if t["annotations"]["readOnlyHint"]]
+                for t in reply["result"]["tools"] if t["annotations"]["readOnlyHint"] and t["name"] not in gmail_tools]
         elif msg.get("method") == "initialize":
             reply["result"]["instructions"] = (
                 "Monash Moodle + Ed，只读。get_study_todo 看待办；search_content 搜资料；"

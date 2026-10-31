@@ -623,9 +623,16 @@ PARAM_HELP = {
     ("get_ed_lessons", "max_chars"): "最大字符数，默认30000，最高100000",
 }
 
+def available_tools() -> dict:
+    if load_settings().get("gmail_enabled"):
+        from .gmail_tools import TOOLS as gmail_tools
+        return {**TOOLS, **gmail_tools}
+    return TOOLS
+
+
 def tool_list() -> list[dict]:
     out = []
-    for name, spec in TOOLS.items():
+    for name, spec in available_tools().items():
         _, desc, params = spec[:3]
         read_only = spec[3] if len(spec) > 3 else True
         props = {}
@@ -645,7 +652,7 @@ def tool_list() -> list[dict]:
 
 def call_tool(name: str, arguments: dict) -> dict:
     try:
-        data = TOOLS[name][0](arguments or {})
+        data = available_tools()[name][0](arguments or {})
         text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
         result = {"content": [{"type": "text", "text": _clip(text, MAX_OUT)}]}
         # A panel must never turn a successful text query into an error.
@@ -712,7 +719,7 @@ def handle(msg: dict) -> dict | None:
             p = msg.get("params") or {}
             name = p.get("name")
             canonical = LEGACY_TOOL_ALIASES.get(name, name)
-            if canonical not in TOOLS:
+            if canonical not in available_tools():
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"没有工具 {name}"}}
             result = call_tool(canonical, p.get("arguments") or {})
         else:

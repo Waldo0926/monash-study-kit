@@ -37,6 +37,7 @@ HOME = Path(os.environ.get("MONASH_KIT_HOME") or _default_home())
 SETTINGS_FILE = HOME / "settings.json"
 
 DEFAULTS = {
+    "gmail_enabled": False,      # 完成本机 Gmail OAuth 后启用本地 MCP 邮件工具
     "download_videos": False,     # 录像动辄几百 MB；没装 [media] 转不了字幕，下下来 Claude 也看不了
     "auto_sync_hours": 1,         # MCP 在跑的时候，多久在后台同步一次
     "keepalive_minutes": 20,      # MCP 在跑的时候，多久给 Moodle 会话续一次期（空闲 4 小时就过期）

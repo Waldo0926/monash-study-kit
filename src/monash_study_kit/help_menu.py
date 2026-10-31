@@ -35,6 +35,11 @@ FEATURES = [
         ("Moodle 公告", "FIT2102 最近有什么公告？", "monash moodle news FIT2102"),
         ("Moodle 私信（只读）", "Moodle 上有人给我发消息吗？", "monash moodle messages"),
     ]),
+    ("Gmail（可选安装和授权）", [
+        ("下载邮件正文与消息数据到私有镜像，离线全文搜索", "搜索已同步的交换申请邮件", "monash gmail search 交换"),
+        ("下载并保存指定邮件附件", "查看邮件对话和附件列表", "monash gmail thread THREAD_ID"),
+        ("可选邮箱管理：草稿、发信、归档、标签；先预览再确认", "预览将要发送的邮件草稿", "monash gmail send-draft DRAFT_ID"),
+    ]),
     ("维护", [
         ("在本机网页浏览已同步课件", "打开本地课件浏览页", "monash library --open"),
         ("登录 / 重新登录 Moodle", "帮我重新登录 Moodle", "monash login"),

@@ -38,6 +38,7 @@ import urllib.error
 import webbrowser
 
 from . import __version__, edlib, jobs
+from .gmail import GmailAuthError, GmailError
 from . import features as F
 from .edlib import EdAuthError
 from .moodlelib import FILES_DIR, MoodleAuthError, MoodleClient, MoodleError, db_connect
@@ -723,7 +724,7 @@ class _Parser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from . import cli_ed
+    from . import cli_ed, cli_gmail
     ap = _Parser(prog="monash", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"monash-study-kit {__version__}")
     sub = ap.add_subparsers(dest="cmd")
@@ -815,6 +816,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = cmd(m, "ls", cmd_m_ls, help="本地已同步的课件"); p.add_argument("course"); p.add_argument("week", nargs="?")
 
     cli_ed.add_commands(sub.add_parser("ed", help="Ed 查询").add_subparsers(dest="ecmd", required=True))
+    cli_gmail.add_commands(sub.add_parser("gmail", help="Gmail 同步、离线搜索与可选邮箱操作").add_subparsers(dest="gcmd", required=True))
     return ap
 
 
@@ -851,7 +853,7 @@ def main(argv: list[str] | None = None) -> int:
         if not quiet:
             _print_update_notice()
         return code
-    except (MoodleAuthError, EdAuthError) as e:
+    except (MoodleAuthError, EdAuthError, GmailAuthError) as e:
         print(f"{e}", file=sys.stderr)
         return EXIT_AUTH
     except LookupError as e:                   # 包括 edquery.NotFound
@@ -860,9 +862,9 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         print(e, file=sys.stderr)
         return EXIT_USAGE
-    except (MoodleError, urllib.error.URLError, TimeoutError, ConnectionError) as e:
+    except (MoodleError, GmailError, urllib.error.URLError, TimeoutError, ConnectionError) as e:
         # HTTPError 也是 URLError：Ed 的 401 已经变成 EdAuthError，走到这里的是 5xx 重试完之类
-        print(f"连不上 Moodle/Ed，或对方出错：{e}", file=sys.stderr)
+        print(f"连不上 Monash 服务，或对方出错：{e}", file=sys.stderr)
         return EXIT_NETWORK
     except KeyboardInterrupt:
         return EXIT_INTERRUPTED
