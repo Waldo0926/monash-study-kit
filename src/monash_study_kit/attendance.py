@@ -66,6 +66,9 @@ def login(timeout=600):
                     clue = page.locator("body").inner_text(timeout=10000)
                     if re.search(r"attendance|semester|units|logout|log out", clue, re.I):
                         _save_state(context)
+                        from . import attendance_auto
+
+                        attendance_auto.record_login()
                         return {"status": "connected", "saved": True}
                 page.wait_for_timeout(1000)
             raise AttendanceAuthError("Login timed out; complete Monash sign-in and MFA in the browser")
@@ -113,6 +116,11 @@ def _open_day(page, key):
     page.goto(ORIGIN + "/student/Units.aspx", wait_until="domcontentloaded", timeout=45000)
     _check_page(page)
     page.wait_for_selector("#daySel", state="attached", timeout=15000)
+    return _select_day(page, key)
+
+
+def _select_day(page, key):
+    """在已经打开的 Units.aspx 上切到某一天，不重新加载页面。"""
     if key not in page.evaluate("() => [...document.querySelectorAll('#daySel option')].map(o => o.value)"):
         return False
     page.select_option("#daySel", key)
@@ -139,24 +147,73 @@ def _load():
 
 
 def status():
+    from . import attendance_auto
+
     cache = _load()
     return {
         "configured": STATE_FILE.is_file(),
         "last_success": cache.get("last_success"),
+        "last_method": cache.get("last_method"),
         "cached_records": len(cache["records"]),
         "scanned_dates": cache.get("scanned_dates", []),
         "last_error": cache.get("last_error"),
-        "session_lifetime": "Not yet measured against the real account",
+        "session_lifetime": attendance_auto.lifetime(),
     }
 
 
 def keepalive():
+    from . import attendance_auto
+
+    try:
+        with browser() as context:
+            page = context.new_page()
+            page.goto(ORIGIN + "/student/Default.aspx", wait_until="domcontentloaded", timeout=45000)
+            _check_page(page)
+            _save_state(context)
+    except AttendanceAuthError:
+        attendance_auto.record_failure()
+        raise
+    attendance_auto.record_ok()
+    return {"authenticated": True, "checked_at": datetime.now(TZ).isoformat()}
+
+
+def _day_key(date):
+    month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.month - 1]
+    return f"{date.day}_{month}_{date.strftime('%y')}"
+
+
+def _read_fast(keys):
+    """不开浏览器读（attendance_http）。没打开这个设置，或者页面结构对不上，返回 None 改用浏览器。"""
+    from .paths import load_settings
+
+    if not load_settings().get("attendance_fast_read"):
+        return None
+    from . import attendance_http
+
+    try:
+        return attendance_http.read_days(keys)
+    except attendance_http.FastPathUnavailable:
+        return None
+
+
+def _read_browser(keys, script):
+    """开一次 Units.aspx，在 #daySel 里一天一天切，不每天重新加载。"""
+    out = {}
     with browser() as context:
         page = context.new_page()
-        page.goto(ORIGIN + "/student/Default.aspx", wait_until="domcontentloaded", timeout=45000)
-        _check_page(page)
+        opened = False
+        for key in keys:
+            # The requested date's panel must be the visible one; a generic body is not sufficient.
+            if not (_select_day(page, key) if opened else _open_day(page, key)):
+                out[key] = None
+                continue
+            opened = True
+            rows = page.evaluate(script, key)
+            if not rows.get("ready"):
+                raise RuntimeError("Attendance date page was not ready")
+            out[key] = rows["sessions"]
         _save_state(context)
-    return {"authenticated": True, "checked_at": datetime.now(TZ).isoformat()}
+    return out
 
 
 def sync(days=7):
@@ -168,31 +225,27 @@ def sync(days=7):
     today = datetime.now(TZ).date()
     dates += [today + timedelta(days=i) for i in range(1, 7 - today.weekday())]
     records, scanned, unavailable = [], [], []
+    from . import attendance_auto
+
     try:
-        with browser() as context:
-            page = context.new_page()
-            for date in dates:
-                month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][
-                    date.month - 1
-                ]
-                key = f"{date.day}_{month}_{date.strftime('%y')}"
-                # The requested date's panel must be the visible one; a generic body is not sufficient.
-                if not _open_day(page, key):
-                    unavailable.append(date.isoformat())
-                    continue
-                rows = page.evaluate(script, key)
-                if not rows.get("ready"):
-                    raise RuntimeError("Attendance date page was not ready")
-                for row in rows["sessions"]:
-                    row["date"] = date.isoformat()
-                    row["attendanceDate"] = {"iso": date.isoformat(), "key": key}
-                    row["id"] = hashlib.sha256(
-                        json.dumps([row["date"], row["course"], row["session"], row["time"]]).encode()
-                    ).hexdigest()[:24]
-                    row["observed_at"] = datetime.now(TZ).isoformat()
-                    records.append(row)
-                scanned.append(date.isoformat())
-            _save_state(context)
+        keys = [_day_key(date) for date in dates]
+        pages = _read_fast(keys)
+        method = "http" if pages is not None else "browser"
+        if pages is None:
+            pages = _read_browser(keys, script)
+        for date, key in zip(dates, keys):
+            if pages.get(key) is None:
+                unavailable.append(date.isoformat())
+                continue
+            for row in pages[key]:
+                row["date"] = date.isoformat()
+                row["attendanceDate"] = {"iso": date.isoformat(), "key": key}
+                row["id"] = hashlib.sha256(
+                    json.dumps([row["date"], row["course"], row["session"], row["time"]]).encode()
+                ).hexdigest()[:24]
+                row["observed_at"] = datetime.now(TZ).isoformat()
+                records.append(row)
+            scanned.append(date.isoformat())
         old = _load()
         merged = {row["id"]: row for row in old["records"] if row["date"] not in scanned}
         merged.update({row["id"]: row for row in records})
@@ -200,16 +253,21 @@ def sync(days=7):
             "records": list(merged.values()),
             "scanned_dates": sorted(set(old.get("scanned_dates", [])) | set(scanned)),
             "last_success": datetime.now(TZ).isoformat(),
+            "last_method": method,
             "last_error": None,
         }
         write_secret(CACHE_FILE, json.dumps(cache))
+        attendance_auto.record_ok()
         return {
             "read_records": len(records),
             "scanned_dates": scanned,
             "unavailable_dates": unavailable,
+            "method": method,
             "status": "ok",
         }
     except Exception as e:
+        if isinstance(e, AttendanceAuthError):
+            attendance_auto.record_failure()
         cache = _load()
         cache["last_error"] = type(e).__name__ + ": " + str(e)[:250]
         write_secret(CACHE_FILE, json.dumps(cache))

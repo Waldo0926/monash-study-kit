@@ -9,7 +9,8 @@
 服务器开着的时候（也就是 Claude 开着的时候）在后台做这几件事：
   * 每 20 分钟给 Moodle 会话续一次期，因为 Moodle 空闲 4 小时就把你踢出去；
   * 每小时同步一次 Ed 和 Moodle，再更新全文索引；
-  * 开了 Gmail 的话，每 30 分钟同步一次邮件（gmail_sync_minutes）。
+  * 开了 Gmail 的话，每 30 分钟同步一次邮件（gmail_sync_minutes）；
+  * 开了考勤的话，按课表读考勤（attendance_auto），不是每小时都开浏览器。
 后台的输出写进 mcp.log，绝不能写 stdout（stdout 是给 Claude 的协议通道）。
 
 MCP 本身不消耗额度，只有工具返回的内容进上下文才算，所以每个工具的返回都有长度上限。
@@ -196,6 +197,7 @@ def _background_tick(every_sync: float, every_touch: float, last_touch: float) -
     if jobs.hours_since_sync() * 3600 >= every_sync:
         start_sync()
     start_mail_sync()
+    start_attendance_work()
     if time.time() - last_touch >= every_touch:
         last_touch = time.time()
         try:
@@ -246,6 +248,52 @@ def _sync_mail():
         log(f"邮件同步失败（已下载的页都保存了，下一轮接着下）：{e}")
     finally:
         store.close()
+
+
+_attendance = {"thread": None, "last_keepalive": 0.0, "auth_logged": False}
+
+
+def start_attendance_work() -> str | None:
+    """开了考勤时：到了课表上的时间点就读一次（attendance_auto.due），否则按设置轻量续期。"""
+    settings = load_settings()
+    if not settings.get("attendance_enabled"):
+        return None
+    if _attendance["thread"] and _attendance["thread"].is_alive():
+        return None
+    from datetime import datetime as _dt
+    from . import attendance, attendance_auto
+    work = None
+    if settings.get("attendance_auto_sync", True):
+        found = attendance_auto.due(attendance._load()["records"], attendance_auto.last_auto_run(),
+                                    _dt.now(attendance.TZ))
+        if found:
+            attendance_auto.mark_auto_run()   # 先记下，失败了也不会每分钟重试
+            reason, days = found
+            work = ("sync", lambda: attendance.sync(days), reason)
+    minutes = float(settings.get("attendance_keepalive_minutes") or 0)
+    if work is None and minutes > 0 and time.time() - _attendance["last_keepalive"] >= minutes * 60:
+        _attendance["last_keepalive"] = time.time()
+        from . import attendance_http
+        work = ("keepalive", attendance_http.keepalive, "keepalive")
+    if work is None:
+        return None
+    _attendance["thread"] = threading.Thread(target=_attendance_job, args=work, name="attendance", daemon=True)
+    _attendance["thread"].start()
+    return work[0]
+
+
+def _attendance_job(kind, fn, reason):
+    from .attendance import AttendanceAuthError
+    try:
+        result = fn()
+        _attendance["auth_logged"] = False
+        log(f"考勤{'读取' if kind == 'sync' else '续期'}（{reason}）：{result.get('method', '')} 成功")
+    except AttendanceAuthError as e:
+        if not _attendance["auth_logged"]:
+            log(f"考勤要重新登录：{e}")
+            _attendance["auth_logged"] = True
+    except Exception as e:  # noqa: BLE001
+        log(f"考勤{'读取' if kind == 'sync' else '续期'}失败：{e}")
 
 
 # ---------------------------------------------------------------- 管理工具

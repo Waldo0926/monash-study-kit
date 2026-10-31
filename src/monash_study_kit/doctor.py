@@ -230,6 +230,13 @@ def check_attendance() -> dict | None:
         return _check("考勤", WARN, "还没读过考勤记录", "monash attendance sync")
     hours = _age(cache.get("last_success"))
     detail = f"已保存 {len(cache.get('records', []))} 个班次" + (f"，上次读取 {hours:.0f} 小时前" if hours is not None else "")
+    from . import attendance_auto
+    current = attendance_auto.lifetime().get("current")
+    if isinstance(current, dict) and "still_valid_after_hours" in current:
+        detail += f"，这次登录已撑 {current['still_valid_after_hours']} 小时"
+    elif isinstance(current, dict):
+        low, high = current["expired_after_hours"]
+        detail += f"，上次登录在 {low} 到 {high} 小时之间过期"
     if cache.get("last_error"):
         fix = "monash attendance login" if "AuthError" in cache["last_error"] else "monash attendance sync"
         return _check("考勤", WARN, detail + "；上次出错：" + scrub(cache["last_error"])[:120], fix)

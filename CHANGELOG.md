@@ -16,7 +16,11 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 - `monash status` and `monash doctor` include school mail and attendance when they are on. Doctor output never shows the mail address. A missing `[gmail]` install now says what to install instead of looking like a network error.
 - The agent skill lists the optional mail and attendance commands and the rule that `--confirm` is only added after the student confirms the preview.
 - Token cost when switched on: about 730 more per conversation for Gmail, 590 for attendance, 1,900 for everything including the write switches. Nothing changes while they are off.
-- Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
+- Attendance reads follow the timetable instead of the clock while the MCP server runs: weekday mornings at 8 and 15 minutes after each class not yet checked in to, nothing at night, at weekends or for classes already done (`attendance_auto_sync`, on by default).
+- A browser read opens the portal page once and switches days in its menu, instead of reloading the page for every day.
+- Optional browser-free read (`attendance_fast_read`, off by default): one request with the saved login cookies and a Python port of the parser. It falls back to the browser whenever the page does not look as expected. `monash attendance probe` compares both reads on the real portal and prints only counts and whether they match. Tests compare the Python and JavaScript parsers on the same pages.
+- The attendance login lifetime is now measured: logins, successful reads and the first expiry are recorded, and `monash attendance status` shows how long the current login has lasted and when earlier ones expired. Optional lightweight keepalive (`attendance_keepalive_minutes`, off by default) renews the login with a plain request and saves any new cookies.
+- Not verified yet: attendance submission, how long the attendance login lasts, whether the browser-free read and the keepalive work on the real portal, and portals of campuses other than Malaysia.
 
 ## 1.4.1
 

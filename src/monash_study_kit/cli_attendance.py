@@ -24,6 +24,10 @@ def run(args):
             result = attendance.sync(args.days)
         elif args.acmd == "overview":
             result = attendance.overview(args.days)
+        elif args.acmd == "probe":
+            from . import attendance_http
+            result = attendance_http.probe()
+            print("下面只有数量和对不对得上，没有课程、时间、链接或 cookie，可以直接发给维护者。", file=sys.stderr)
         elif args.acmd == "codes":
             from .paths import load_settings
             result = attendance.find_codes(args.days, gmail_allowed=bool(load_settings().get("gmail_enabled")))
@@ -52,5 +56,6 @@ def add_commands(sub):
     p.add_argument("--days", type=int, default=7, help="往前读几天（1 到 14）")
     p = command("overview", "看已保存的班次：已签到、还没签、还没到时间（不联网）")
     p.add_argument("--days", type=int, default=14, help="往前看几天")
+    command("probe", "检查能不能不开浏览器读考勤：两种读法对照一遍，只输出数量（要先登录，约一两分钟）")
     p = command("codes", "从已同步的 Moodle、Ed 和学校邮件里找还没签到的班次的签到码（只是候选，要自己核对）")
     p.add_argument("--days", type=int, default=7, help="找最近几天的")

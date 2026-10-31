@@ -16,7 +16,7 @@
     monash ed …                  # Ed 查询：new、threads、search、show、following、lessons、quiz
 
     monash gmail …               # 可选：学校邮箱同步、邮件待办、离线搜索（要装 [gmail]）
-    monash attendance …          # 可选：考勤 login、status、sync、overview、codes（要装 [attendance]）
+    monash attendance …          # 可选：考勤 login、status、sync、overview、codes、probe（要装 [attendance]）
 
     monash media                 # 录播：取 YouTube 字幕、下载 Zoom 录像并转写（要装 [media]）
     monash open                  # 打开课件文件夹

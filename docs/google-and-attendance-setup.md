@@ -71,7 +71,27 @@ monash attendance status
 - `codes` 找到的只是候选签到码，每个都标了来自哪条公告、帖子或邮件。同一节课找到两个不同的码会标成冲突，一定要自己核对。
 - 默认是**马来西亚校区**门户 `https://attendance.monash.edu.my`，时区 `Asia/Kuala_Lumpur`。其他校区可以设置 `MONASH_ATTENDANCE_ORIGIN` 和 `MONASH_ATTENDANCE_TZ`，但页面解析只在马来西亚校区验证过，换校区前要先确认页面结构。
 - 门户的日期是用页面上的下拉框 `#daySel` 切换的（URL 里的日期会被忽略），大约只能选今天前后两周。
-- 登录状态能维持多久还没测准；`monash attendance status` 或 AI 报登录过期时，重新运行 `monash attendance login`。
+- 登录状态能维持多久还没测准。程序会自己记：每次登录、每次读成功、第一次发现过期都记一笔，`monash attendance status` 里的 `session_lifetime` 会显示这次登录已经撑了多久，以及以前几次是在几小时到几小时之间失效的。报登录过期时重新运行 `monash attendance login`。
+
+### 考勤的后台读取和三个设置
+
+AI 软件开着时，考勤按课表自动读：工作日早上 8 点读最近三天（看这几天的班次），每节还没签到的课开始 15 分钟后再读当天（看签上没有）。已经签过的课、晚上、周末都不跑。电脑睡着错过了，醒来只补一次。
+
+| 设置 | 默认 | 作用 |
+|---|---|---|
+| `attendance_auto_sync` | `true` | 按课表自动读；`false` 就只在你或 AI 要的时候读 |
+| `attendance_fast_read` | `false` | 不开浏览器，直接带着登录 cookie 请求门户页面，一次读完两周，几秒钟。页面结构对不上会自动退回浏览器 |
+| `attendance_keepalive_minutes` | `0` | 每隔多少分钟用一次轻量请求给登录续期，不开浏览器；`0` 不续期 |
+
+`attendance_fast_read` 打开前先运行一次：
+
+```sh
+monash attendance probe
+```
+
+它会用两种方法各读一遍门户（不开浏览器的 Python 版，和原来浏览器里的读法），逐天对照班次数量、签到状态和有没有签到链接。输出里只有数量和“对不对得上”，没有课程、时间、链接或 cookie，可以直接发给维护者。结论写着“完全一致”才打开。
+
+`attendance_keepalive_minutes` 建议先保持 `0` 用几天，看 `session_lifetime` 里登录自然能撑多久；如果撑不过一天，再设成 `30` 试试续期有没有用。
 
 ## 四、在 AI 软件里用
 
