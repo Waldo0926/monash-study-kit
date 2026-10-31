@@ -42,7 +42,7 @@ DEFAULTS = {
     "gmail_manage_enabled": False,  # 本地 MCP 可以起草、发草稿、改标签（每次先预览，用户确认才执行）；要先用 --manage 授权
     "attendance_enabled": False,  # 登录考勤门户后启用本地 MCP 只读考勤工具
     "attendance_auto_sync": True,  # 开了考勤时按课表自动读：工作日早上 8 点，每节没签到的课开始 15 分钟后
-    "attendance_fast_read": False,  # 不开浏览器直接请求门户页面；先用 monash attendance probe 确认两种读法一致再开
+    "attendance_fast_read": True,   # 不开浏览器直接请求门户页面（结构对不上会自动改用浏览器）；monash attendance probe 可以对照
     "attendance_keepalive_minutes": 0,  # 多久用一次轻量请求给考勤登录续期；0 = 不续期，先测出登录能维持多久再定
     "attendance_submit_enabled": False,  # 本地 MCP 可以准备签到提交（先预览，用户确认才执行）
     "download_videos": False,     # 录像动辄几百 MB；没装 [media] 转不了字幕，下下来 Claude 也看不了

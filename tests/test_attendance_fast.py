@@ -151,9 +151,10 @@ def test_sync_uses_fast_read_when_on_and_falls_back_to_the_browser(monkeypatch, 
     monkeypatch.setattr(attendance_http, "read_days", unavailable)
     monkeypatch.setattr(attendance, "_read_browser", lambda keys, script: {k: [] for k in keys})
     assert attendance.sync(1)["method"] == "browser"
-    monkeypatch.setattr(paths, "load_settings", lambda: {})
-    monkeypatch.setattr(attendance_http, "read_days", lambda keys: pytest.fail("fast read is off by default"))
+    monkeypatch.setattr(paths, "load_settings", lambda: {"attendance_fast_read": False})
+    monkeypatch.setattr(attendance_http, "read_days", lambda keys: pytest.fail("fast read was turned off"))
     assert attendance.sync(1)["method"] == "browser"
+    assert paths.DEFAULTS["attendance_fast_read"] is True      # 门户上对照过，默认打开
 
 
 def test_login_lifetime_is_measured_from_successes_and_the_first_failure(monkeypatch, cache):
@@ -244,13 +245,13 @@ def test_probe_reports_counts_only(monkeypatch, cache):
 
 def test_keepalive_records_success_and_failure(monkeypatch, cache, tmp_path):
     state_file(monkeypatch, tmp_path, [])
-    monkeypatch.setattr(attendance_http, "fetch", lambda url: ("<html>ok</html>", ["n=1; Path=/"]))
+    monkeypatch.setattr(attendance_http, "_get", lambda url: ("<html>ok</html>", ["n=1; Path=/"]))
     attendance_auto.record_login()
     assert attendance_http.keepalive() == {"authenticated": True, "renewed_cookies": 1}
 
     def expired(url):
         raise attendance.AttendanceAuthError("expired")
-    monkeypatch.setattr(attendance_http, "fetch", expired)
+    monkeypatch.setattr(attendance_http, "_get", expired)
     with pytest.raises(attendance.AttendanceAuthError):
         attendance_http.keepalive()
     assert "expired_after_hours" in attendance_auto.lifetime()["current"]
@@ -294,3 +295,20 @@ def test_tls_uses_the_system_verifier_when_truststore_is_installed(monkeypatch):
     assert made == [ssl.PROTOCOL_TLS_CLIENT] and context.verify_mode == ssl.CERT_REQUIRED
     monkeypatch.setitem(sys.modules, "truststore", None)      # 没装时用 Python 默认的，校验照样开着
     assert attendance_http._tls().verify_mode == ssl.CERT_REQUIRED
+
+
+def test_every_portal_request_counts_toward_the_login_lifetime(monkeypatch, cache):
+    attendance_auto.record_login()
+    data = json.loads(attendance_auto.SESSION_FILE.read_text())
+    data["login_at"] = data["last_ok"] = data["login_at"] - 7200
+    attendance_auto.SESSION_FILE.write_text(json.dumps(data))
+    monkeypatch.setattr(attendance_http, "_get", lambda url: ("<html></html>", []))
+    attendance_http.fetch(attendance_http.UNITS)
+    assert attendance_auto.lifetime()["current"]["still_valid_after_hours"] >= 2.0
+
+    def expired(url):
+        raise attendance.AttendanceAuthError("expired")
+    monkeypatch.setattr(attendance_http, "_get", expired)
+    with pytest.raises(attendance.AttendanceAuthError):
+        attendance_http.fetch(attendance_http.UNITS)
+    assert "expired_after_hours" in attendance_auto.lifetime()["current"]

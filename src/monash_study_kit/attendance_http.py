@@ -4,8 +4,9 @@
 区块在服务器返回的 HTML 里就都有（只是隐藏），一次请求就能读到两周的班次，比开浏览器
 一天一天切快得多。这一点要在真实门户上确认，所以：
 
-  * 默认不用这条路（设置 attendance_fast_read），先用 `monash attendance probe` 对照；
-  * 打开以后，只要页面结构对不上（没有 #daySel、某天的区块不在 HTML 里），就退回浏览器。
+  * 2026-10-31 在马来西亚校区门户上用 `monash attendance probe` 对照过：15 天的区块都在
+    HTML 里，两种读法逐天一致，所以默认用这条路（设置 attendance_fast_read）；
+  * 只要页面结构对不上（没有 #daySel、某天的区块不在 HTML 里、证书校验不过），就退回浏览器。
 
 parse_day 是 attendance_assets/extract-rows.js 的 Python 版，只在当天的区块里找，
 所以不需要浏览器的“是否可见”判断。两边的结果在测试里逐条对照。
@@ -79,7 +80,21 @@ def _tls() -> ssl.SSLContext:
 
 
 def fetch(url: str) -> tuple[str, list[str]]:
-    """带 cookie GET 一个门户页面，返回 (HTML, Set-Cookie 列表)。跳去登录页就当登录过期。"""
+    """带 cookie GET 一个门户页面，返回 (HTML, Set-Cookie 列表)。跳去登录页就当登录过期。
+
+    每次请求的结果都记进登录时长：成功说明登录还在，跳去登录页说明已经过期。
+    """
+    from . import attendance_auto
+    try:
+        result = _get(url)
+    except AttendanceAuthError:
+        attendance_auto.record_failure()
+        raise
+    attendance_auto.record_ok()
+    return result
+
+
+def _get(url: str) -> tuple[str, list[str]]:
     if not url.startswith(ORIGIN + "/student/"):
         raise ValueError("Only Attendance student pages are fetched")
     cookies = _state().get("cookies", [])
@@ -145,15 +160,9 @@ def update_cookies(set_cookies: list[str]) -> int:
 
 def keepalive() -> dict:
     """轻量续期：请求一次首页，有新 cookie 就存下来。不开浏览器。"""
-    from . import attendance_auto
-    try:
-        with portal_lock():
-            _, set_cookies = fetch(HOME_PAGE)
-            renewed = update_cookies(set_cookies)
-    except AttendanceAuthError:
-        attendance_auto.record_failure()
-        raise
-    attendance_auto.record_ok()
+    with portal_lock():
+        _, set_cookies = fetch(HOME_PAGE)
+        renewed = update_cookies(set_cookies)
     return {"authenticated": True, "renewed_cookies": renewed}
 
 
@@ -364,7 +373,7 @@ def _signature(rows: list[dict]) -> list[tuple]:
 def probe() -> dict:
     """在真实门户上对照两种读法。只输出数量和对不对得上，不输出课程、时间、链接等内容。"""
     from . import attendance, attendance_auto
-    report: dict = {"portal": urllib.parse.urlsplit(ORIGIN).hostname, "session": attendance_auto.lifetime()}
+    report: dict = {"portal": urllib.parse.urlsplit(ORIGIN).hostname}
     try:
         import truststore  # noqa: F401
         report["system_certificates"] = True
@@ -380,6 +389,7 @@ def probe() -> dict:
                                 "先重新安装一次带 [attendance] 的版本（会装上 truststore），再跑一次 probe。"))
         return report
     document = htmldom.parse(html)
+    report["session"] = attendance_auto.lifetime()    # 放在请求之后，这次成功也算进去
     report["http"] = {"ok": True, "html_kb": len(html) // 1024, "set_cookie_headers": len(set_cookies)}
     try:
         keys = day_options(document)
@@ -426,7 +436,7 @@ def probe() -> dict:
     report["browser"] = {"days_compared": same + different, "same": same, "different": different,
                          "panels_after_render": dom_panels, "difference_kinds": sorted(mismatch_kinds)}
     if different == 0 and len(fast) == len(keys):
-        report["verdict"] = "两种读法完全一致，可以打开：monash config attendance_fast_read true"
+        report["verdict"] = "两种读法完全一致，快速读取可以放心用（默认已经打开，设置 attendance_fast_read）"
     else:
         report["verdict"] = "有不一致，先别打开快速读取，把这段结果发给维护者"
     return report

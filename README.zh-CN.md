@@ -385,7 +385,7 @@ monash attendance login
 monash attendance sync
 ```
 
-登录完重启 AI 软件。AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`。考勤按课表读，不是按钟点：工作日早上 8 点一次，每节还没签到的课开始 15 分钟后再一次，晚上、周末和课间都不跑（`monash config attendance_auto_sync false` 关掉）。你或 AI 也可以随时让它读一次。每次读只开一个无头浏览器页面，在门户的下拉框里切日期；等 `monash attendance probe` 确认不开浏览器的快速读法在你的门户上结果一样，就可以 `monash config attendance_fast_read true` 打开它。开了以后 `monash status` 和 `monash doctor` 都会显示这两部分，`monash update` 也会保留你装的可选依赖。
+登录完重启 AI 软件。AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`。考勤按课表读，不是按钟点：工作日早上 8 点一次，每节还没签到的课开始 15 分钟后再一次，晚上、周末和课间都不跑（`monash config attendance_auto_sync false` 关掉）。你或 AI 也可以随时让它读一次。每次读只是向门户发一次普通请求（约 5 KB，几秒钟，不开浏览器）；页面要是和预期不一样，会自动改用一个无头浏览器页面。在马来西亚校区的门户上，两种读法对门户提供的 15 天结果完全一致；`monash attendance probe` 可以在你的门户上再对照一次。开了以后 `monash status` 和 `monash doctor` 都会显示这两部分，`monash update` 也会保留你装的可选依赖。
 
 起草、发送草稿、改标签和考勤签到提交，默认在 AI 软件里是关着的，要你自己打开：`monash config gmail_manage_enabled true`（先用 `monash gmail login --manage` 授权）或 `monash config attendance_submit_enabled true`。打开以后 AI 也必须先把完整预览给你看，你确认了这一项才会执行。不会彻底删除邮件。
 
