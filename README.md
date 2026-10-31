@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=Release&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
 [![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
-[![Access](https://img.shields.io/badge/Access-Read--only-475569?style=for-the-badge)](#privacy-and-security)
+[![Moodle/Ed read-only](https://img.shields.io/badge/Moodle%20%2F%20Ed-read--only-475569?style=for-the-badge)](#privacy-and-security)
 [![Docs](https://img.shields.io/badge/Docs-docs.secureview.tech-1e5eff?style=for-the-badge)](https://docs.secureview.tech/study-kit/)
 
 [![CI](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml/badge.svg)](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml) [![Monash Study Kit MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit/badges/score.svg)](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit)
@@ -20,7 +20,7 @@ Connect Monash **Moodle** and **Ed** to the AI app on your computer (Claude, Cod
 - "What does the A2 spec ask for?", "What's my current grade in FIT2109?"
 - "Quiz me on FIT2109 week 3." In apps that support MCP Apps, to-dos, lesson progress and quiz questions also show up as small panels you can click
 
-By default, everything stays **on your own computer**: course files, login state and the database live locally and never pass through a third-party server.
+By default, synced course files, login state and the local database stay **on your own computer**. Results returned by MCP tools go to the AI app you connect; its privacy policy applies. Optional remote access sends those results through the AI provider's connection, not through a server run by this project's maintainer.
 All Moodle and Ed tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed. The optional school mail and attendance parts can draft mail, change labels or check you in, and only after you confirm each action.
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
@@ -30,6 +30,8 @@ Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work
 The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Your AI app reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
 
 ---
+
+For the original v1.1 security review and the [1.5 feature review checklist](docs/SECURITY-REVIEW-1.5-SCOPE.md), see [security documentation](docs/security.md). The earlier review does not automatically certify features added later.
 
 ## Two parts, one codebase
 
