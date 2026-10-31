@@ -21,7 +21,7 @@ def test_tools_cover_both_sides_and_only_login_sync_are_not_read_only():
     assert {"get_study_todo", "list_moodle_due", "read_file", "search_content", "list_ed_updates", "read_ed_thread", "get_monash_status"} <= set(tools)
     assert not any("submit" in n or n == "moodle_quiz" or "post" in n for n in tools)
     writable = {n for n, t in tools.items() if not t["annotations"]["readOnlyHint"]}
-    assert writable == {"start_monash_login", "sync_monash_data"}
+    assert writable == {"start_monash_login", "sync_monash_data", "start_school_service_setup"}
     assert tools["read_file"]["inputSchema"]["required"] == ["path"]
 
 
@@ -93,7 +93,8 @@ def test_catalog_stays_small():
     """工具清单每次对话都整份发给 Claude，不调用也算额度。加工具/改说明时别让它涨回去。"""
     tools = call("tools/list")["result"]["tools"]
     size = len(json.dumps(tools, ensure_ascii=False))
-    assert len(tools) <= 18 and size <= 9200, (len(tools), size)
+    # 1.5.0 加了 start_school_service_setup（在 AI 里接邮箱和考勤），两样都接好后不再列出
+    assert len(tools) <= 19 and size <= 9200, (len(tools), size)
     assert len(M.INSTRUCTIONS) <= 400
     enums = tools[[t["name"] for t in tools].index("search_ed_threads")]["inputSchema"]["properties"]["only"]["enum"]
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}

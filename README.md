@@ -304,13 +304,15 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
 
 ## Token use
 
-Every MCP tool's name, description and parameters are sent to the model at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.4.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
+Every MCP tool's name, description and parameters are sent to the model at the start of each conversation, so they cost tokens even when unused. Measured with `scripts/measure_tokens.py` on 1.5.0 (estimate: 4 ASCII characters or 1 Chinese character per token):
 
 | Sent once per conversation | Tokens |
 | --- | ---: |
-| 18 tool definitions | 2,962 |
+| 19 tool definitions | 3,107 |
 | Server instructions | 270 |
-| **Total** | **3,232** |
+| **Total** | **3,377** |
+
+1.5.0 added `start_school_service_setup` (145), which lets you connect school mail or attendance by asking your AI app. It is hidden again once both are connected; with both connected the total is 5,132. In 1.4.0 the total was 3,232.
 
 The instructions grew from 187 in 1.2.0 when the rule for assignment questions was added (brief and rubric first, then staff answers on Ed).
 
@@ -394,7 +396,7 @@ Not on PyPI yet (see Unreleased in the [changelog](CHANGELOG.md)). Both parts ar
 - **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline, reads whole threads and the text of attachments (PDF, Office, images). Reading never marks mail as read.
 - **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?" or "what's the code for today's FIT2102 workshop?". Codes are looked up in synced Moodle, Ed and school mail and shown with where they came from, for you to check. Only checked against the Malaysia campus portal.
 
-If you only want to ask about your inbox in Claude or ChatGPT, their built-in Gmail connectors are the easiest way. The Gmail part here is for linking mail with attendance codes, searching mail and attachments offline, and using it in apps without a Gmail connector such as Codex or Cursor. No Google Cloud setup is needed: the package includes a Google app, and Google will show "this app isn't verified" (click Advanced, then continue). Using your own Google app instead is optional. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). In short:
+If you only want to ask about your inbox in Claude or ChatGPT, their built-in Gmail connectors are the easiest way. The Gmail part here is for linking mail with attendance codes, searching mail and attachments offline, and using it in apps without a Gmail connector such as Codex or Cursor. No Google Cloud setup is needed: the package includes a Google app, and Google will show "this app isn't verified" (click Advanced, then continue). Using your own Google app instead is optional. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). The easiest way is to ask your AI app: "connect my school email" or "connect my attendance". It installs what is missing, opens the sign-in window on your computer, and you only sign in; nothing is typed in a terminal and no password goes into the chat. The same steps in a terminal:
 
 ```bash
 uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://github.com/Waldo0926/monash-study-kit"

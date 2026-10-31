@@ -286,13 +286,15 @@ npx skills add Waldo0926/monash-study-kit
 
 ## Token 用量
 
-每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给模型，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.4.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给模型，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.5.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
 
 | 每次对话发一次 | Token |
 | --- | ---: |
-| 18 个工具定义 | 2,962 |
+| 19 个工具定义 | 3,107 |
 | 服务说明 | 270 |
-| **合计** | **3,232** |
+| **合计** | **3,377** |
+
+1.5.0 加了 `start_school_service_setup`（145），让你在 AI 里说一声就能接上学校邮箱或考勤；两样都接好以后它就不再列出。两样都接上时合计 5,132。1.4.0 的合计是 3,232。
 
 服务说明在 1.2.0 是 187，1.3.0 加了作业问题的规则（作业说明和评分细则优先，再看 Ed 上教职员工的回答）后变成 270。
 
@@ -375,7 +377,7 @@ Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成�
 - **学校邮箱（Gmail）。** 在本机保存一份 Monash 邮箱的私有副本。问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话和附件里的文字（PDF、Office、图片）。读邮件不会把它标成已读。
 - **考勤。** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”“今天 FIT2102 workshop 的签到码是多少？”。签到码从已同步的 Moodle、Ed 和学校邮件里找，每个都标出处让你核对。只在马来西亚校区的门户上验证过。
 
-如果只是想在 Claude 或 ChatGPT 里问问邮箱里有什么，用它们自带的 Gmail 连接器最简单。这里的 Gmail 适合想把邮件和考勤签到码连在一起、离线搜邮件和附件，或者在 Codex、Cursor 这些没有自带 Gmail 的软件里用的人。不用自己去 Google Cloud 设置：安装包里自带一个 Google 应用，授权页会提示“Google 尚未验证此应用”，点“高级”再点“继续”就行。也可以用你自己建的应用。完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)。简单来说：
+如果只是想在 Claude 或 ChatGPT 里问问邮箱里有什么，用它们自带的 Gmail 连接器最简单。这里的 Gmail 适合想把邮件和考勤签到码连在一起、离线搜邮件和附件，或者在 Codex、Cursor 这些没有自带 Gmail 的软件里用的人。不用自己去 Google Cloud 设置：安装包里自带一个 Google 应用，授权页会提示“Google 尚未验证此应用”，点“高级”再点“继续”就行。也可以用你自己建的应用。完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)。最简单的是直接在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”：缺的组件会自动安装，然后在你电脑上打开登录窗口，你只要登录就行，不用开终端，密码也不经过聊天。用终端的话是这几步：
 
 ```bash
 uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://github.com/Waldo0926/monash-study-kit"

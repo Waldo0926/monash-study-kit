@@ -105,16 +105,30 @@ def _run(args):
 
 
 def _sync(client, store, args):
-    # 每页和它的游标一起提交：中途出错时前面的页已经存好，再运行一次会从出错那页接着下。
+    # 一次只下一页，下完打印一行进度。每页和它的游标一起提交，中途出错时前面的页已经存好，
+    # 再运行一次会从出错那页接着下。
+    print("正在下载邮件，第一次可能要几分钟（每页最多 100 封）…", file=sys.stderr)
+    result, done = None, 0
     try:
-        result = gmail.sync(client, store, query=args.query, page_limit=args.pages)
+        for page in range(1, args.pages + 1):
+            result = gmail.sync(client, store, query=args.query, page_limit=1)
+            done += result.get("processed", 0)
+            print(f"  第 {page} 页：这次处理了 {done} 封，本地一共 {result['cached_messages']} 封", file=sys.stderr)
+            if result["status"] != "more_pending":
+                break
     except gmail.GmailError:
         print("同步中断了。已经下载的页都保存好了，再运行一次 monash gmail sync 会从断点继续。", file=sys.stderr)
         raise
+    except KeyboardInterrupt:
+        print("\n停下了。已经下载的页都保存好了，再运行一次 monash gmail sync 会接着下。", file=sys.stderr)
+        raise
     if result["status"] == "more_pending":
-        print("还有没下载完的邮件，再运行一次 monash gmail sync（或加大 --pages）。", file=sys.stderr)
+        print("还有没下载完的邮件，再运行一次 monash gmail sync（或加大 --pages）；"
+              "AI 软件开着时后台也会接着下。", file=sys.stderr)
     elif result["status"] == "resync_required":
         print("Gmail 的增量记录过期了，再运行一次 monash gmail sync 会重新下载所选范围。", file=sys.stderr)
+    else:
+        print("下载完了。", file=sys.stderr)
     return result
 
 

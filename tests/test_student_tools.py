@@ -161,7 +161,9 @@ def test_attendance_tools_read_the_saved_records(monkeypatch):
 
 def test_help_lists_mail_and_attendance_only_when_enabled():
     plain = help_menu.render(cli=True, settings={})
-    assert "学校邮箱" not in plain and "考勤" not in plain
+    # 没接上时只提示“可以接”，不列邮件和考勤的具体功能
+    assert "monash gmail todo" not in plain and "monash attendance overview" not in plain
+    assert "■ 学校邮箱" not in plain and "■ 考勤" not in plain
     text = help_menu.render(cli=True, settings={"gmail_enabled": True, "attendance_enabled": True})
     assert "monash gmail todo" in text and "monash attendance sync" in text
     assert "邮箱操作" not in text and "签到提交" not in text
@@ -445,3 +447,19 @@ def test_bundled_google_app_is_a_desktop_client_if_present():
     config = json.loads(cli_gmail.BUNDLED_CLIENT.read_text(encoding="utf-8"))
     assert set(config) == {"installed"}
     assert config["installed"]["client_id"].endswith(".apps.googleusercontent.com")
+
+
+def test_gmail_sync_prints_progress_page_by_page(monkeypatch, capsys, tmp_path):
+    store = gmail.Store(tmp_path / "gmail.db")
+    monkeypatch.setattr(gmail, "Store", lambda: store)
+    pages = iter([("more_pending", 100, 100), ("more_pending", 100, 200), ("ok", 40, 240)])
+    calls = []
+    def sync(client, st, *, query, page_limit):
+        calls.append(page_limit)
+        status, processed, cached = next(pages)
+        return {"status": status, "processed": processed, "cached_messages": cached}
+    monkeypatch.setattr(gmail, "sync", sync)
+    args = cli.build_parser().parse_args(["gmail", "sync"])
+    assert args.fn(args) == 0
+    err = capsys.readouterr().err
+    assert calls == [1, 1, 1] and "第 3 页：这次处理了 240 封，本地一共 240 封" in err and "下载完了" in err

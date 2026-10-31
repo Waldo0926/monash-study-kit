@@ -4,6 +4,8 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## Unreleased
 
+- Connect school mail or attendance by asking your AI app ("connect my school email"): the new `start_school_service_setup` tool installs the missing pieces into the running install, opens the sign-in window on your computer and turns everything on, then syncs and tells the AI app its tool list changed. No terminal needed. The tool adds 145 tokens per conversation and is hidden once both are connected.
+- `monash gmail sync` prints progress page by page.
 - `monash gmail login` works without `--client` when the package includes a Google app (`google_client.json`), so students do not need their own Google Cloud project; `--client` still uses your own. The guide suggests the AI apps' built-in Gmail connectors for people who only want to ask about their inbox.
 - Units without Ed: `monash config use_ed false` (or answering yes when `monash setup` asks after skipping the Ed token) stops sync, the to-do list and `monash doctor` from reporting a missing Ed token, and hides the four Ed tools and the Ed section of the help. Default unchanged; `monash login ed` turns it back on.
 - Optional school Gmail, installed with `[gmail]`. `monash gmail login` uses your own Google Cloud Desktop OAuth client and asks for `gmail.modify` so the actions below work; `--read-only` asks for `gmail.readonly` only. `monash gmail sync` keeps a private local copy; each page is saved with its cursor, so a failed run keeps the pages it finished and the next run picks up from the failed page. `monash gmail todo` lists recent unread inbox mail without promotions and social updates. Search results now carry the date, unread, inbox, starred, important, category and attachment count.

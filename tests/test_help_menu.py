@@ -13,7 +13,7 @@ def call(method, params=None):
     return M.handle({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}})
 
 
-ALL_FEATURES = H.FEATURES + list(H.OPTIONAL.values())
+ALL_FEATURES = H.FEATURES + list(H.OPTIONAL.values()) + [("setup", list(H.SETUP.values()))]
 
 
 @pytest.mark.parametrize("cmd", [c for _, items in ALL_FEATURES for *_, c in items if c])

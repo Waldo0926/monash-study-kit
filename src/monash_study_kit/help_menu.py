@@ -68,6 +68,11 @@ OPTIONAL = {
         ("你确认自己到课了，再用签到码帮你提交", "我刚上完 FIT2102 的 workshop，签到码是 ABCDE", ""),
     ]),
 }
+# 还没接上的可选功能放在“维护”里，告诉用户在 AI 里说一声就能接；接好了就不再显示
+SETUP = {
+    "gmail_enabled": ("接上学校邮箱：自动安装、打开登录窗口，你只要登录", "帮我接上学校邮箱", "monash gmail login"),
+    "attendance_enabled": ("接上考勤：自动安装、打开登录窗口，你只要登录", "帮我接上考勤", "monash attendance login"),
+}
 # 写操作要先开对应的只读功能
 REQUIRES = {"gmail_manage_enabled": "gmail_enabled", "attendance_submit_enabled": "attendance_enabled"}
 
@@ -80,7 +85,9 @@ def features(settings: dict | None = None) -> list:
     extra = [OPTIONAL[key] for key in OPTIONAL
              if settings.get(key) and settings.get(REQUIRES.get(key, key))]
     base = FEATURES if settings.get("use_ed", True) else [f for f in FEATURES if f[0] != "Ed 论坛"]
-    return base[:-1] + extra + base[-1:]
+    title, items = base[-1]
+    setup = [SETUP[key] for key in SETUP if not settings.get(key)]
+    return base[:-1] + extra + [(title, setup + items)]
 
 
 def render(cli: bool = True, settings: dict | None = None) -> str:
