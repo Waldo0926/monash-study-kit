@@ -43,6 +43,8 @@ MAX_BODY = 1 << 20
 # 注册不需要认证（协议就是这么定的），不设上限的话谁都能一直往库里塞客户端
 MAX_CLIENTS = 50
 EXTRA_REDIRECTS: set[str] = set()
+# monash = Moodle + Ed 只读。其余是可选的学生服务，配对时由用户逐项勾选，见 student_tools.REMOTE_CHOICES
+SCOPES = ("monash", "gmail.read", "gmail.manage", "attendance.read", "attendance.submit")
 
 
 def configure(public_url: str, redirects: list[str] | None = None) -> None:
@@ -71,9 +73,11 @@ def configure(public_url: str, redirects: list[str] | None = None) -> None:
     RESOURCE = PUBLIC_URL + "/mcp"
 
 
-def handle_remote(msg: dict) -> dict | None:
+def handle_remote(msg: dict, scopes=frozenset({"monash"}), owner: str = "remote") -> dict | None:
+    """scopes 是这个客户端配对时被授权的功能，owner 是客户端 ID（确认凭据和后台任务按它分开）。"""
     from . import mcp_server as mcp
-    from .student_tools import NAMES as student_tools
+    from . import student_tools
+    granted = student_tools.remote_scopes(scopes, mcp.load_settings())
     params = msg.get("params", {})
     if not isinstance(params, dict):
         return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32602, "message": "params must be an object"}}
@@ -82,9 +86,12 @@ def handle_remote(msg: dict) -> dict | None:
         if not isinstance(name, str) or not isinstance(params.get("arguments", {}), dict):
             return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32602, "message": "Invalid tool arguments"}}
         name = mcp.LEGACY_TOOL_ALIASES.get(name, name)
-        if name in student_tools:
+        if student_tools.remote_allowed(name, granted):
+            return {"jsonrpc": "2.0", "id": msg.get("id"),
+                    "result": student_tools.remote_call(name, params.get("arguments") or {}, granted, owner)}
+        if name in student_tools.NAMES or name in student_tools.REMOTE_NAMES:
             return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {
-                "code": -32602, "message": "Gmail and Attendance require separate remote client authorization; this transport does not grant it yet"}}
+                "code": -32602, "message": "This client is not authorized for this tool; pair again and tick the feature"}}
         spec = mcp.TOOLS.get(name)
         if spec and len(spec) > 3 and not spec[3]:
             return {"jsonrpc": "2.0", "id": msg.get("id"), "error": {
@@ -94,12 +101,13 @@ def handle_remote(msg: dict) -> dict | None:
         if msg.get("method") == "tools/list":
             reply["result"]["tools"] = [
                 {**t, "securitySchemes": [{"type": "oauth2", "scopes": ["monash"]}]}
-                for t in reply["result"]["tools"] if t["annotations"]["readOnlyHint"] and t["name"] not in student_tools]
+                for t in reply["result"]["tools"] if t["annotations"]["readOnlyHint"] and t["name"] not in student_tools.NAMES]
+            reply["result"]["tools"] += student_tools.remote_tool_list(granted)
         elif msg.get("method") == "initialize":
             reply["result"]["instructions"] = (
                 "Monash Moodle + Ed，只读。get_study_todo 看待办；search_content 搜资料；"
                 "get_ed_lessons 看进度或练习题。登录过期请用户在服务器自己的终端重新登录；"
-                "令牌不要发进聊天。不能提交作业、交卷或发帖。")
+                "令牌不要发进聊天。不能提交作业、交卷或发帖。" + student_tools.remote_hint(granted))
     return reply
 
 
@@ -127,9 +135,9 @@ def db(path: Path | None = None) -> sqlite3.Connection:
     con.executescript("""
     CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, name TEXT, redirect_uris TEXT, created INTEGER);
     CREATE TABLE IF NOT EXISTS codes (hash TEXT PRIMARY KEY, client_id TEXT, redirect_uri TEXT,
-        challenge TEXT, expires INTEGER, resource TEXT NOT NULL DEFAULT '');
+        challenge TEXT, expires INTEGER, resource TEXT NOT NULL DEFAULT '', scopes TEXT NOT NULL DEFAULT 'monash');
     CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY, kind TEXT, client_id TEXT, expires INTEGER,
-        created INTEGER, resource TEXT NOT NULL DEFAULT '');
+        created INTEGER, resource TEXT NOT NULL DEFAULT '', scopes TEXT NOT NULL DEFAULT 'monash');
     CREATE TABLE IF NOT EXISTS pairing (id INTEGER PRIMARY KEY CHECK (id = 1), hash TEXT, expires INTEGER,
         tries INTEGER);
     """)
@@ -138,6 +146,9 @@ def db(path: Path | None = None) -> sqlite3.Connection:
         columns = {row["name"] for row in con.execute(f"PRAGMA table_info({table})")}
         if "resource" not in columns:
             con.execute(f"ALTER TABLE {table} ADD COLUMN resource TEXT NOT NULL DEFAULT ''")
+        # 加这一列之前配对的客户端只有 Moodle + Ed，不会因为升级就能读邮箱
+        if "scopes" not in columns:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN scopes TEXT NOT NULL DEFAULT 'monash'")
         con.execute(f"UPDATE {table} SET resource=? WHERE resource=''", (RESOURCE,))
     return con
 
@@ -184,25 +195,32 @@ def prune_clients(con) -> bool:
     return con.execute("SELECT COUNT(*) FROM clients").fetchone()[0] < MAX_CLIENTS
 
 
-def issue_tokens(con, client_id: str, resource: str | None = None) -> dict:
+def issue_tokens(con, client_id: str, resource: str | None = None, scopes: str = "monash") -> dict:
     resource = RESOURCE if resource is None else resource
     if resource != RESOURCE:
         raise ValueError("invalid_target")
     access, refresh = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     now = _now()
-    con.execute("INSERT INTO tokens (hash, kind, client_id, expires, created, resource) "
-                "VALUES (?, 'access', ?, ?, ?, ?)", (_h(access), client_id, now + ACCESS_TTL, now, resource))
-    con.execute("INSERT INTO tokens (hash, kind, client_id, expires, created, resource) "
-                "VALUES (?, 'refresh', ?, ?, ?, ?)", (_h(refresh), client_id, now + REFRESH_TTL, now, resource))
+    con.execute("INSERT INTO tokens (hash, kind, client_id, expires, created, resource, scopes) "
+                "VALUES (?, 'access', ?, ?, ?, ?, ?)", (_h(access), client_id, now + ACCESS_TTL, now, resource, scopes))
+    con.execute("INSERT INTO tokens (hash, kind, client_id, expires, created, resource, scopes) "
+                "VALUES (?, 'refresh', ?, ?, ?, ?, ?)", (_h(refresh), client_id, now + REFRESH_TTL, now, resource, scopes))
     con.execute("DELETE FROM tokens WHERE expires < ?", (now,))
     return {"access_token": access, "token_type": "Bearer", "expires_in": ACCESS_TTL,
-            "refresh_token": refresh, "scope": "monash"}
+            "refresh_token": refresh, "scope": scopes}
+
+
+def access_grant(con, token: str):
+    """有效的访问令牌返回它的 client_id 和 scopes，否则 None。"""
+    row = con.execute("SELECT client_id, scopes, expires, resource FROM tokens WHERE hash=? AND kind='access'",
+                      (_h(token),)).fetchone()
+    if row and row["expires"] >= _now() and hmac.compare_digest(row["resource"], RESOURCE):
+        return row
+    return None
 
 
 def valid_access(con, token: str) -> bool:
-    row = con.execute("SELECT expires, resource FROM tokens WHERE hash=? AND kind='access'",
-                      (_h(token),)).fetchone()
-    return bool(row and row["expires"] >= _now() and hmac.compare_digest(row["resource"], RESOURCE))
+    return access_grant(con, token) is not None
 
 
 def pkce_ok(verifier: str, challenge: str) -> bool:
@@ -239,12 +257,36 @@ main{{max-width:420px;margin:12vh auto;padding:24px 16px}}.card{{background:var(
 h1{{font-size:20px;margin:0 0 8px}}p{{color:var(--muted);margin:0 0 16px}}
 input{{width:100%;box-sizing:border-box;font:600 22px ui-monospace,monospace;letter-spacing:2px;text-align:center;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg)}}
 button{{width:100%;margin-top:14px;padding:12px;border:0;border-radius:10px;background:var(--accent);color:#fff;font:600 16px inherit;cursor:pointer}}
-.err{{color:var(--warn);margin:0 0 12px}}</style></head><body><main><div class="card">
-<h1>授权 {client} 使用 Monash Moodle / Ed 只读工具</h1>
-<p>只读：截止日期、成绩、公告、课件。输入在终端里运行 <code>monash remote pair</code> 得到的配对码。</p>
-{error}<form method="post" action="/oauth/authorize">{hidden}
+.err{{color:var(--warn);margin:0 0 12px}}
+fieldset{{border:1px solid var(--line);border-radius:10px;margin:0 0 16px;padding:10px 12px}}
+legend{{color:var(--muted);font-size:14px;padding:0 4px}}label{{display:flex;gap:8px;margin:6px 0;font-size:15px}}
+label input{{width:auto;margin-top:4px}}</style></head><body><main><div class="card">
+<h1>授权 {client} 使用 Monash Study Kit</h1>
+<p>Moodle 和 Ed 只读：截止日期、成绩、公告、课件。输入在终端里运行 <code>monash remote pair</code> 得到的配对码。</p>
+{error}<form method="post" action="/oauth/authorize">{hidden}{choices}
 <input name="pairing_code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX" required autofocus>
 <button type="submit">授权</button></form></div></main></body></html>"""
+
+
+def _offered() -> list[str]:
+    """配对页上可以勾的功能：只列服务器主人在设置里开了的。"""
+    from . import mcp_server, student_tools
+    enabled = student_tools.scopes(mcp_server.load_settings())
+    return [s for s in student_tools.REMOTE_CHOICES if s in enabled]
+
+
+def _choices(form: dict) -> str:
+    from .student_tools import REMOTE_CHOICES
+    offered = _offered()
+    if not offered:
+        return ""
+    # 第一次打开时只读的默认勾上、写操作默认不勾；配对码输错重来时保留用户刚才的选择
+    first = "pairing_code" not in form
+    boxes = "".join(
+        f'<label><input type="checkbox" name="grant_{s}" value="1"'
+        f'{" checked" if (form.get("grant_" + s) if not first else s.endswith(".read")) else ""}>'
+        f'{html.escape(REMOTE_CHOICES[s])}</label>' for s in offered)
+    return f'<fieldset><legend>这个软件还可以用（不勾就不给）</legend>{boxes}</fieldset>'
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -316,7 +358,7 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in urllib.parse.parse_qs(query).items()}
         if path in ("/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"):
             return self._json(200, {"resource": RESOURCE, "authorization_servers": [PUBLIC_URL],
-                                    "bearer_methods_supported": ["header"], "scopes_supported": ["monash"]})
+                                    "bearer_methods_supported": ["header"], "scopes_supported": list(SCOPES)})
         if path in ("/.well-known/oauth-authorization-server", "/.well-known/oauth-authorization-server/mcp"):
             return self._json(200, {
                 "issuer": PUBLIC_URL, "authorization_response_iss_parameter_supported": True,
@@ -324,7 +366,7 @@ class Handler(BaseHTTPRequestHandler):
                 "token_endpoint": PUBLIC_URL + "/oauth/token", "registration_endpoint": PUBLIC_URL + "/oauth/register",
                 "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"],
                 "code_challenge_methods_supported": ["S256"], "token_endpoint_auth_methods_supported": ["none"],
-                "scopes_supported": ["monash"]})
+                "scopes_supported": list(SCOPES)})
         if path == "/oauth/authorize":
             return self._authorize_page(q)
         if path == "/mcp":
@@ -388,8 +430,8 @@ class Handler(BaseHTTPRequestHandler):
             return "缺少 PKCE（S256）。", None
         if "resource" in q and q["resource"] != RESOURCE:
             return "OAuth resource 与 MCP 地址不一致。", None
-        if set(q.get("scope", "monash").split()) != {"monash"}:
-            return "只支持 moodle scope。", None
+        if not set(q.get("scope", "monash").split()) <= set(SCOPES):
+            return "不支持请求的 scope。", None
         return None, client
 
     def _authorize_page(self, q: dict, error: str = ""):
@@ -403,7 +445,7 @@ class Handler(BaseHTTPRequestHandler):
             open_ = pairing_open(self.con)
         if not error and not open_:
             error = "现在没有打开的配对窗口。先在终端运行 pair，再刷新本页。"
-        page = AUTH_PAGE.format(client=html.escape(client["name"]), hidden=hidden,
+        page = AUTH_PAGE.format(client=html.escape(client["name"]), hidden=hidden, choices=_choices(q),
                                 error=f'<p class="err">{html.escape(error)}</p>' if error else "")
         self._send(200 if not error else 403, page.encode(), "text/html",
                    {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; "
@@ -420,11 +462,12 @@ class Handler(BaseHTTPRequestHandler):
         if not ok:
             return self._authorize_page(f, "配对码不对，或者配对窗口已过期/已用掉。重新运行 pair 拿新码。")
         code = secrets.token_urlsafe(32)
+        scopes = " ".join(["monash"] + [s for s in _offered() if f.get("grant_" + s)])
         with self.lock:
-            self.con.execute("INSERT INTO codes (hash, client_id, redirect_uri, challenge, expires, resource) "
-                             "VALUES (?, ?, ?, ?, ?, ?)",
+            self.con.execute("INSERT INTO codes (hash, client_id, redirect_uri, challenge, expires, resource, scopes) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
                              (_h(code), client["id"], f["redirect_uri"], f["code_challenge"],
-                              _now() + CODE_TTL, f.get("resource", RESOURCE)))
+                              _now() + CODE_TTL, f.get("resource", RESOURCE), scopes))
         params = {"code": code, "iss": PUBLIC_URL,
                   **({"state": f["state"]} if f.get("state") else {})}
         sep = "&" if "?" in f["redirect_uri"] else "?"
@@ -447,7 +490,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._oauth_error(400, "invalid_grant", "PKCE 校验失败")
                 if f.get("resource", row["resource"]) != row["resource"]:
                     return self._oauth_error(400, "invalid_target", "resource 与授权时不一致")
-                return self._json(200, issue_tokens(self.con, row["client_id"], row["resource"]))
+                return self._json(200, issue_tokens(self.con, row["client_id"], row["resource"], row["scopes"]))
             if grant == "refresh_token":
                 h = _h(f.get("refresh_token", ""))
                 row = self.con.execute("SELECT * FROM tokens WHERE hash=? AND kind='refresh'", (h,)).fetchone()
@@ -458,7 +501,7 @@ class Handler(BaseHTTPRequestHandler):
                 if f.get("resource", row["resource"]) != row["resource"]:
                     return self._oauth_error(400, "invalid_target", "resource 与刷新令牌不一致")
                 self.con.execute("DELETE FROM tokens WHERE hash=?", (h,))  # 用一次就换新的
-                return self._json(200, issue_tokens(self.con, row["client_id"], row["resource"]))
+                return self._json(200, issue_tokens(self.con, row["client_id"], row["resource"], row["scopes"]))
         self._oauth_error(400, "unsupported_grant_type")
 
     # ---- MCP（Streamable HTTP，无状态，只回 JSON）
@@ -466,8 +509,8 @@ class Handler(BaseHTTPRequestHandler):
         auth = self.headers.get("Authorization", "")
         token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
         with self.lock:
-            ok = bool(token) and valid_access(self.con, token)
-        if not ok:
+            grant = access_grant(self.con, token) if token else None
+        if grant is None:
             return self._json(401, {"error": "invalid_token"}, {"WWW-Authenticate":
                               f'Bearer resource_metadata="{PUBLIC_URL}/.well-known/oauth-protected-resource"'})
         try:
@@ -477,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             return self._json(400, {"jsonrpc": "2.0", "id": None,
                                     "error": {"code": -32600, "message": "Expected one JSON-RPC object"}})
-        reply = handle_remote(payload)
+        reply = handle_remote(payload, frozenset(grant["scopes"].split()), grant["client_id"])
         if reply is None:
             return self._send(202, b"", "")
         self._json(200, reply)
@@ -515,8 +558,9 @@ def command(args) -> int:
         elif args.action == "pair":
             print(f"Pairing code: {open_pairing(con)}\nValid for 10 minutes, single use.")
         elif args.action == "clients":
-            for row in con.execute("SELECT id, name FROM clients ORDER BY created"):
-                print(f"{row['id']}  {row['name']}")
+            for row in con.execute("SELECT id, name, (SELECT scopes FROM tokens WHERE client_id=clients.id "
+                                   "ORDER BY created DESC LIMIT 1) AS scopes FROM clients ORDER BY created"):
+                print(f"{row['id']}  {row['name']}  {row['scopes'] or '（还没拿到令牌）'}")
         elif args.action == "revoke":
             if args.all:
                 con.executescript("DELETE FROM tokens; DELETE FROM codes; DELETE FROM clients; UPDATE pairing SET hash=NULL;")

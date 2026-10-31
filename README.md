@@ -404,9 +404,11 @@ monash attendance login
 monash attendance sync
 ```
 
-Restart your AI app after logging in. The AI reads the local copy, so run `monash gmail sync` or `monash attendance sync` when you want fresh data; there is no background sync for these yet.
+Restart your AI app after logging in. While it is open, mail syncs in the background every 30 minutes (`monash config gmail_sync_minutes`, 0 turns it off); `monash gmail sync` updates it right away. Attendance is read when you run `monash attendance sync`.
 
-Drafting, sending a draft, changing labels and submitting attendance stay off in the AI app until you turn them on with `monash config gmail_manage_enabled true` (after `monash gmail login --manage`) or `monash config attendance_submit_enabled true`. Even then the AI has to show you the full preview first and only runs it after you confirm that exact action. Mail is never permanently deleted. The remote MCP (`monash remote`) does not offer any mail or attendance tools.
+Drafting, sending a draft, changing labels and submitting attendance stay off in the AI app until you turn them on with `monash config gmail_manage_enabled true` (after `monash gmail login --manage`) or `monash config attendance_submit_enabled true`. Even then the AI has to show you the full preview first and only runs it after you confirm that exact action. Mail is never permanently deleted.
+
+With `monash remote serve`, each app you pair chooses on the pairing page which of these features it may use. Only features turned on on the server are offered, read-only ones start ticked and the write ones start unticked. So Claude on your phone can have attendance only and ChatGPT mail only, or neither. Apps paired earlier keep Moodle and Ed only until you pair them again, and `monash remote clients` shows what each app has.
 
 Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
 

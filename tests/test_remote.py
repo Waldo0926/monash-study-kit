@@ -416,3 +416,89 @@ def test_extra_callback_is_opt_in_and_exact(monkeypatch):
     for bad in ("http://example.org/callback", "https://example.org/*", "https://u:p@example.org/callback"):
         with pytest.raises(ValueError):
             R.configure("https://study.example.org", [bad])
+
+
+# ---------------------------------------------------------------- 按客户端勾选邮件和考勤
+
+def _student_settings(monkeypatch, **flags):
+    from monash_study_kit import mcp_server
+    monkeypatch.setattr(mcp_server, "load_settings", lambda: dict(flags))
+
+
+def _authorize(base, con, extra_form):
+    _, _, reg = req(base + "/oauth/register", "POST", {"redirect_uris": [CB], "client_name": "Claude"})
+    cid = reg["client_id"]
+    v, c = pkce()
+    params = {"client_id": cid, "redirect_uri": CB, "response_type": "code",
+              "code_challenge": c, "code_challenge_method": "S256"}
+    _, _, page = req(base + "/oauth/authorize?" + urllib.parse.urlencode(params))
+    st, h, _ = req(base + "/oauth/authorize", "POST",
+                   form={**params, **extra_form, "pairing_code": R.open_pairing(con)})
+    assert st == 302
+    code = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(h["Location"]).query))["code"]
+    _, _, tok = req(base + "/oauth/token", "POST", form={"grant_type": "authorization_code", "code": code,
+                                                         "redirect_uri": CB, "client_id": cid, "code_verifier": v})
+    return page, tok
+
+
+def _tools(base, tok):
+    _, _, reply = req(base + "/mcp", "POST", {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+                      {"Authorization": "Bearer " + tok["access_token"]})
+    return {t["name"] for t in reply["result"]["tools"]}
+
+
+def test_pairing_page_offers_only_features_the_server_turned_on(server, monkeypatch):
+    base, con = server
+    _student_settings(monkeypatch)
+    page, tok = _authorize(base, con, {})
+    assert "grant_" not in page and tok["scope"] == "monash"
+    _student_settings(monkeypatch, gmail_enabled=True, gmail_manage_enabled=True)
+    page, _ = _authorize(base, con, {})
+    assert 'name="grant_gmail.read" value="1" checked' in page
+    assert 'name="grant_gmail.manage" value="1">' in page        # 写操作默认不勾
+    assert "grant_attendance" not in page
+
+
+def test_client_chooses_features_and_refresh_keeps_the_choice(server, monkeypatch):
+    base, con = server
+    _student_settings(monkeypatch, gmail_enabled=True, attendance_enabled=True)
+    # 表单里塞服务器没开的功能也没用
+    _, tok = _authorize(base, con, {"grant_gmail.read": "1", "grant_attendance.submit": "1"})
+    assert tok["scope"] == "monash gmail.read"
+    names = _tools(base, tok)
+    assert {"gmail_search", "gmail_inbox_todo", "list_moodle_due"} <= names and "attendance_status" not in names
+    _, _, new = req(base + "/oauth/token", "POST", form={"grant_type": "refresh_token",
+                                                           "refresh_token": tok["refresh_token"]})
+    assert new["scope"] == "monash gmail.read" and "gmail_search" in _tools(base, new)
+    # 另一个软件只勾考勤
+    _, tok = _authorize(base, con, {"grant_attendance.read": "1"})
+    names = _tools(base, tok)
+    assert "attendance_overview" in names and "gmail_search" not in names
+
+
+def test_clients_listing_shows_each_grant(server, monkeypatch, capsys, tmp_path):
+    base, con = server
+    _student_settings(monkeypatch, gmail_enabled=True)
+    _authorize(base, con, {"grant_gmail.read": "1"})
+    real_db = R.db
+    monkeypatch.setattr(R, "db", lambda path=None: real_db(tmp_path / "r.db"))
+    assert R.command(SimpleNamespace(action="clients")) == 0
+    assert "Claude  monash gmail.read" in capsys.readouterr().out
+
+
+def test_tokens_from_before_the_scopes_column_stay_moodle_and_ed_only(tmp_path):
+    path = tmp_path / "legacy.db"
+    con = R.sqlite3.connect(path)
+    con.executescript("""
+        CREATE TABLE codes (hash TEXT PRIMARY KEY, client_id TEXT, redirect_uri TEXT,
+            challenge TEXT, expires INTEGER, resource TEXT NOT NULL DEFAULT '');
+        CREATE TABLE tokens (hash TEXT PRIMARY KEY, kind TEXT, client_id TEXT,
+            expires INTEGER, created INTEGER, resource TEXT NOT NULL DEFAULT '');
+    """)
+    con.execute("INSERT INTO tokens VALUES (?, 'access', 'old-client', ?, ?, '')",
+                (R._h("old-access"), R._now() + 1800, R._now()))
+    con.commit()
+    con.close()
+    new_con = R.db(path)
+    assert R.access_grant(new_con, "old-access")["scopes"] == "monash"
+    new_con.close()

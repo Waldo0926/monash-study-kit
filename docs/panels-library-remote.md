@@ -96,14 +96,17 @@ author. Use a separate OS account and data directory for each owner.
 
 Discovery metadata lives at `/.well-known/oauth-protected-resource` and
 `/.well-known/oauth-authorization-server`. OAuth routes are `/oauth/register`,
-`/oauth/authorize` and `/oauth/token`. The requested scope is `monash`. Tokens are
+`/oauth/authorize` and `/oauth/token`. The base scope is `monash` (Moodle and Ed).
+Optional Gmail and Attendance scopes are chosen per app on the pairing page; see
+[gmail-foundation.md](gmail-foundation.md#what-the-local-and-remote-mcp-expose). Tokens are
 bound to the MCP resource URL; access tokens last one hour and refresh tokens last
 30 days and rotate on use. Only hashes are kept in the private
 `secrets/remote-mcp.db` (0700 directory, 0600 file on Unix). Changing the public
 origin changes the audience and requires fresh authorization. Windows users must
 also restrict the account's data-home ACLs.
 
-The remote catalog contains 16 read-only query tools. It omits local browser login
+The base remote catalog contains 16 read-only query tools. Mail and attendance tools are
+added only for apps that were granted them. It omits local browser login
 and manual sync triggers and rejects their legacy aliases too. It shares study
 panel resources, tool text and prompts with stdio. There is no credential-setting,
 assignment submission, quiz submission, posting or public file-download route.

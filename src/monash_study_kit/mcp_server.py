@@ -6,9 +6,10 @@
 和 sync_monash_data（在后台同步）。可选的 Gmail 和考勤工具在 student_tools 里，默认不注册；
 其中改邮箱、提交签到的写操作要在设置里单独打开，每次也要用户看过预览、确认后才执行。
 
-服务器开着的时候（也就是 Claude 开着的时候）在后台做两件事：
+服务器开着的时候（也就是 Claude 开着的时候）在后台做这几件事：
   * 每 20 分钟给 Moodle 会话续一次期，因为 Moodle 空闲 4 小时就把你踢出去；
-  * 每小时同步一次 Ed 和 Moodle，再更新全文索引。
+  * 每小时同步一次 Ed 和 Moodle，再更新全文索引；
+  * 开了 Gmail 的话，每 30 分钟同步一次邮件（gmail_sync_minutes）。
 后台的输出写进 mcp.log，绝不能写 stdout（stdout 是给 Claude 的协议通道）。
 
 MCP 本身不消耗额度，只有工具返回的内容进上下文才算，所以每个工具的返回都有长度上限。
@@ -151,7 +152,7 @@ def _student_hint(tools: dict) -> str:
     if "get_gmail_inbox_todo" in tools:
         out += ("本服务连着用户的 Monash 学校邮箱。用户问“我的邮箱/邮件/有什么要处理的/学校发的邮件”时，"
                 "优先用本服务的 get_gmail_inbox_todo 和 search_gmail_cache，不要改用其他通用 Gmail 连接器，"
-                "除非用户明确说的是别的邮箱。邮件来自本地镜像，要最新的请用户在终端运行 monash gmail sync。")
+                "除非用户明确说的是别的邮箱。邮件来自本地镜像，后台定时同步，as_of/last_success 是上次同步时间。")
     if "attendance_overview" in tools:
         out += ("问签到/考勤用 attendance_overview；数据来自用户上次运行的 monash attendance sync，"
                 "登录过期请用户在终端运行 monash attendance login。")
@@ -190,6 +191,7 @@ def _background_tick(every_sync: float, every_touch: float, last_touch: float) -
         update_check.refresh()          # 自己控制频率：一天最多真查一次
     if jobs.hours_since_sync() * 3600 >= every_sync:
         start_sync()
+    start_mail_sync()
     if time.time() - last_touch >= every_touch:
         last_touch = time.time()
         try:
@@ -199,6 +201,47 @@ def _background_tick(every_sync: float, every_touch: float, last_touch: float) -
         except Exception as e:  # noqa: BLE001
             log(f"续期失败：{e}")
     return last_touch
+
+
+_mail = {"thread": None, "next": 0.0, "auth_logged": False}
+
+
+def start_mail_sync() -> bool:
+    """开了 Gmail 就定时同步邮件（gmail_sync_minutes，0=不同步）。另开线程，不耽误 Moodle 续期。"""
+    settings = load_settings()
+    minutes = float(settings.get("gmail_sync_minutes") or 0)
+    if not settings.get("gmail_enabled") or minutes <= 0 or time.time() < _mail["next"]:
+        return False
+    if _mail["thread"] and _mail["thread"].is_alive():
+        return False
+    _mail["next"] = time.time() + minutes * 60
+    _mail["thread"] = threading.Thread(target=_sync_mail, name="gmail-sync", daemon=True)
+    _mail["thread"].start()
+    return True
+
+
+def _sync_mail():
+    from . import gmail
+    store = gmail.Store()
+    try:
+        client = gmail.Client()
+        # 沿用上次的范围：换了 query 会被当成新的初次下载
+        result = gmail.sync(client, store, query=store.state("query") or "newer_than:90d", page_limit=3)
+        if result["status"] == "more_pending":
+            _mail["next"] = 0.0     # 初次下载还没完，下一轮（约一分钟后）接着下
+        elif result["status"] == "ok":
+            gmail.sync_attachments(client, store, limit=5)   # 附件正文进全文搜索，每轮几封
+        _mail["auth_logged"] = False
+        log(f"邮件同步：{result['status']}，处理 {result.get('processed', 0)} 条")
+    except gmail.GmailAuthError as e:
+        # 授权失效时每轮都会失败，日志只记第一次，等用户重新 monash gmail login
+        if not _mail["auth_logged"]:
+            log(f"邮件同步要重新授权：{e}")
+            _mail["auth_logged"] = True
+    except Exception as e:  # noqa: BLE001
+        log(f"邮件同步失败（已下载的页都保存了，下一轮接着下）：{e}")
+    finally:
+        store.close()
 
 
 # ---------------------------------------------------------------- 管理工具

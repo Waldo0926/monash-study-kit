@@ -385,9 +385,11 @@ monash attendance login
 monash attendance sync
 ```
 
-登录完重启 AI 软件。AI 读的是本地副本，想要最新的就运行 `monash gmail sync` 或 `monash attendance sync`，这两部分暂时没有后台自动同步。
+登录完重启 AI 软件。AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`。考勤在你运行 `monash attendance sync` 时读取。
 
-起草、发送草稿、改标签和考勤签到提交，默认在 AI 软件里是关着的，要你自己打开：`monash config gmail_manage_enabled true`（先用 `monash gmail login --manage` 授权）或 `monash config attendance_submit_enabled true`。打开以后 AI 也必须先把完整预览给你看，你确认了这一项才会执行。不会彻底删除邮件。远程 MCP（`monash remote`）不提供任何邮件和考勤工具。
+起草、发送草稿、改标签和考勤签到提交，默认在 AI 软件里是关着的，要你自己打开：`monash config gmail_manage_enabled true`（先用 `monash gmail login --manage` 授权）或 `monash config attendance_submit_enabled true`。打开以后 AI 也必须先把完整预览给你看，你确认了这一项才会执行。不会彻底删除邮件。
+
+用 `monash remote serve` 远程接入时，每个软件在配对页上自己勾选能用哪些功能：只列服务器上已经开了的，只读的默认勾上，写操作默认不勾。比如手机上的 Claude 只开考勤，ChatGPT 只开邮箱，或者都不开。之前已经配对的软件还是只有 Moodle 和 Ed，重新配对才会多出来；`monash remote clients` 能看到每个软件拿到了什么。
 
 还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户。
 

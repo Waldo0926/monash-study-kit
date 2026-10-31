@@ -66,7 +66,8 @@ def test_instructions_point_mail_questions_at_this_server(monkeypatch):
     assert "完整预览" in text and "不能自己替用户确认" in text
 
 
-def test_remote_rejects_every_student_tool_even_when_enabled_locally(monkeypatch):
+def test_old_remote_grants_get_no_student_tools_even_when_enabled_locally(monkeypatch):
+    # 只有 monash 权限的客户端（包括升级前配对的）看不到也调不了邮件和考勤
     use(monkeypatch, gmail_enabled=True, gmail_manage_enabled=True,
         attendance_enabled=True, attendance_submit_enabled=True)
     listed = remote.handle_remote({"id": 1, "method": "tools/list"})["result"]["tools"]
@@ -191,3 +192,125 @@ def test_cli_attendance_login_status_and_expired_session(monkeypatch, capsys):
     args = cli.build_parser().parse_args(["attendance", "sync", "--days", "3"])
     assert args.fn(args) == cli.EXIT_AUTH
     assert "monash attendance login" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- 邮件后台同步
+
+class FakeStore:
+    def __init__(self, query=None):
+        self.query, self.closed = query, False
+
+    def state(self, key, default=None):
+        return self.query if key == "query" else default
+
+    def close(self):
+        self.closed = True
+
+
+def test_background_mail_sync_only_when_enabled(monkeypatch):
+    started = []
+    monkeypatch.setattr(M, "_sync_mail", lambda: started.append(1))
+    monkeypatch.setitem(M._mail, "next", 0.0)
+    monkeypatch.setitem(M._mail, "thread", None)
+    use(monkeypatch, gmail_enabled=False, gmail_sync_minutes=30)
+    assert M.start_mail_sync() is False
+    use(monkeypatch, gmail_enabled=True, gmail_sync_minutes=0)
+    assert M.start_mail_sync() is False
+    use(monkeypatch, gmail_enabled=True, gmail_sync_minutes=30)
+    assert M.start_mail_sync() is True
+    M._mail["thread"].join(5)
+    assert started == [1] and M.start_mail_sync() is False        # 30 分钟内不再跑
+
+
+def test_background_mail_sync_keeps_query_resumes_and_indexes_attachments(monkeypatch):
+    calls = []
+    store = FakeStore("newer_than:30d")
+    monkeypatch.setattr(gmail, "Store", lambda: store)
+    monkeypatch.setattr(gmail, "Client", lambda: "client")
+    monkeypatch.setattr(gmail, "sync_attachments", lambda c, st, limit: calls.append(("attachments", limit)))
+    status = {"value": "more_pending"}
+    def sync(client, st, *, query, page_limit):
+        calls.append(("sync", query, page_limit))
+        return {"status": status["value"], "processed": 3}
+    monkeypatch.setattr(gmail, "sync", sync)
+    monkeypatch.setitem(M._mail, "next", 999.0)
+    M._sync_mail()
+    assert calls == [("sync", "newer_than:30d", 3)] and M._mail["next"] == 0.0 and store.closed
+    status["value"] = "ok"
+    M._sync_mail()
+    assert calls[-1] == ("attachments", 5)
+
+
+def test_background_mail_sync_logs_expired_login_once(monkeypatch):
+    logged = []
+    monkeypatch.setattr(M, "log", logged.append)
+    monkeypatch.setattr(gmail, "Store", lambda: FakeStore())
+    monkeypatch.setattr(gmail, "Client", lambda: None)
+    def expired(*a, **kw):
+        raise gmail.GmailAuthError("expired")
+    monkeypatch.setattr(gmail, "sync", expired)
+    monkeypatch.setitem(M._mail, "auth_logged", False)
+    M._sync_mail()
+    M._sync_mail()
+    assert len(logged) == 1 and "重新授权" in logged[0]
+
+
+# ---------------------------------------------------------------- 远程按客户端授权
+
+def remote_call(name, arguments, scopes, owner="client-a", id_=1):
+    return remote.handle_remote({"id": id_, "method": "tools/call", "params": {"name": name, "arguments": arguments}},
+                                frozenset(scopes), owner)
+
+
+def remote_names(scopes):
+    return {t["name"] for t in remote.handle_remote({"id": 1, "method": "tools/list"}, frozenset(scopes), "c")
+            ["result"]["tools"]}
+
+
+def test_remote_client_gets_only_what_it_was_granted_and_the_server_allows(monkeypatch):
+    use(monkeypatch, gmail_enabled=True, gmail_manage_enabled=True, attendance_enabled=True)
+    names = remote_names({"monash", "gmail.read"})
+    assert {"gmail_search", "gmail_inbox_todo", "student_job_status", "list_moodle_due"} <= names
+    assert not names & {"gmail_prepare_action", "execute_student_action", "attendance_status"}
+    assert not names & set(gmail_tools.TOOLS)          # 本地专用的名字不出现在远程
+    assert "attendance_status" in remote_names({"monash", "attendance.read"})
+    # 客户端授权了，但服务器没开签到提交：拿不到
+    assert "attendance_prepare_submit" not in remote_names({"monash", "attendance.read", "attendance.submit"})
+    # 服务器关掉 Gmail 以后，原来授权过的客户端也拿不到
+    use(monkeypatch)
+    assert not remote_names({"monash", "gmail.read", "gmail.manage"}) & remote_tools()
+    reply = remote_call("gmail_inbox_todo", {}, {"monash", "gmail.read"})
+    assert reply["error"]["code"] == -32602
+
+
+def remote_tools():
+    return set(student_tools.REMOTE_NAMES) | student_tools.NAMES
+
+
+def test_remote_inbox_todo_and_instructions(monkeypatch, tmp_path):
+    use(monkeypatch, gmail_enabled=True)
+    store = gmail.Store(tmp_path / "gmail.db")
+    monkeypatch.setattr(gmail, "Store", lambda: store)
+    monkeypatch.setattr(gmail, "Client", Mailbox)
+    result = remote_call("gmail_inbox_todo", {"days": 3}, {"monash", "gmail.read"})["result"]
+    assert json.loads(result["content"][0]["text"])["days"] == 3
+    bad = remote_call("gmail_inbox_todo", {"days": "3"}, {"monash", "gmail.read"})["result"]
+    assert bad["isError"] and "Invalid argument type" in bad["content"][0]["text"]
+    init = remote.handle_remote({"id": 1, "method": "initialize", "params": {}}, frozenset({"monash", "gmail.read"}), "c")
+    assert "学校邮箱" in init["result"]["instructions"] and "gmail_inbox_todo" in init["result"]["instructions"]
+
+
+def test_remote_write_needs_confirmation_and_tickets_belong_to_one_client(monkeypatch):
+    Mailbox.writes = []
+    monkeypatch.setattr(gmail, "Client", Mailbox)
+    use(monkeypatch, gmail_enabled=True, gmail_manage_enabled=True)
+    scopes = {"monash", "gmail.manage"}
+    reply = remote_call("gmail_prepare_action", {"operation": "labels", "message_id": "m1", "remove": "INBOX"}, scopes)
+    review = json.loads(reply["result"]["content"][0]["text"])
+    ticket = {"action_id": review["action_id"], "review_digest": review["review_digest"], "user_confirmed": True}
+    other = remote_call("execute_student_action", ticket, scopes, owner="client-b")["result"]
+    assert other["isError"] and Mailbox.writes == []
+    read_only = remote_call("execute_student_action", ticket, {"monash", "gmail.read"})
+    assert "error" in read_only and Mailbox.writes == []
+    done = json.loads(remote_call("execute_student_action", ticket, scopes)["result"]["content"][0]["text"])
+    assert done["state"] == "done" and Mailbox.writes == [("m1", [], ["INBOX"])]

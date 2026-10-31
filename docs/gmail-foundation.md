@@ -55,8 +55,13 @@ outside that range. Changing the query starts a new backfill but keeps what is a
 cached; it is not a privacy filter. One cache belongs to one mailbox. Syncing a different
 account into it is refused; use a separate `MONASH_KIT_HOME` for a second mailbox.
 
-There is no background Gmail sync in the public local MCP yet. The AI app reads the local
-copy, and `monash gmail sync` brings it up to date.
+While the MCP server runs (the local one inside your AI app, or `monash remote serve`), a
+background thread syncs mail every `gmail_sync_minutes` (30 by default, 0 turns it off). It
+keeps the query from the last run, so a custom `--query` is not reset. Each round handles
+at most three pages; while the first download is still going it comes back about a minute
+later instead of waiting the full interval. After a complete round it also indexes the text
+of up to five attachments. An expired login is written to `mcp.log` once, not every round.
+`monash gmail sync` still works for an immediate update.
 
 ## Search results and mail to-do
 
@@ -118,9 +123,23 @@ for questions about "my email" instead of a general Gmail connector the user may
 The scopes passed to `student_services` come from these settings, so turning a switch off
 also blocks executing a ticket prepared before.
 
-The remote transport (`monash remote serve`) lists none of these tools and rejects direct
-calls to them, whatever the local settings are. Existing remote grants must not silently
-gain mailbox or attendance access. Per-client remote grants are future work.
+The remote transport (`monash remote serve`) never lists these local tool names. It uses the
+catalog from `student_services` instead (`gmail_search`, `gmail_thread`, `gmail_sync`,
+`gmail_read_attachment`, `attendance_overview`, `attendance_find_codes` and so on, plus
+`gmail_inbox_todo` and `student_job_status`), and only for apps that were granted them:
+
+- The pairing page shows one checkbox per feature the server owner has turned on with the
+  settings above. Read-only features start ticked, the two write features start unticked.
+  Nothing the server has turned off can be granted, even by editing the form.
+- The choice is stored with the authorization code and the tokens and survives refresh.
+  `monash remote clients` prints each app's scopes.
+- At every call the app's scopes are intersected with the current server settings, so
+  turning a setting off on the server takes it away from every app at once.
+- Apps paired before this change, or paired with nothing ticked, keep `monash` only.
+  To widen an app's access, pair it again; to narrow it, `monash remote revoke --client ID`
+  and pair again.
+- Review tickets and background jobs are stored under the app's client ID, so one app
+  cannot execute or read another app's ticket or job.
 
 ## Public project direction
 

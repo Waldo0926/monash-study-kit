@@ -53,7 +53,7 @@ monash gmail todo          # 邮件待办：最近几天收件箱里没读的学
 monash gmail search 交换    # 离线全文搜索
 ```
 
-AI 软件里查的是本地这份副本。现在还没有后台自动同步邮件，想看最新的就先运行 `monash gmail sync`。同步中途出错不用担心，已经下好的页都保存了，再运行一次会接着下。
+之后 AI 软件开着的时候，后台每 30 分钟同步一次邮件（`monash config gmail_sync_minutes 60` 改间隔，`0` 关掉）。第一次下载没下完时大约一分钟后接着下。想马上看到最新的，就手动运行 `monash gmail sync`。同步中途出错不用担心，已经下好的页都保存了，再运行一次会接着下。
 
 ## 三、考勤
 
@@ -81,8 +81,20 @@ monash attendance status
 几点说明：
 
 - 同时开着 Claude 官方的 Gmail 连接器时，Claude 有时会用错。monash 会告诉 Claude 查学校邮件优先用它；还是用错的话，开个新对话，问的时候说“学校邮箱”，或者在这个对话里关掉官方 Gmail 连接器。
-- 远程 MCP（`monash remote serve`）**不提供**邮件和考勤工具，网页版或手机上的 Claude、ChatGPT 看不到它们。按客户端单独授权是以后的工作。
+- 想在网页版或手机上的 Claude、ChatGPT 里也用，见下一节“远程使用”。
 - `monash help` 和 AI 里的“功能大全”只在开启后才列出邮件和考勤功能。
+
+### 远程使用（可选）
+
+`monash remote serve` 的用法见 README。服务器上按第二、三步登录好之后：
+
+1. 在服务器上运行 `monash remote pair` 拿一次性配对码。
+2. 在 Claude 或 ChatGPT 里添加连接器，授权页上会多出几个勾选框，只列服务器上已经开了的功能：
+   - 学校邮箱（只读）、考勤（只读）默认勾上；
+   - 邮箱操作、签到提交默认不勾，要用就自己勾（服务器上也要先按第五步打开）。
+   不想让这个软件碰邮箱，就把邮箱那项去掉，Moodle 和 Ed 照样能用。
+3. 每个软件分开授权。比如手机上的 Claude 只勾考勤，ChatGPT 只勾邮箱，互不影响。`monash remote clients` 能看到每个软件拿到了哪些功能。
+4. 之前已经配对过的软件不会自动多出邮箱和考勤。要加，就在软件里断开再用新配对码连一次；要收回，用 `monash remote revoke --client 客户端ID` 后重新配对。服务器上把某个功能的设置关掉，所有软件马上都用不了它。
 
 ## 五、可选：让 AI 帮你操作邮箱和签到
 
@@ -94,7 +106,7 @@ monash config gmail_manage_enabled true
 monash config attendance_submit_enabled true
 ```
 
-改完重启 AI 软件。不想要了就把对应设置改回 `false`。
+改完重启 AI 软件。不想要了就把对应设置改回 `false`。远程使用时，这两项还要在配对页上给具体的软件勾上才有。
 
 ## 六、常见问题
 
@@ -104,7 +116,8 @@ monash config attendance_submit_enabled true
 | `invalid_client` / 刷新令牌失败 | 客户端密钥被删除或换过，或者应用还停在“测试”状态（7 天过期）。按第一步检查，再用新的客户端 JSON 重新运行第二步的登录。 |
 | `This cache belongs to another mailbox` | 本地副本属于另一个邮箱。一个数据目录只放一个邮箱，第二个邮箱要另设 `MONASH_KIT_HOME`。 |
 | Claude 查邮件时用了官方 Gmail | 见第四步。 |
-| AI 软件里看不到邮件或考勤工具 | 还没登录成功，或者没重启 AI 软件。`monash config` 看一下 `gmail_enabled`、`attendance_enabled` 是不是 `True`。 |
+| AI 软件里看不到邮件或考勤工具 | 还没登录成功，或者没重启 AI 软件。`monash config` 看一下 `gmail_enabled`、`attendance_enabled` 是不是 `True`。远程使用时还要确认配对时勾了这一项，否则重新配对。 |
+| 后台同步好像没在跑 | 看 `mcp.log`。授权失效时只记一次“邮件同步要重新授权”，重新 `monash gmail login` 就好。 |
 | 考勤报找不到 playwright 或浏览器 | 没装 `[attendance]`，或者没运行第三步里的 `playwright install chromium`。 |
 | 考勤同步超时 | 门户页面结构变了。先确认 `#daySel` 下拉框和 `dayPanel_<日期>` 区块还在。 |
 
@@ -112,7 +125,8 @@ monash config attendance_submit_enabled true
 
 起草、发信、改标签、考勤提交都分两步：先返回完整预览和一次性确认凭据，用户确认后才执行。
 
-- 本地 MCP 默认不注册这些工具，要按第五步打开。
+- 本地 MCP 默认不注册这些工具，要按第五步打开；远程还要在配对时给那个软件勾上。
+- 确认凭据按软件分开，一个软件准备的操作，另一个软件执行不了。
 - AI 必须把预览原样给你看，你确认了这一项，它才能带着 `user_confirmed=true` 去执行，不能自己替你确认。
 - 凭据 10 分钟有效、只能用一次，绑定预览时的内容；发送草稿前会核对草稿在预览后有没有被改过。
 - 执行前的检查没通过时记为“已拒绝”（确定没有发出）；执行中出错记为“结果未知”，不会自动重试，需要先去确认实际状态。
