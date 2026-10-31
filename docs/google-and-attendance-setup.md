@@ -143,6 +143,7 @@ monash config attendance_submit_enabled true
 | 后台同步好像没在跑 | 看 `mcp.log`。授权失效时只记一次“邮件同步要重新授权”，重新 `monash gmail login` 就好。 |
 | 考勤报找不到 playwright 或浏览器 | 没装 `[attendance]`，或者没运行第三步里的 `playwright install chromium`。 |
 | 不确定哪里没设置好 | `monash doctor` 会多出“学校邮箱”和“考勤”两项，告诉你缺什么、怎么修；输出里不带邮箱地址，可以直接发给别人帮忙看。 |
+| `probe` 报 `CERTIFICATE_VERIFY_FAILED` 或“证书校验不过” | 门户服务器可能没把中间证书发全，Chrome 会自己补，Python 不会。新版会用系统的证书校验（`truststore`，装 `[attendance]` 时一起装上）；还是不行就一直用浏览器读，不影响使用。证书校验始终开着，不要设置跳过校验。 |
 | 考勤同步超时 | 门户页面结构变了。先确认 `#daySel` 下拉框和 `dayPanel_<日期>` 区块还在。 |
 
 ## 七、写操作的保护

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -63,6 +64,20 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _tls() -> ssl.SSLContext:
+    """用系统自己的证书校验（truststore）。
+
+    门户的服务器可能没把中间证书发全：Chrome 会自己去补，Python 自带的校验不会，
+    于是在 macOS 上报 “unable to get local issuer certificate”。macOS 和 Windows 的系统
+    校验会像 Chrome 一样补上。校验始终是开着的，没装 truststore 就用 Python 默认的。
+    """
+    try:
+        import truststore
+    except ImportError:
+        return ssl.create_default_context()
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+
 def fetch(url: str) -> tuple[str, list[str]]:
     """带 cookie GET 一个门户页面，返回 (HTML, Set-Cookie 列表)。跳去登录页就当登录过期。"""
     if not url.startswith(ORIGIN + "/student/"):
@@ -72,7 +87,7 @@ def fetch(url: str) -> tuple[str, list[str]]:
         "Cookie": "; ".join(f"{c['name']}={c['value']}" for c in cookies),
         "User-Agent": "Mozilla/5.0 (monash-study-kit)",
     })
-    opener = urllib.request.build_opener(_NoRedirect())
+    opener = urllib.request.build_opener(_NoRedirect(), urllib.request.HTTPSHandler(context=_tls()))
     try:
         with opener.open(request, timeout=30) as response:
             body = response.read(8 * 1024 * 1024).decode(response.headers.get_content_charset() or "utf-8", "replace")
@@ -83,6 +98,11 @@ def fetch(url: str) -> tuple[str, list[str]]:
         if e.code in (301, 302, 303, 307, 308, 401, 403):
             raise AttendanceAuthError(f"Attendance session expired (HTTP {e.code}); run monash attendance login") from None
         raise RuntimeError(f"Attendance returned HTTP {e.code}") from None
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, ssl.SSLCertVerificationError):
+            # 证书校验不过就不用这条路，浏览器那边照样能读；绝不关掉校验
+            raise FastPathUnavailable("Python could not verify the portal's HTTPS certificate chain") from None
+        raise
     if LOGIN_CLUE.search(body[:20000]):
         raise AttendanceAuthError("Attendance session expired; reconnect with Monash sign-in")
     return body, set_cookies
@@ -345,8 +365,20 @@ def probe() -> dict:
     """在真实门户上对照两种读法。只输出数量和对不对得上，不输出课程、时间、链接等内容。"""
     from . import attendance, attendance_auto
     report: dict = {"portal": urllib.parse.urlsplit(ORIGIN).hostname, "session": attendance_auto.lifetime()}
-    with portal_lock():
-        html, set_cookies = fetch(UNITS)
+    try:
+        import truststore  # noqa: F401
+        report["system_certificates"] = True
+    except ImportError:
+        report["system_certificates"] = False
+    try:
+        with portal_lock():
+            html, set_cookies = fetch(UNITS)
+    except FastPathUnavailable as e:
+        report["http"] = {"ok": False, "error": str(e)}
+        report["verdict"] = ("证书校验不过，不开浏览器的读法用不了，会一直用浏览器读（不影响使用）。"
+                             + ("" if report["system_certificates"] else
+                                "先重新安装一次带 [attendance] 的版本（会装上 truststore），再跑一次 probe。"))
+        return report
     document = htmldom.parse(html)
     report["http"] = {"ok": True, "html_kb": len(html) // 1024, "set_cookie_headers": len(set_cookies)}
     try:

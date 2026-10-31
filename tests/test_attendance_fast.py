@@ -261,3 +261,36 @@ def test_class_slots_use_the_portal_timezone():
     now = at(2, 10, 20)
     assert attendance_auto.due([record(2, "10:00AM")], (now - timedelta(minutes=10)).timestamp(), now) \
         == ("after_class", 1)
+
+
+def test_certificate_problem_falls_back_instead_of_failing(monkeypatch, tmp_path, cache):
+    import ssl
+    state_file(monkeypatch, tmp_path, [])
+
+    class Opener:
+        def open(self, request, timeout):
+            raise urllib.error.URLError(ssl.SSLCertVerificationError("unable to get local issuer certificate"))
+    monkeypatch.setattr(attendance_http.urllib.request, "build_opener", lambda *a: Opener())
+    with pytest.raises(attendance_http.FastPathUnavailable):
+        attendance_http.fetch(attendance_http.UNITS)
+    # sync 退回浏览器，probe 说明原因而不是报错退出
+    from monash_study_kit import paths
+    monkeypatch.setattr(paths, "load_settings", lambda: {"attendance_fast_read": True})
+    monkeypatch.setattr(attendance, "_read_browser", lambda keys, script: {k: [] for k in keys})
+    assert attendance.sync(1)["method"] == "browser"
+    report = attendance_http.probe()
+    assert report["http"]["ok"] is False and "证书" in report["verdict"]
+
+
+def test_tls_uses_the_system_verifier_when_truststore_is_installed(monkeypatch):
+    import ssl
+    import sys
+    import types
+    made = []
+    fake = types.ModuleType("truststore")
+    fake.SSLContext = lambda protocol: made.append(protocol) or ssl.create_default_context()
+    monkeypatch.setitem(sys.modules, "truststore", fake)
+    context = attendance_http._tls()
+    assert made == [ssl.PROTOCOL_TLS_CLIENT] and context.verify_mode == ssl.CERT_REQUIRED
+    monkeypatch.setitem(sys.modules, "truststore", None)      # 没装时用 Python 默认的，校验照样开着
+    assert attendance_http._tls().verify_mode == ssl.CERT_REQUIRED

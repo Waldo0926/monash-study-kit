@@ -12,7 +12,8 @@ def encoded(value):
 
 
 def message(mid="a", text="Exchange deadline Friday", **extra):
-    return {"id": mid, "threadId": "thread1", "internalDate": "1000", "labelIds": ["INBOX", "UNREAD"],
+    # 真实的毫秒时间戳。1970 年开头那一天在 Windows 上换不了本地时间（OSError 22），真实邮件也不会有
+    return {"id": mid, "threadId": "thread1", "internalDate": "1761868800000", "labelIds": ["INBOX", "UNREAD"],
             "payload": {"mimeType": "text/plain", "headers": [
                 {"name": "Subject", "value": "NTU application"},
                 {"name": "From", "value": "abroad@example.edu"}], "body": {"data": encoded(text)}}, **extra}
