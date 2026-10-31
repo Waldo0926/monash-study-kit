@@ -312,3 +312,12 @@ def test_every_portal_request_counts_toward_the_login_lifetime(monkeypatch, cach
     with pytest.raises(attendance.AttendanceAuthError):
         attendance_http.fetch(attendance_http.UNITS)
     assert "expired_after_hours" in attendance_auto.lifetime()["current"]
+
+
+def test_real_portal_label_with_time_first_and_lowercase_pm():
+    # 真实门户的写法：时间在前，“4:00 pm” 中间有空格、小写
+    html = '<div id="p"><li>4:00 pm FIT2102 Workshop 01 <span class="glyphicon glyphicon-ok"></span></li></div>'
+    (row,) = attendance_http.parse_day(htmldom.parse(html).find(id="p"), "20_Oct_26")
+    assert (row["course"], row["session"], row["time"], row["completed"]) == ("FIT2102", "Workshop 01", "4:00 pm", True)
+    now = at(3, 16, 20)
+    assert attendance_auto.due([record(3, "4:00 pm")], now.timestamp() - 1800, now) == ("after_class", 1)
