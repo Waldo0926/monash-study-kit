@@ -130,6 +130,16 @@ At the end you can choose to sync right away. The first sync downloads all cours
 
 Then open your AI app. In Claude Desktop, **"+" → Connectors** in the chat box lists **monash**; leave it switched on. For other apps, `monash connect` shows which ones are connected.
 
+## What's new in 1.5
+
+- **School mail (optional).** Ask "anything in my email I need to deal with?" and get recent unread school mail, offline search, whole threads and attachment text. The AI can draft a reply, send a draft or archive mail, and only after you confirm each action.
+- **Attendance (optional).** "Which classes this week haven't I checked in to?" and "what's the code for today's workshop?", with each code's source. Reads follow your timetable and take a few seconds without opening a browser. Checked against the Malaysia campus portal.
+- **No terminal needed to connect them.** Say "connect my school email" or "connect my attendance" in your AI app; it installs what is missing and opens the sign-in window. No Google Cloud setup either.
+- **Remote apps choose.** With `monash remote`, each app you pair ticks which of these it may use.
+- **Units without Ed** can turn Ed off: `monash config use_ed false`.
+
+Details: [Optional: Gmail and attendance](#optional-gmail-and-attendance) and the [changelog](CHANGELOG.md).
+
 ## What's new in 1.4
 
 - **Study panels.** In apps that support MCP Apps, "what do I need to do this week", "show my FIT2109 lesson progress" and "help me practise the week 3 quiz" also come with a small panel: deadline cards, lesson progress by module, and quiz questions you can click through. When you finish a quiz, the **交给 AI 批改** button sends your choices back to the chat and the AI explains them from the lesson. Nothing is submitted to Ed. Apps without panels still get the same text answers as before.
@@ -391,7 +401,7 @@ Videos uploaded directly to Moodle aren't downloaded by default either (often hu
 
 ## Optional: Gmail and attendance
 
-Not on PyPI yet (see Unreleased in the [changelog](CHANGELOG.md)). Both parts are off by default and only run on your own computer.
+New in 1.5.0. Both parts are off until you connect them and only run on your own computer.
 
 - **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline, reads whole threads and the text of attachments (PDF, Office, images). Reading never marks mail as read.
 - **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?" or "what's the code for today's FIT2102 workshop?". Codes are looked up in synced Moodle, Ed and school mail and shown with where they came from, for you to check. Only checked against the Malaysia campus portal.
@@ -399,7 +409,7 @@ Not on PyPI yet (see Unreleased in the [changelog](CHANGELOG.md)). Both parts ar
 If you only want to ask about your inbox in Claude or ChatGPT, their built-in Gmail connectors are the easiest way. The Gmail part here is for linking mail with attendance codes, searching mail and attachments offline, and using it in apps without a Gmail connector such as Codex or Cursor. No Google Cloud setup is needed: the package includes a Google app, and Google will show "this app isn't verified" (click Advanced, then continue). Using your own Google app instead is optional. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). The easiest way is to ask your AI app: "connect my school email" or "connect my attendance". It installs what is missing, opens the sign-in window on your computer, and you only sign in; nothing is typed in a terminal and no password goes into the chat. The same steps in a terminal:
 
 ```bash
-uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://github.com/Waldo0926/monash-study-kit"
+uv tool install --reinstall "monash-study-kit[gmail,attendance]"
 monash gmail login
 monash gmail sync
 monash attendance login

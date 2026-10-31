@@ -42,10 +42,10 @@
 
 **最简单：在 AI 软件里说“帮我接上学校邮箱”。** 下面的安装和登录它都会自动做，你只要在弹出的浏览器里登录学校账号。考勤也一样，说“帮我接上考勤”。下面是用终端手动做的步骤。
 
-这部分还没发布到 PyPI，现在要从 GitHub 源码装（`gmail` 和 `attendance` 两个可选依赖，只要一个就只写一个）：
+先装上可选的组件（`gmail` 和 `attendance` 两个，只要一个就只写一个）：
 
 ```sh
-uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://github.com/Waldo0926/monash-study-kit"
+uv tool install --reinstall "monash-study-kit[gmail,attendance]"
 ```
 
 然后授权（会打开系统浏览器）：

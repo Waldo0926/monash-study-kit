@@ -125,6 +125,16 @@ monash setup
 
 完成后打开你的 AI 软件。Claude Desktop 在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行；其他软件可以运行 `monash connect` 看哪些已经接上。
 
+## 1.5 新增了什么
+
+- **学校邮箱（可选）。** 问“我邮箱里有什么要处理的？”，列出最近没读的学校邮件，也能离线搜索、读整个对话和附件里的文字。AI 可以帮你起草回复、发送草稿、归档邮件，每一项都要你确认才执行。
+- **考勤（可选）。** 问“这周还有哪节课没签到？”“今天 workshop 的签到码是多少？”，每个签到码都标出处。按课表自动读，不开浏览器，几秒钟就完。在马来西亚校区门户上验证过。
+- **不用开终端就能接上。** 在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”，缺的组件自动安装，然后打开登录窗口。也不用自己去 Google Cloud 设置。
+- **远程的软件各自选。** 用 `monash remote` 时，每个配对的软件自己勾选能用哪些功能。
+- **课不用 Ed 的话**可以关掉 Ed：`monash config use_ed false`。
+
+详细见[可选：Gmail 与考勤](#可选gmail-与考勤)和[更新日志](CHANGELOG.md)。
+
 ## 1.4 新增了什么
 
 - **学习面板。** 在支持 MCP Apps 的软件里，问“这周我有什么要做的”“看看我 FIT2109 的 lesson 进度”“帮我练一下第 3 周的测验”时，回答会附一个小面板：截止日期卡片、按 module 分的 lesson 进度、可以一题一题点的测验题。做完测验点 **交给 AI 批改**，你的选择会发回对话，AI 根据 lesson 内容讲解。不会提交到 Ed。不支持面板的软件照样收到和以前一样的文字回答。
@@ -372,7 +382,7 @@ Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成�
 
 ## 可选：Gmail 与考勤
 
-这部分还没发布到 PyPI（见[更新日志](CHANGELOG.md)里的 Unreleased）。两部分默认都不开，只在你自己的电脑上运行。
+1.5.0 新增。两部分在你接上之前都不会打开，只在你自己的电脑上运行。
 
 - **学校邮箱（Gmail）。** 在本机保存一份 Monash 邮箱的私有副本。问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话和附件里的文字（PDF、Office、图片）。读邮件不会把它标成已读。
 - **考勤。** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”“今天 FIT2102 workshop 的签到码是多少？”。签到码从已同步的 Moodle、Ed 和学校邮件里找，每个都标出处让你核对。只在马来西亚校区的门户上验证过。
@@ -380,7 +390,7 @@ Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成�
 如果只是想在 Claude 或 ChatGPT 里问问邮箱里有什么，用它们自带的 Gmail 连接器最简单。这里的 Gmail 适合想把邮件和考勤签到码连在一起、离线搜邮件和附件，或者在 Codex、Cursor 这些没有自带 Gmail 的软件里用的人。不用自己去 Google Cloud 设置：安装包里自带一个 Google 应用，授权页会提示“Google 尚未验证此应用”，点“高级”再点“继续”就行。也可以用你自己建的应用。完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)。最简单的是直接在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”：缺的组件会自动安装，然后在你电脑上打开登录窗口，你只要登录就行，不用开终端，密码也不经过聊天。用终端的话是这几步：
 
 ```bash
-uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://github.com/Waldo0926/monash-study-kit"
+uv tool install --reinstall "monash-study-kit[gmail,attendance]"
 monash gmail login
 monash gmail sync
 monash attendance login

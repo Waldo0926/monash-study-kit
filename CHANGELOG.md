@@ -2,30 +2,47 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
-## Unreleased
+## 1.5.0
 
-- Connect school mail or attendance by asking your AI app ("connect my school email"): the new `start_school_service_setup` tool installs the missing pieces into the running install, opens the sign-in window on your computer and turns everything on, then syncs and tells the AI app its tool list changed. No terminal needed. The tool adds 145 tokens per conversation and is hidden once both are connected.
-- `monash gmail sync` prints progress page by page.
-- `monash gmail login` works without `--client` when the package includes a Google app (`google_client.json`), so students do not need their own Google Cloud project; `--client` still uses your own. The guide suggests the AI apps' built-in Gmail connectors for people who only want to ask about their inbox.
-- Units without Ed: `monash config use_ed false` (or answering yes when `monash setup` asks after skipping the Ed token) stops sync, the to-do list and `monash doctor` from reporting a missing Ed token, and hides the four Ed tools and the Ed section of the help. Default unchanged; `monash login ed` turns it back on.
-- Optional school Gmail, installed with `[gmail]`. `monash gmail login` uses your own Google Cloud Desktop OAuth client and asks for `gmail.modify` so the actions below work; `--read-only` asks for `gmail.readonly` only. `monash gmail sync` keeps a private local copy; each page is saved with its cursor, so a failed run keeps the pages it finished and the next run picks up from the failed page. `monash gmail todo` lists recent unread inbox mail without promotions and social updates. Search results now carry the date, unread, inbox, starred, important, category and attachment count.
-- Optional attendance, installed with `[attendance]`: `monash attendance login`, `status`, `sync`, `overview` and `codes` read your classes and check-in status from the attendance portal and look up candidate codes in synced Moodle, Ed and school mail. Checked only against the Malaysia campus portal; `MONASH_ATTENDANCE_ORIGIN` and `MONASH_ATTENDANCE_TZ` point it elsewhere.
-- Local MCP: logging in turns on the tools (`gmail_enabled`, `attendance_enabled`). Mail tools add `get_gmail_inbox_todo` and `gmail_read_attachment`; attendance adds status, overview, sync, code lookup and export, the last three as background jobs read with `student_job_status`. Mail tools and the server instructions tell the AI app to use them for questions about "my email" instead of a general Gmail connector. `monash help` and the help prompt list mail and attendance only when they are on.
-- Drafting, sending a draft, changing labels and submitting attendance are on after logging in (`gmail_manage_enabled`, `attendance_submit_enabled`, each can be turned off). Each one returns a full preview and a single-use ticket bound to that payload, and runs only with the user's explicit confirmation of that action. Nothing permanently deletes mail. See [ADR 0004](docs/adr/0004-confirmed-mail-and-attendance-actions.md).
-- While the MCP server runs, mail syncs in the background every 30 minutes (`gmail_sync_minutes`, 0 turns it off), keeps the last query, continues an unfinished first download about a minute later, and indexes a few attachments per round. An expired Gmail login is logged once.
-- Remote MCP: each app picks on the pairing page which mail and attendance features it may use. Only features enabled on the server are offered; read-only ones start ticked, write ones unticked. The choice is stored with the tokens and kept on refresh, intersected with the server settings at every call, and shown by `monash remote clients`. Apps paired earlier keep Moodle and Ed only. Review tickets and jobs are per app, so one app cannot run another's ticket. Remote apps get the shared catalog (`gmail_search`, `gmail_thread`, `gmail_sync`, `attendance_overview`, `attendance_find_codes` and others) plus `gmail_inbox_todo` and `student_job_status`.
-- Setup guide in [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md) (Chinese), design notes in [docs/gmail-foundation.md](docs/gmail-foundation.md), and a privacy policy in [PRIVACY.md](PRIVACY.md). The core still depends only on pypdf.
-- `gmail_prepare_action` refuses early with a clear message when the Google authorization is read-only, instead of failing at execute time and leaving the ticket as unknown.
-- `monash update` keeps every optional extra that is installed (`gmail`, `attendance`, `media`), not only `media`, so updating does not remove Gmail or attendance support.
-- `monash status` and `monash doctor` include school mail and attendance when they are on. Doctor output never shows the mail address. A missing `[gmail]` install now says what to install instead of looking like a network error.
-- The agent skill lists the optional mail and attendance commands and the rule that `--confirm` is only added after the student confirms the preview.
-- Token cost: about 1,900 more per conversation with both parts logged in (5,132 instead of 3,232). Nothing changes without logging in.
-- Attendance reads follow the timetable instead of the clock while the MCP server runs: weekday mornings at 8 and 15 minutes after each class not yet checked in to, nothing at night, at weekends or for classes already done (`attendance_auto_sync`, on by default).
-- A browser read opens the portal page once and switches days in its menu, instead of reloading the page for every day.
-- Browser-free read (`attendance_fast_read`, on by default): one request with the saved login cookies and a Python port of the parser. On the Malaysia portal both reads matched on all 15 days it offers. It falls back to the browser whenever the page does not look as expected. `monash attendance probe` compares both reads on the real portal and prints only counts and whether they match. Tests compare the Python and JavaScript parsers on the same pages.
-- The browser-free read verifies HTTPS with the operating system's certificate store (`truststore`, part of `[attendance]`), so a portal that does not send its intermediate certificate still verifies on macOS and Windows. If it cannot be verified the read falls back to the browser and `probe` says why; verification is never turned off.
-- The attendance login lifetime is now measured: logins, successful reads and the first expiry are recorded, and `monash attendance status` shows how long the current login has lasted and when earlier ones expired. Optional lightweight keepalive (`attendance_keepalive_minutes`, off by default) renews the login with a plain request and saves any new cookies.
-- Not verified yet: attendance submission, how long the attendance login lasts, whether the browser-free read and the keepalive work on the real portal, and portals of campuses other than Malaysia.
+Optional school mail and attendance. Both are off until you connect them, the core still depends only on pypdf, and Moodle and Ed stay read-only.
+
+**Connecting**
+
+- Ask your AI app "connect my school email" or "connect my attendance". The new `start_school_service_setup` tool installs what is missing into the running install, opens the sign-in window on your computer and turns everything on, then syncs and tells the AI app its tool list changed. Passwords and codes stay in your browser. The tool adds 145 tokens per conversation and is hidden once both are connected.
+- In a terminal: `uv tool install --reinstall "monash-study-kit[gmail,attendance]"`, then `monash gmail login` and `monash attendance login`.
+- `monash gmail login` uses a Google app that ships with the package, so no Google Cloud project is needed. Google shows "this app isn't verified" (Advanced, then continue). `--client` uses your own app instead. For people who only want to ask about their inbox, the guide suggests the AI apps' built-in Gmail connectors.
+
+**School mail** (`[gmail]`)
+
+- A private local copy: `monash gmail sync` saves each page with its cursor and prints progress, so an interrupted run keeps what it finished and the next run continues. While your AI app is open, mail syncs every 30 minutes (`gmail_sync_minutes`) and a few attachments per round are indexed.
+- `monash gmail todo` and `get_gmail_inbox_todo` list recent unread inbox mail without promotions and social updates. Search results carry the date, unread, inbox, starred, important, category and attachment count. `gmail_read_attachment` reads PDF, Office and image attachments.
+- Drafting, sending a draft and changing labels (archive, mark as read, star) are on after login. Every action returns a full preview and a single-use ticket bound to that payload, and runs only after you confirm that exact action. Nothing permanently deletes mail. `monash gmail login --read-only` asks Google for read access only. See [ADR 0004](docs/adr/0004-confirmed-mail-and-attendance-actions.md).
+- The server instructions tell the AI app to use this for questions about "my email" instead of a general Gmail connector.
+
+**Attendance** (`[attendance]`)
+
+- `monash attendance login`, `status`, `sync`, `overview`, `codes` and `probe`, and matching tools in the AI app: classes and check-in status from the portal, and candidate codes found in synced Moodle, Ed and school mail, each with its source.
+- A read is one plain request with the saved login (about 5 KB, a few seconds) and a Python port of the extension's parser. On the Malaysia portal it matched the browser read on all 15 days the portal offers. It falls back to a single headless browser page whenever the page looks different or the certificate cannot be verified, and HTTPS is checked with the system certificate store (`truststore`).
+- Reads follow your timetable: weekday mornings at 8 and 15 minutes after each class you have not checked in to, nothing at night, at weekends or for finished classes (`attendance_auto_sync`).
+- Check-in is on after login and is prepared only when you say you attended, with the same preview and confirmation as mail.
+- `monash attendance status` records how long the login lasts. An optional lightweight keepalive (`attendance_keepalive_minutes`) is off until that is known.
+- Checked only against the Malaysia campus portal; `MONASH_ATTENDANCE_ORIGIN` and `MONASH_ATTENDANCE_TZ` point it elsewhere.
+
+**Remote MCP**
+
+- Each app chooses on the pairing page which mail and attendance features it may use. Only features turned on on the server are offered; read-only ones start ticked, actions unticked. The choice is kept on refresh, checked against the server settings at every call and shown by `monash remote clients`. Apps paired before 1.5.0 keep Moodle and Ed only. Tickets and background jobs belong to one app.
+
+**Other changes**
+
+- Units without Ed: `monash config use_ed false`, or answering yes in `monash setup` after skipping the Ed token, stops the reminders about a missing token and hides the Ed tools and help.
+- `monash update` keeps every installed extra (`gmail`, `attendance`, `media`).
+- `monash status` and `monash doctor` cover mail and attendance once they are on; doctor output never shows the mail address.
+- `monash help` and the help prompt list mail and attendance once connected, and suggest connecting them until then.
+- The agent skill lists the mail and attendance commands and the rule that `--confirm` comes only after the student confirms the preview.
+- Token use: 3,377 per conversation by default (3,232 in 1.4.1), 5,132 with mail and attendance connected.
+- Docs: setup guide in [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md) (Chinese), design notes in [docs/gmail-foundation.md](docs/gmail-foundation.md), privacy policy in [PRIVACY.md](PRIVACY.md).
+
+Not verified yet: attendance check-in on a real account, how long the attendance login lasts, the keepalive, and portals of campuses other than Malaysia.
 
 ## 1.4.1
 

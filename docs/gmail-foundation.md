@@ -9,7 +9,7 @@ Status: the shared modules (`gmail.py`, `service_actions.py`, `service_jobs.py`,
 `student_services.py`, `attendance.py`, `attendance_evidence.py`) are the versions that
 run on the author's private deployment, tested against a real Monash mailbox and the
 Malaysia attendance portal on 2026-10-31. The public CLI and local MCP use the same
-modules. The feature is listed under Unreleased in the changelog and is not on PyPI yet.
+modules. Released in 1.5.0.
 
 ## Reading is compatible with downloading
 
