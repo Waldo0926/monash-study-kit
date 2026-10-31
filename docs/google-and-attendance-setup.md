@@ -59,13 +59,16 @@ monash gmail search 交换    # 离线全文搜索
 
 ```sh
 monash attendance login
-monash attendance sync
+monash attendance sync       # 读门户，要开浏览器，一两分钟
+monash attendance overview   # 看已保存的班次，不联网
+monash attendance codes      # 从 Moodle、Ed、学校邮件里找签到码
 monash attendance status
 ```
 
 - 第一次用要先给 playwright 装浏览器：macOS/Linux 运行 `"$(uv tool dir)/monash-study-kit/bin/python" -m playwright install chromium`，Windows 运行 `& "$(uv tool dir)\monash-study-kit\Scripts\python.exe" -m playwright install chromium`。
 - `login` 会打开浏览器让你登录考勤门户（Okta + MFA），保存的是门户的登录状态，不保存密码。成功后本地 MCP 会自动打开只读考勤工具（设置 `attendance_enabled`）。
-- `sync` 读取最近几天（`--days`，最多 14）和本周还没到的班次及签到状态，存到本地。AI 软件里的 `attendance_overview` 读的就是这份。
+- `sync` 读取最近几天（`--days`，最多 14）和本周还没到的班次及签到状态，存到本地。AI 软件里也能让它自己读（“刷新一下我的考勤”），在后台跑，读完再告诉你。
+- `codes` 找到的只是候选签到码，每个都标了来自哪条公告、帖子或邮件。同一节课找到两个不同的码会标成冲突，一定要自己核对。
 - 默认是**马来西亚校区**门户 `https://attendance.monash.edu.my`，时区 `Asia/Kuala_Lumpur`。其他校区可以设置 `MONASH_ATTENDANCE_ORIGIN` 和 `MONASH_ATTENDANCE_TZ`，但页面解析只在马来西亚校区验证过，换校区前要先确认页面结构。
 - 门户的日期是用页面上的下拉框 `#daySel` 切换的（URL 里的日期会被忽略），大约只能选今天前后两周。
 - 登录状态能维持多久还没测准；`monash attendance status` 或 AI 报登录过期时，重新运行 `monash attendance login`。
@@ -119,6 +122,7 @@ monash config attendance_submit_enabled true
 | AI 软件里看不到邮件或考勤工具 | 还没登录成功，或者没重启 AI 软件。`monash config` 看一下 `gmail_enabled`、`attendance_enabled` 是不是 `True`。远程使用时还要确认配对时勾了这一项，否则重新配对。 |
 | 后台同步好像没在跑 | 看 `mcp.log`。授权失效时只记一次“邮件同步要重新授权”，重新 `monash gmail login` 就好。 |
 | 考勤报找不到 playwright 或浏览器 | 没装 `[attendance]`，或者没运行第三步里的 `playwright install chromium`。 |
+| 不确定哪里没设置好 | `monash doctor` 会多出“学校邮箱”和“考勤”两项，告诉你缺什么、怎么修；输出里不带邮箱地址，可以直接发给别人帮忙看。 |
 | 考勤同步超时 | 门户页面结构变了。先确认 `#daySel` 下拉框和 `dayPanel_<日期>` 区块还在。 |
 
 ## 七、写操作的保护

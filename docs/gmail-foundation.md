@@ -112,13 +112,18 @@ switches stay off until set by hand with `monash config`.
 
 | Setting | Tools added |
 |---|---|
-| `gmail_enabled` | `get_gmail_cache_status`, `get_gmail_inbox_todo`, `search_gmail_cache`, `read_gmail_cached_thread` |
+| `gmail_enabled` | `get_gmail_cache_status`, `get_gmail_inbox_todo`, `search_gmail_cache`, `read_gmail_cached_thread`, `gmail_read_attachment` |
 | `gmail_manage_enabled` (with `gmail_enabled`) | `gmail_prepare_action`, `execute_student_action` |
-| `attendance_enabled` | `attendance_status`, `attendance_overview` |
+| `attendance_enabled` | `attendance_status`, `attendance_sync`, `attendance_overview`, `attendance_find_codes`, `attendance_export`, `student_job_status` |
 | `attendance_submit_enabled` (with `attendance_enabled`) | `attendance_prepare_submit`, `execute_student_action` |
 
-The Gmail read tools only read the local cache and need neither the Google libraries nor
-a valid token. When mail tools are on, the server instructions tell the AI app to use them
+The four Gmail cache tools only read the local cache and need neither the Google libraries
+nor a valid token; `gmail_read_attachment` downloads the attachment first if it is not cached.
+Attendance sync, code lookup and export open a headless browser or read many files, so they
+run as background jobs and return a `job_id` for `student_job_status`.
+`gmail_prepare_action` checks that the saved Google authorization actually has write access
+before building a preview. Without that check a read-only login would only fail at execute
+time, after the ticket was claimed, and leave it as `unknown`. When mail tools are on, the server instructions tell the AI app to use them
 for questions about "my email" instead of a general Gmail connector the user may also have.
 The scopes passed to `student_services` come from these settings, so turning a switch off
 also blocks executing a ticket prepared before.

@@ -37,10 +37,12 @@ def test_read_tools_follow_settings_and_writes_need_their_own_switch(monkeypatch
     assert set(gmail_tools.TOOLS) <= listed and "get_gmail_inbox_todo" in listed
     assert not (listed & WRITE) and "attendance_status" not in listed
 
+    assert "gmail_read_attachment" in listed and "student_job_status" not in listed
+
     use(monkeypatch, attendance_enabled=True)
     listed = names()
-    assert {"attendance_status", "attendance_overview"} <= listed
-    assert not (listed & WRITE) and "attendance_sync" not in listed
+    assert set(student_tools.ATTENDANCE_READ) | {"student_job_status"} <= listed
+    assert not (listed & WRITE)
 
     # 写操作的开关单独开没用，要先开对应的只读功能
     use(monkeypatch, gmail_manage_enabled=True, attendance_submit_enabled=True)
@@ -82,6 +84,10 @@ def test_old_remote_grants_get_no_student_tools_even_when_enabled_locally(monkey
 class Mailbox:
     """假的 Gmail：只记录写操作，读操作给固定内容。"""
     writes = []
+    scopes = [gmail.MANAGE_SCOPE]
+
+    def _credentials(self):
+        return type("Credentials", (), {"scopes": self.scopes})()
 
     def get(self, path, **params):
         if path == "profile":
@@ -130,7 +136,7 @@ def test_mail_write_runs_only_after_preview_and_explicit_confirmation(monkeypatc
 
 def test_expired_gmail_login_tells_the_user_what_to_run(monkeypatch):
     class Expired:
-        def get(self, *a, **kw):
+        def _credentials(self):
             raise gmail.GmailAuthError("Gmail authorization expired")
     monkeypatch.setattr(gmail, "Client", Expired)
     use(monkeypatch, gmail_enabled=True, gmail_manage_enabled=True)
@@ -314,3 +320,76 @@ def test_remote_write_needs_confirmation_and_tickets_belong_to_one_client(monkey
     assert "error" in read_only and Mailbox.writes == []
     done = json.loads(remote_call("execute_student_action", ticket, scopes)["result"]["content"][0]["text"])
     assert done["state"] == "done" and Mailbox.writes == [("m1", [], ["INBOX"])]
+
+
+def test_read_only_gmail_login_cannot_prepare_a_mailbox_action(monkeypatch):
+    # 只读授权时在预览这一步就拦下，不要等执行时才失败、留下“结果未知”的凭据
+    class ReadOnly(Mailbox):
+        scopes = [gmail.READ_SCOPE]
+    Mailbox.writes = []
+    monkeypatch.setattr(gmail, "Client", ReadOnly)
+    use(monkeypatch, gmail_enabled=True, gmail_manage_enabled=True)
+    result = call("gmail_prepare_action", {"operation": "labels", "message_id": "m1", "add": "STARRED"})["result"]
+    assert result["isError"] and "--manage" in result["content"][0]["text"]
+    reply = remote_call("gmail_prepare_action", {"operation": "labels", "message_id": "m1", "add": "STARRED"},
+                        {"monash", "gmail.manage"})["result"]
+    assert reply["isError"] and "服务器的终端" in reply["content"][0]["text"]
+
+
+def test_local_attendance_sync_and_codes_run_as_jobs(monkeypatch):
+    attendance = pytest.importorskip("monash_study_kit.attendance")
+    seen = {}
+    def codes(days=7, gmail_allowed=False):
+        seen.update(days=days, gmail=gmail_allowed)
+        return {"records": [{"id": "r1", "candidates": [{"code": "ABCDE"}]}]}
+    monkeypatch.setattr(attendance, "find_codes", codes)
+    use(monkeypatch, attendance_enabled=True, gmail_enabled=True)
+    job = json.loads(call("attendance_find_codes", {"days": 3})["result"]["content"][0]["text"])
+    assert job["state"] == "queued"
+    status = {}
+    for _ in range(200):
+        status = json.loads(call("student_job_status", {"job_id": job["job_id"]})["result"]["content"][0]["text"])
+        if status["state"] not in ("queued", "running"):
+            break
+        import time
+        time.sleep(0.02)
+    assert status["state"] == "done" and status["result"]["records"][0]["candidates"][0]["code"] == "ABCDE"
+    assert seen == {"days": 3, "gmail": True}
+    # 别的远程客户端看不到本地的任务
+    other = remote_call("student_job_status", {"job_id": job["job_id"]}, {"monash", "attendance.read"})["result"]
+    assert other["isError"]
+
+
+def test_cli_attendance_overview_and_codes(monkeypatch, capsys):
+    attendance = pytest.importorskip("monash_study_kit.attendance")
+    monkeypatch.setattr(attendance, "overview", lambda days=14: {"records": [], "days": days})
+    args = cli.build_parser().parse_args(["attendance", "overview", "--days", "5"])
+    assert args.fn(args) == 0 and json.loads(capsys.readouterr().out)["days"] == 5
+    monkeypatch.setattr(attendance, "find_codes", lambda days=7, gmail_allowed=False: {"gmail": gmail_allowed})
+    monkeypatch.setattr("monash_study_kit.paths.load_settings", lambda: {"gmail_enabled": True})
+    args = cli.build_parser().parse_args(["attendance", "codes"])
+    assert args.fn(args) == 0 and json.loads(capsys.readouterr().out)["gmail"] is True
+
+
+def test_cli_gmail_without_the_extra_says_what_to_install(monkeypatch, capsys, tmp_path):
+    def missing():
+        try:
+            import not_a_real_module  # noqa: F401
+        except ImportError as e:
+            raise gmail.GmailError('Install Gmail support: pip install "monash-study-kit[gmail]"') from e
+    monkeypatch.setattr(gmail, "_google", missing)
+    args = cli.build_parser().parse_args(["gmail", "login", "--client", str(tmp_path / "c.json")])
+    (tmp_path / "c.json").write_text("{}")
+    assert args.fn(args) == 1 and "monash-study-kit[gmail]" in capsys.readouterr().err
+
+
+def test_status_and_doctor_cover_enabled_optional_features(monkeypatch, capsys):
+    from monash_study_kit import doctor
+    monkeypatch.setattr(doctor, "load_settings", lambda: {})
+    assert doctor.check_gmail() is None and doctor.check_attendance() is None
+    monkeypatch.setattr(doctor, "load_settings", lambda: {"gmail_enabled": True, "attendance_enabled": True})
+    names = {r["name"]: r for r in doctor.run(skip=("check_claude_code", "check_claude_desktop"))["checks"]}
+    assert "学校邮箱" in names and "考勤" in names
+    assert "@" not in names["学校邮箱"]["detail"]          # 体检输出要能发给别人，不带邮箱
+    monkeypatch.setattr(cli, "load_settings", lambda: {"gmail_enabled": True})
+    assert "gmail" in cli._optional_status()

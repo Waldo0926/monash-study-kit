@@ -1,4 +1,4 @@
-"""考勤命令：登录门户、看状态、读取最近的班次和签到情况。
+"""考勤命令：登录门户、看状态、读取最近的班次和签到情况、找签到码。
 
 要先装 [attendance]（playwright），再运行一次 python -m playwright install chromium。
 attendance 模块只在这里用到时才导入：它一导入就要读时区库，没装考勤的人不该受影响。
@@ -22,6 +22,11 @@ def run(args):
             result = attendance.status()
         elif args.acmd == "sync":
             result = attendance.sync(args.days)
+        elif args.acmd == "overview":
+            result = attendance.overview(args.days)
+        elif args.acmd == "codes":
+            from .paths import load_settings
+            result = attendance.find_codes(args.days, gmail_allowed=bool(load_settings().get("gmail_enabled")))
         else:
             raise ValueError("Unknown attendance command")
     except attendance.AttendanceAuthError as e:
@@ -45,3 +50,7 @@ def add_commands(sub):
     command("status", "登录状态、上次读取时间和已保存的班次数")
     p = command("sync", "读取最近几天和本周还没到的班次及签到状态，保存到本地")
     p.add_argument("--days", type=int, default=7, help="往前读几天（1 到 14）")
+    p = command("overview", "看已保存的班次：已签到、还没签、还没到时间（不联网）")
+    p.add_argument("--days", type=int, default=14, help="往前看几天")
+    p = command("codes", "从已同步的 Moodle、Ed 和学校邮件里找还没签到的班次的签到码（只是候选，要自己核对）")
+    p.add_argument("--days", type=int, default=7, help="找最近几天的")

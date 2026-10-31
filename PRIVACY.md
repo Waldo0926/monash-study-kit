@@ -36,7 +36,7 @@ The software does not use your data for advertising, does not sell it, and does 
 The software sends data to:
 
 - the services you connected (Moodle, Ed, Google, the attendance portal), to read your data and, only after you confirm, to carry out an action you asked for;
-- the AI app you connect to your instance (for example Claude or Codex), and only the results of the queries that app makes on your behalf. That app's own privacy policy applies to what it receives.
+- the AI app you connect to your instance (for example Claude or Codex), and only the results of the queries that app makes on your behalf. That app's own privacy policy applies to what it receives. With the optional remote mode, an app receives mail or attendance results only if you ticked that feature when pairing it.
 
 No other party receives your data.
 

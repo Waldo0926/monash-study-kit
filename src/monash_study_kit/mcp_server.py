@@ -151,10 +151,14 @@ def _student_hint(tools: dict) -> str:
     out = ""
     if "get_gmail_inbox_todo" in tools:
         out += ("本服务连着用户的 Monash 学校邮箱。用户问“我的邮箱/邮件/有什么要处理的/学校发的邮件”时，"
-                "优先用本服务的 get_gmail_inbox_todo 和 search_gmail_cache，不要改用其他通用 Gmail 连接器，"
+                "优先用本服务的 get_gmail_inbox_todo 和 search_gmail_cache（附件用 gmail_read_attachment 读），"
+                "不要改用其他通用 Gmail 连接器，"
                 "除非用户明确说的是别的邮箱。邮件来自本地镜像，后台定时同步，as_of/last_success 是上次同步时间。")
     if "attendance_overview" in tools:
-        out += ("问签到/考勤用 attendance_overview；数据来自用户上次运行的 monash attendance sync，"
+        out += ("问签到/考勤先用 attendance_overview 看已保存的记录；要最新的用 attendance_sync，"
+                "找签到码用 attendance_find_codes（从 Moodle、Ed"
+                + ("、学校邮件" if "get_gmail_inbox_todo" in tools else "")
+                + " 里找，候选码要给用户核对）。这几个返回 job_id，用 student_job_status 查结果。"
                 "登录过期请用户在终端运行 monash attendance login。")
     if "execute_student_action" in tools:
         out += ("邮箱操作和签到提交先用对应的 prepare 工具拿到完整预览，原样给用户看；用户明确确认这一项后才调 "
@@ -684,6 +688,11 @@ PARAM_HELP = {
     ("get_gmail_inbox_todo", "days"): "最近几天，默认7",
     ("get_gmail_inbox_todo", "limit"): "最多列几封，默认10",
     ("attendance_overview", "days"): "往前看几天，默认14；未来已排的班次总会列出",
+    ("attendance_sync", "days"): "往前读几天，默认7，最多14；本周还没到的班次也会读",
+    ("attendance_find_codes", "days"): "找最近几天没签到的班次，默认7",
+    ("student_job_status", "job_id"): "同步、找码、导出返回的 job_id",
+    ("gmail_read_attachment", "message_id"): "邮件 ID，来自搜索结果或对话",
+    ("gmail_read_attachment", "part_id"): "read_gmail_cached_thread 里附件的 part_id",
 }
 
 def available_tools() -> dict:

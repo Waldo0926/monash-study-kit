@@ -51,14 +51,18 @@ OPTIONAL = {
         ("邮件待办：最近几天收件箱里没读的学校邮件，去掉推广和社交类", "我邮箱里有什么要处理的？", "monash gmail todo"),
         ("离线全文搜索已同步的邮件，带日期、未读、星标和附件数", "找一下交换申请的邮件", "monash gmail search 交换"),
         ("读整个邮件对话和附件列表", "把那封交换申请的邮件全文给我看", "monash gmail thread THREAD_ID"),
+        ("读附件：PDF、Word、PPT、图片里的文字", "那封邮件附件里的表格要填什么？",
+         "monash gmail attachment MESSAGE_ID PART_ID"),
     ]),
     "gmail_manage_enabled": ("邮箱操作（先预览，确认后才执行）", [
         ("起草回复、发送草稿", "帮我给老师起草一封请假邮件", "monash gmail draft --file reply.eml"),
         ("改标签：归档、标已读、加星标", "把这封邮件归档并标成已读", "monash gmail labels MESSAGE_ID --remove INBOX"),
     ]),
     "attendance_enabled": ("考勤", [
-        ("最近的班次：哪些已签到、哪些还没签、哪些还没到时间", "这周还有哪节课没签到？", "monash attendance sync"),
-        ("考勤登录和上次读取的时间", "考勤数据是什么时候的？", "monash attendance status"),
+        ("最近的班次：哪些已签到、哪些还没签、哪些还没到时间", "这周还有哪节课没签到？", "monash attendance overview"),
+        ("从 Moodle、Ed 和学校邮件里找签到码，标出处让你核对", "今天 FIT2102 workshop 的签到码是多少？",
+         "monash attendance codes"),
+        ("重新读一遍考勤门户（要开浏览器，一两分钟）", "刷新一下我的考勤", "monash attendance sync"),
     ]),
     "attendance_submit_enabled": ("签到提交（先预览，确认后才执行）", [
         ("你确认自己到课了，再用签到码帮你提交", "我刚上完 FIT2102 的 workshop，签到码是 ABCDE", ""),

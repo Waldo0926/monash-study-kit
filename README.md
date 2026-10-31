@@ -358,7 +358,7 @@ You can also query directly in the terminal without any AI:
 | `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
 | `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |
 | `monash gmail todo` / `sync` / `search` / `thread` | Optional school Gmail: unread inbox mail / sync / offline search / read a thread ([setup](#optional-gmail-and-attendance)) |
-| `monash attendance login` / `status` / `sync` | Optional attendance portal: log in / status / read recent classes |
+| `monash attendance login` / `status` / `sync` / `overview` / `codes` | Optional attendance: log in / status / read the portal / saved classes / find check-in codes |
 | `monash update` | Update to the latest version |
 
 Add `--json` for JSON output (output is JSON automatically when piped; `--text` forces text). Every command has `--help`.
@@ -391,8 +391,8 @@ Videos uploaded directly to Moodle aren't downloaded by default either (often hu
 
 Not on PyPI yet (see Unreleased in the [changelog](CHANGELOG.md)). Both parts are off by default and only run on your own computer.
 
-- **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline and reads whole threads. The default permission is read-only, so nothing in the mailbox changes, not even unread status.
-- **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?". Only checked against the Malaysia campus portal.
+- **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline, reads whole threads and the text of attachments (PDF, Office, images). The default permission is read-only, so nothing in the mailbox changes, not even unread status.
+- **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?" or "what's the code for today's FIT2102 workshop?". Codes are looked up in synced Moodle, Ed and school mail and shown with where they came from, for you to check. Only checked against the Malaysia campus portal.
 
 You need your own Google Cloud OAuth client for Gmail. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). In short:
 
@@ -404,11 +404,13 @@ monash attendance login
 monash attendance sync
 ```
 
-Restart your AI app after logging in. While it is open, mail syncs in the background every 30 minutes (`monash config gmail_sync_minutes`, 0 turns it off); `monash gmail sync` updates it right away. Attendance is read when you run `monash attendance sync`.
+Restart your AI app after logging in. While it is open, mail syncs in the background every 30 minutes (`monash config gmail_sync_minutes`, 0 turns it off); `monash gmail sync` updates it right away. Attendance is read when you or the AI ask for it (`monash attendance sync`), because each read opens a headless browser for a minute or two. `monash status` and `monash doctor` show both parts once they are on, and `monash update` keeps the extras you installed.
 
 Drafting, sending a draft, changing labels and submitting attendance stay off in the AI app until you turn them on with `monash config gmail_manage_enabled true` (after `monash gmail login --manage`) or `monash config attendance_submit_enabled true`. Even then the AI has to show you the full preview first and only runs it after you confirm that exact action. Mail is never permanently deleted.
 
 With `monash remote serve`, each app you pair chooses on the pairing page which of these features it may use. Only features turned on on the server are offered, read-only ones start ticked and the write ones start unticked. So Claude on your phone can have attendance only and ChatGPT mail only, or neither. Apps paired earlier keep Moodle and Ed only until you pair them again, and `monash remote clients` shows what each app has.
+
+Each part adds tool descriptions to every conversation: about 730 tokens for Gmail, 590 for attendance, and 1,900 with both plus the write switches (5,132 in total instead of 3,232). With both off nothing changes.
 
 Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
 

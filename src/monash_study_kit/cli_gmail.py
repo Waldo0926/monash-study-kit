@@ -12,6 +12,17 @@ from .paths import save_settings
 
 
 def run(args):
+    try:
+        return _run(args)
+    except gmail.GmailError as e:
+        # 没装 [gmail] 时 main 会把它当成“连不上”，说清楚是少装了东西
+        if isinstance(e.__cause__, ImportError):
+            print(f"{e}\n装好后重新运行这条命令。", file=sys.stderr)
+            return 1
+        raise
+
+
+def _run(args):
     if args.gcmd == "login":
         result = gmail.login(Path(args.client), manage=args.manage)
         save_settings({"gmail_enabled": True})

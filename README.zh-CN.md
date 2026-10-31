@@ -340,7 +340,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
 | `monash gmail todo` / `sync` / `search` / `thread` | 可选：学校邮箱的邮件待办 / 同步 / 离线搜索 / 读对话（[设置](#可选gmail-与考勤)） |
-| `monash attendance login` / `status` / `sync` | 可选：考勤门户登录 / 状态 / 读取最近的班次 |
+| `monash attendance login` / `status` / `sync` / `overview` / `codes` | 可选：考勤登录 / 状态 / 读门户 / 已保存的班次 / 找签到码 |
 | `monash update` | 更新到最新版 |
 
 加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
@@ -372,8 +372,8 @@ Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成�
 
 这部分还没发布到 PyPI（见[更新日志](CHANGELOG.md)里的 Unreleased）。两部分默认都不开，只在你自己的电脑上运行。
 
-- **学校邮箱（Gmail）。** 在本机保存一份 Monash 邮箱的私有副本。问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话。默认只申请只读权限，邮箱里什么都不会变，连未读状态都不动。
-- **考勤。** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”。只在马来西亚校区的门户上验证过。
+- **学校邮箱（Gmail）。** 在本机保存一份 Monash 邮箱的私有副本。问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话和附件里的文字（PDF、Office、图片）。默认只申请只读权限，邮箱里什么都不会变，连未读状态都不动。
+- **考勤。** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”“今天 FIT2102 workshop 的签到码是多少？”。签到码从已同步的 Moodle、Ed 和学校邮件里找，每个都标出处让你核对。只在马来西亚校区的门户上验证过。
 
 Gmail 要用你自己的 Google Cloud OAuth 客户端。完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)。简单来说：
 
@@ -385,11 +385,13 @@ monash attendance login
 monash attendance sync
 ```
 
-登录完重启 AI 软件。AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`。考勤在你运行 `monash attendance sync` 时读取。
+登录完重启 AI 软件。AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`。考勤在你或 AI 要的时候才读（`monash attendance sync`），因为每次都要开一个无头浏览器，要一两分钟。开了以后 `monash status` 和 `monash doctor` 都会显示这两部分，`monash update` 也会保留你装的可选依赖。
 
 起草、发送草稿、改标签和考勤签到提交，默认在 AI 软件里是关着的，要你自己打开：`monash config gmail_manage_enabled true`（先用 `monash gmail login --manage` 授权）或 `monash config attendance_submit_enabled true`。打开以后 AI 也必须先把完整预览给你看，你确认了这一项才会执行。不会彻底删除邮件。
 
 用 `monash remote serve` 远程接入时，每个软件在配对页上自己勾选能用哪些功能：只列服务器上已经开了的，只读的默认勾上，写操作默认不勾。比如手机上的 Claude 只开考勤，ChatGPT 只开邮箱，或者都不开。之前已经配对的软件还是只有 Moodle 和 Ed，重新配对才会多出来；`monash remote clients` 能看到每个软件拿到了什么。
+
+每开一部分，每次对话开头都要多发一些工具说明：Gmail 约 730 token，考勤约 590，两部分加写操作全开约多 1,900（总共 5,132，不开时是 3,232）。不开就没有任何变化。
 
 还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户。
 

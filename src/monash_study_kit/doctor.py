@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 from . import __version__, claude_setup, edlib, jobs
 from .moodlelib import MoodleAuthError, MoodleClient, MoodleError, db_connect
-from .paths import DEFAULTS, FILES_DIR, HOME, LOG_FILE, load_settings
+from .paths import DATA_DIR, DEFAULTS, FILES_DIR, HOME, LOG_FILE, SECRETS_DIR, load_settings
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 MARK = {OK: "✓", WARN: "!", FAIL: "✗"}
@@ -187,6 +187,55 @@ def check_mcp_log(lines: int = 400) -> dict:
     return _check("Claude 里的运行记录", OK, f"最近启动 {last}，没有报错")
 
 
+def _age(iso_or_none) -> float | None:
+    if not iso_or_none:
+        return None
+    return (datetime.now(timezone.utc) - datetime.fromisoformat(iso_or_none)).total_seconds() / 3600
+
+
+def check_gmail() -> dict | None:
+    """开了 Gmail 才查。不打印邮箱地址。"""
+    if not load_settings().get("gmail_enabled"):
+        return None
+    import importlib.util
+    from . import gmail
+    if importlib.util.find_spec("google_auth_oauthlib") is None:
+        return _check("学校邮箱", FAIL, "没装 Gmail 支持", 'uv tool install --reinstall "monash-study-kit[gmail]"')
+    if not gmail.TOKEN_FILE.is_file():
+        return _check("学校邮箱", FAIL, "还没授权", "monash gmail login --client <OAuth 客户端 JSON>")
+    store = gmail.Store()
+    try:
+        st = store.status()
+    finally:
+        store.close()
+    hours = _age(st["last_success"])
+    detail = f"本地 {st['cached_messages']} 封" + (f"，上次同步 {hours:.0f} 小时前" if hours is not None else "，还没同步完")
+    if hours is None or hours > 24:
+        return _check("学校邮箱", WARN, detail, "AI 软件开着时每 30 分钟自动同步；也可以手动 monash gmail sync，"
+                      "还不行就看运行记录里有没有“邮件同步”")
+    return _check("学校邮箱", OK, detail)
+
+
+def check_attendance() -> dict | None:
+    if not load_settings().get("attendance_enabled"):
+        return None
+    import importlib.util
+    if importlib.util.find_spec("playwright") is None:
+        return _check("考勤", FAIL, "没装考勤支持", 'uv tool install --reinstall "monash-study-kit[attendance]"')
+    if not (SECRETS_DIR / "attendance-state.json").is_file():
+        return _check("考勤", FAIL, "还没登录考勤门户", "monash attendance login")
+    try:
+        cache = json.loads((DATA_DIR / "attendance" / "records.json").read_text())
+    except FileNotFoundError:
+        return _check("考勤", WARN, "还没读过考勤记录", "monash attendance sync")
+    hours = _age(cache.get("last_success"))
+    detail = f"已保存 {len(cache.get('records', []))} 个班次" + (f"，上次读取 {hours:.0f} 小时前" if hours is not None else "")
+    if cache.get("last_error"):
+        fix = "monash attendance login" if "AuthError" in cache["last_error"] else "monash attendance sync"
+        return _check("考勤", WARN, detail + "；上次出错：" + scrub(cache["last_error"])[:120], fix)
+    return _check("考勤", OK, detail)
+
+
 def check_settings() -> dict:
     changed = {k: v for k, v in load_settings().items() if DEFAULTS.get(k) != v}
     files = f"课件在 {FILES_DIR}"
@@ -194,7 +243,7 @@ def check_settings() -> dict:
 
 
 CHECKS = [check_install, check_data_dir, check_browser, check_moodle, check_ed, check_courses, check_sync,
-          check_claude_desktop, check_claude_code, check_mcp_log, check_settings]
+          check_gmail, check_attendance, check_claude_desktop, check_claude_code, check_mcp_log, check_settings]
 
 
 def run(skip: tuple = (), deep: bool = False) -> dict:
@@ -203,7 +252,9 @@ def run(skip: tuple = (), deep: bool = False) -> dict:
         if fn.__name__ in skip:
             continue
         try:
-            results.append(fn())
+            result = fn()
+            if result is not None:      # 没开的可选功能不占一行
+                results.append(result)
         except Exception as e:  # noqa: BLE001  体检本身不能崩
             results.append(_check(fn.__name__.removeprefix("check_"), WARN, f"检查时出错：{type(e).__name__}: {scrub(str(e))}"))
     if deep:

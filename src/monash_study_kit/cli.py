@@ -16,7 +16,7 @@
     monash ed …                  # Ed 查询：new、threads、search、show、following、lessons、quiz
 
     monash gmail …               # 可选：学校邮箱同步、邮件待办、离线搜索（要装 [gmail]）
-    monash attendance …          # 可选：考勤门户 login、status、sync（要装 [attendance]）
+    monash attendance …          # 可选：考勤 login、status、sync、overview、codes（要装 [attendance]）
 
     monash media                 # 录播：取 YouTube 字幕、下载 Zoom 录像并转写（要装 [media]）
     monash open                  # 打开课件文件夹
@@ -215,6 +215,7 @@ def cmd_status(args):
         out["moodle_problem"] = str(e)
     out["ed_token"] = jobs.have_ed_token()
     out["calendar_fallback"] = bool(F.load_calendar_url())
+    out.update(_optional_status())
     if want_json(args):
         return emit_json(out)
     print(f"数据目录：{out['home']}")
@@ -227,6 +228,35 @@ def cmd_status(args):
     print(f"上次同步：{local_time(out['last_sync'], '%Y-%m-%d %H:%M') if out['last_sync'] else '还没同步过'}")
     for k, v in out["errors"].items():
         print(f"  ! {k}：{v}")
+    if "gmail" in out:
+        g = out["gmail"]
+        print(f"学校邮箱：本地 {g['cached_messages']} 封，上次同步 "
+              f"{local_time(g['last_success'], '%Y-%m-%d %H:%M') if g['last_success'] else '还没有'}"
+              + ("" if g["configured"] else "（还没授权 → monash gmail login）"))
+    if "attendance" in out:
+        a = out["attendance"]
+        print(f"考勤：已保存 {a['cached_records']} 个班次，上次读取 "
+              f"{local_time(a['last_success'], '%Y-%m-%d %H:%M') if a['last_success'] else '还没有'}"
+              + ("" if a["configured"] else "（还没登录 → monash attendance login）"))
+
+
+def _optional_status() -> dict:
+    """开了的可选功能各给一行；坏了也不影响 Moodle 和 Ed 的状态。"""
+    settings, out = load_settings(), {}
+    try:
+        if settings.get("gmail_enabled"):
+            from . import gmail
+            store = gmail.Store()
+            try:
+                out["gmail"] = store.status()
+            finally:
+                store.close()
+        if settings.get("attendance_enabled"):
+            from . import attendance
+            out["attendance"] = attendance.status()
+    except Exception as e:  # noqa: BLE001
+        out["optional_problem"] = f"{type(e).__name__}: {e}"
+    return out
 
 
 def cmd_doctor(args):
@@ -372,17 +402,25 @@ PACKAGE = "monash-study-kit"
 SOURCE = "https://github.com/Waldo0926/monash-study-kit/archive/refs/heads/main.zip"
 
 
-def update_commands(media: bool) -> list[list[str]]:
-    extra = "[media]" if media else ""
+# 可选依赖和用来判断装没装的模块。更新时要原样带上，不然 --reinstall 会把它们卸掉
+OPTIONAL_EXTRAS = {"gmail": "google_auth_oauthlib", "attendance": "playwright", "media": "faster_whisper"}
+
+
+def installed_extras() -> list[str]:
+    import importlib.util
+    return [extra for extra, module in OPTIONAL_EXTRAS.items() if importlib.util.find_spec(module) is not None]
+
+
+def update_commands(media: bool = False, extras=()) -> list[list[str]]:
+    names = sorted(set(extras) | ({"media"} if media else set()))
+    extra = f"[{','.join(names)}]" if names else ""
     base = ["uv", "tool", "install", "--reinstall", "--refresh"]
-    return [base + [PACKAGE + extra], base + [f"{PACKAGE}{extra} @ {SOURCE}" if media else SOURCE]]
+    return [base + [PACKAGE + extra], base + [f"{PACKAGE}{extra} @ {SOURCE}" if extra else SOURCE]]
 
 
 def cmd_update(args):
-    import importlib.util
     import shutil
-    media = importlib.util.find_spec("faster_whisper") is not None
-    cmds = update_commands(media)
+    cmds = update_commands(extras=installed_extras())
     if os.name == "nt" or not shutil.which("uv"):
         # Windows 上正在运行的 monash.exe（包括 Claude 开着的那个）不能被覆盖，要先退出 Claude 再在新窗口里跑
         print("先完全退出 Claude Desktop（托盘图标 → Quit），然后在新的 PowerShell 窗口里运行：\n")

@@ -70,3 +70,7 @@ def test_update_installs_from_pypi_first():
     assert first[-1] == "monash-study-kit" and fallback[-1].endswith("main.zip")
     first, fallback = cli.update_commands(media=True)
     assert first[-1] == "monash-study-kit[media]" and fallback[-1].startswith("monash-study-kit[media] @ https://")
+    # 装了 Gmail 和考勤的人更新后也不能丢掉这两个可选依赖
+    first, fallback = cli.update_commands(extras=["gmail", "attendance"])
+    assert first[-1] == "monash-study-kit[attendance,gmail]"
+    assert fallback[-1].startswith("monash-study-kit[attendance,gmail] @ https://")
