@@ -417,3 +417,31 @@ def test_gmail_login_with_a_missing_client_file_says_what_to_do(capsys, tmp_path
     code = cli.main(["gmail", "login", "--client", str(tmp_path / "你的OAuth客户端JSON的路径")])
     err = capsys.readouterr().err
     assert code == cli.EXIT_NOT_FOUND and "找不到 OAuth 客户端文件" in err and "Traceback" not in err
+
+
+def test_gmail_login_uses_the_bundled_app_unless_a_client_is_given(monkeypatch, capsys, tmp_path):
+    from monash_study_kit import cli_gmail
+    used = []
+    monkeypatch.setattr(gmail, "login", lambda path, manage=False: used.append(path) or {})
+    monkeypatch.setattr(cli_gmail, "save_settings", lambda s: None)
+    bundled = tmp_path / "google_client.json"
+    monkeypatch.setattr(cli_gmail, "BUNDLED_CLIENT", bundled)
+    # 这个版本没带公共应用：说清楚要用自己的
+    assert cli.main(["gmail", "login"]) == cli.EXIT_NOT_FOUND
+    assert "--client" in capsys.readouterr().err and used == []
+    bundled.write_text('{"installed": {}}')
+    assert cli.main(["gmail", "login"]) == 0 and used[-1] == bundled
+    own = tmp_path / "mine.json"
+    own.write_text('{"installed": {}}')
+    assert cli.main(["gmail", "login", "--client", str(own)]) == 0 and used[-1] == own
+    capsys.readouterr()
+
+
+def test_bundled_google_app_is_a_desktop_client_if_present():
+    # 打进安装包的只能是“桌面应用”客户端：网页应用的密钥是真机密，不能公开
+    from monash_study_kit import cli_gmail
+    if not cli_gmail.BUNDLED_CLIENT.is_file():
+        pytest.skip("this checkout has no bundled Google app")
+    config = json.loads(cli_gmail.BUNDLED_CLIENT.read_text(encoding="utf-8"))
+    assert set(config) == {"installed"}
+    assert config["installed"]["client_id"].endswith(".apps.googleusercontent.com")

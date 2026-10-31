@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from email import policy
 from email.parser import BytesParser
@@ -10,6 +11,28 @@ from pathlib import Path
 
 from . import gmail
 from .paths import save_settings
+
+# 安装包自带的 Google 应用（桌面应用客户端）。有了它，同学直接 monash gmail login 就行，
+# 不用自己去 Google Cloud 建项目。桌面应用的这个文件按 Google 的设计本来就不算机密，
+# 它只告诉 Google 是哪个应用在请求授权；邮件从 Google 直接到用户自己的电脑。
+BUNDLED_CLIENT = Path(__file__).with_name("google_client.json")
+# gmail.py 留了这个口子给部署方改提示；公开版现在不用 --client 也能登录
+os.environ.setdefault("MONASH_KIT_GMAIL_LOGIN_HINT", "Gmail 还没授权：运行 monash gmail login")
+
+
+def _client_file(arg) -> Path:
+    if arg:
+        path = Path(arg).expanduser()
+        if not path.is_file():
+            raise LookupError(f"找不到 OAuth 客户端文件：{path}\n"
+                              "--client 后面要写你从 Google Cloud 下载的那个 JSON 文件的位置。"
+                              "macOS 上可以先输入 monash gmail login --client 和一个空格，再把文件从访达拖进终端。"
+                              "不加 --client 就用安装包自带的应用。")
+        return path
+    if BUNDLED_CLIENT.is_file():
+        return BUNDLED_CLIENT
+    raise LookupError("这个版本没有自带的 Google 应用，要用你自己建的："
+                      "monash gmail login --client <JSON 文件>，步骤见 docs/google-and-attendance-setup.md。")
 
 
 def run(args):
@@ -27,13 +50,7 @@ def _run(args):
     if args.gcmd == "login":
         # 登录后就全部能用：默认连起草、发草稿、改标签的权限一起要。每次操作仍然先预览、确认才执行
         manage = not args.read_only
-        client_file = Path(args.client).expanduser()
-        if not client_file.is_file():
-            raise LookupError(f"找不到 OAuth 客户端文件：{client_file}\n"
-                              "--client 后面要写你从 Google Cloud 下载的那个 JSON 文件的位置。"
-                              "macOS 上可以先输入 monash gmail login --client 和一个空格，再把文件从访达拖进终端。"
-                              "还没有这个文件的话，按 docs/google-and-attendance-setup.md 第一步创建。")
-        result = gmail.login(client_file, manage=manage)
+        result = gmail.login(_client_file(args.client), manage=manage)
         save_settings({"gmail_enabled": True, "gmail_manage_enabled": manage})
     else:
         store = gmail.Store()
@@ -108,7 +125,7 @@ def add_commands(sub):
         return parser
 
     p = command("login", "用系统浏览器授权 Gmail；凭据只保存在本机")
-    p.add_argument("--client", required=True, help="Google OAuth Desktop app client JSON")
+    p.add_argument("--client", help="可选：用你自己在 Google Cloud 建的桌面应用 JSON；不写就用安装包自带的")
     p.add_argument("--read-only", action="store_true",
                    help="只要读邮件的权限，不让 AI 起草、发草稿或改标签（默认这些都可以，每次都要你确认）")
     p.add_argument("--manage", action="store_true", help=argparse.SUPPRESS)   # 以前的写法，现在是默认

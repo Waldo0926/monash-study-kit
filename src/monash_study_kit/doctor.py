@@ -204,7 +204,7 @@ def check_gmail() -> dict | None:
     if importlib.util.find_spec("google_auth_oauthlib") is None:
         return _check("学校邮箱", FAIL, "没装 Gmail 支持", 'uv tool install --reinstall "monash-study-kit[gmail]"')
     if not gmail.TOKEN_FILE.is_file():
-        return _check("学校邮箱", FAIL, "还没授权", "monash gmail login --client <OAuth 客户端 JSON>")
+        return _check("学校邮箱", FAIL, "还没授权", "monash gmail login")
     store = gmail.Store()
     try:
         st = store.status()

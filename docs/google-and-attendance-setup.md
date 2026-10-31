@@ -1,12 +1,26 @@
 # 接入 Gmail 和考勤：从零开始的设置步骤
 
-这份文档写给想让 monash 也能查学校邮箱和考勤的人。两部分都是可选的，默认不装也不开。每个人用自己的 Google Cloud 项目、自己的凭据，数据只留在自己的电脑上。
+这份文档写给想让 monash 也能查学校邮箱和考勤的人。两部分都是可选的，默认不装也不开。邮件和登录状态只存在你自己的电脑上，不经过维护者。
+
+**先想一想要不要用这里的 Gmail。** 如果只是想在 Claude 或 ChatGPT 里问问邮箱里有什么，用它们自带的 Gmail 连接器最简单，点一下连接就行。这里的 Gmail 多出来的是：
+
+- 和考勤连在一起，找签到码时会顺便搜学校邮件；
+- 邮件存在自己电脑上，能离线搜，附件里 PDF 和图片的文字也能搜；
+- Codex、Cursor 这些没有自带 Gmail 的软件也能用。
 
 只想要考勤、不用 Gmail 的话，第一步不用做，第二步只做开头的安装（可选依赖写 `[attendance]` 就行），然后看第三步。
 
 步骤来自 2026-10-31 在真实 Monash 账号上的第一次完整接入，踩过的坑都写在对应位置。
 
-## 一、Google Cloud：创建项目和 OAuth 客户端
+## 一、（可选）用你自己的 Google 应用
+
+安装包里自带了一个 Google 应用，**大多数人可以跳过这一步**，直接看第二步。下面这些情况才需要自己建：
+
+- 登录时 Google 提示这个应用的用户已满（没经过 Google 审核的应用最多 100 个用户）；
+- 你想完全用自己的项目和凭据；
+- 你在自己的服务器上部署，想和别人分开。
+
+建好以后，第二步登录时加上 `--client 你下载的JSON文件`。
 
 用你的**个人** Google 账号登录 <https://console.cloud.google.com>，不要用学校账号。学校账号所在的 Workspace 组织通常不允许学生建项目。
 
@@ -35,13 +49,13 @@ uv tool install --reinstall "monash-study-kit[gmail,attendance] @ git+https://gi
 然后授权（会打开系统浏览器）：
 
 ```sh
-MONASH_KIT_GMAIL_ACCOUNT=你的学校邮箱 monash gmail login --client /私有路径/google-client.json
+monash gmail login
 ```
 
-Windows PowerShell 里先 `$env:MONASH_KIT_GMAIL_ACCOUNT="你的学校邮箱"`，再运行 `monash gmail login --client ...`。
-
 - 浏览器里选**学校邮箱**，走 Monash 的 Okta 登录和 MFA。
-- 设了 `MONASH_KIT_GMAIL_ACCOUNT` 时，会核对授权的账号是不是它，选错账号会拒绝保存。
+- 授权页上会显示“Google 尚未验证此应用”。这是因为个人项目过不了 Google 那套收费的安全审核，点“高级”，再点“继续”就行。
+- 用的是第一步自己建的应用的话，改成 `monash gmail login --client 你下载的JSON文件`。macOS 上可以先输入 `monash gmail login --client ` 和一个空格，再把文件从访达拖进终端。
+- 想让程序核对你选的是不是学校邮箱，可以在命令前面加 `MONASH_KIT_GMAIL_ACCOUNT=你的学校邮箱 `（Windows PowerShell 里先运行 `$env:MONASH_KIT_GMAIL_ACCOUNT="你的学校邮箱"`），选错账号会拒绝保存。
 - 如果看到 “Monash University has not granted access”，说明学校管理员拦截了第三方应用，这条路走不通。
 - 默认申请 `gmail.modify`：能读邮件，也能让 AI 帮你起草、发草稿、改标签（归档、标已读、加星标），不能彻底删除邮件。Google 授权页上会写“查看和修改邮件”。每次操作都要你看过预览、确认后才执行，见第七步。
 - 只想让它读邮件，加 `--read-only`，只申请 `gmail.readonly`，邮箱里什么都不会变，连未读状态都不动。
@@ -131,7 +145,7 @@ monash config gmail_manage_enabled false
 monash config attendance_submit_enabled false
 ```
 
-想连 Google 的写权限都不给，就用 `monash gmail login --client ... --read-only` 重新登录一次。远程使用时，这两项还要在配对页上给具体的软件勾上才有。
+想连 Google 的写权限都不给，就用 `monash gmail login --read-only` 重新登录一次。远程使用时，这两项还要在配对页上给具体的软件勾上才有。
 
 ## 六、常见问题
 

@@ -17,7 +17,7 @@ Depending on which parts you set up, the software signs in as you and reads:
 - **Gmail** (optional): if you connect a Google account, messages, threads, labels and attachments, through the Gmail API.
 - **Attendance** (optional): your attendance records on the university attendance portal.
 
-Gmail access is requested only when you choose to connect it. By default the software asks for `gmail.modify`, which lets it read mail and, when you ask for it, create drafts, send a draft you reviewed or change labels (archive, mark as read, star). It cannot permanently delete email. If you only want reading, log in with `--read-only` and it asks for `gmail.readonly` instead. Every mailbox action and every attendance check-in runs only after you review the full preview and confirm that specific action.
+Gmail access is requested only when you choose to connect it. The package includes a Google OAuth client (a "desktop app" registered in the maintainer's Google Cloud project) so you can sign in without creating your own. It only tells Google which app is asking; your mail goes from Google straight to your own computer and never passes through the maintainer, who cannot see your tokens or messages. You can use your own client instead with `--client`. By default the software asks for `gmail.modify`, which lets it read mail and, when you ask for it, create drafts, send a draft you reviewed or change labels (archive, mark as read, star). It cannot permanently delete email. If you only want reading, log in with `--read-only` and it asks for `gmail.readonly` instead. Every mailbox action and every attendance check-in runs only after you review the full preview and confirm that specific action.
 
 ## How the data is used
 
