@@ -27,7 +27,13 @@ def _run(args):
     if args.gcmd == "login":
         # 登录后就全部能用：默认连起草、发草稿、改标签的权限一起要。每次操作仍然先预览、确认才执行
         manage = not args.read_only
-        result = gmail.login(Path(args.client), manage=manage)
+        client_file = Path(args.client).expanduser()
+        if not client_file.is_file():
+            raise LookupError(f"找不到 OAuth 客户端文件：{client_file}\n"
+                              "--client 后面要写你从 Google Cloud 下载的那个 JSON 文件的位置。"
+                              "macOS 上可以先输入 monash gmail login --client 和一个空格，再把文件从访达拖进终端。"
+                              "还没有这个文件的话，按 docs/google-and-attendance-setup.md 第一步创建。")
+        result = gmail.login(client_file, manage=manage)
         save_settings({"gmail_enabled": True, "gmail_manage_enabled": manage})
     else:
         store = gmail.Store()

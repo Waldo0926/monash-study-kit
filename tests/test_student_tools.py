@@ -1,5 +1,6 @@
 """本地 MCP 的 Gmail 和考勤：按设置注册、写操作先预览再确认、远程一律拒绝、命令行能用。"""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -402,6 +403,7 @@ def test_gmail_login_turns_everything_on_unless_read_only(monkeypatch, capsys, t
     monkeypatch.setattr(gmail, "login", lambda path, manage=False: calls.append(manage) or {"mode": "x"})
     monkeypatch.setattr(cli_gmail, "save_settings", saved.update)
     client = str(tmp_path / "client.json")
+    Path(client).write_text('{"installed": {}}')
     for argv, manage in ((["gmail", "login", "--client", client], True),
                          (["gmail", "login", "--client", client, "--read-only"], False),
                          (["gmail", "login", "--client", client, "--manage"], True)):
@@ -409,3 +411,9 @@ def test_gmail_login_turns_everything_on_unless_read_only(monkeypatch, capsys, t
         assert args.fn(args) == 0
         assert calls[-1] is manage and saved == {"gmail_enabled": True, "gmail_manage_enabled": manage}
     capsys.readouterr()
+
+
+def test_gmail_login_with_a_missing_client_file_says_what_to_do(capsys, tmp_path):
+    code = cli.main(["gmail", "login", "--client", str(tmp_path / "你的OAuth客户端JSON的路径")])
+    err = capsys.readouterr().err
+    assert code == cli.EXIT_NOT_FOUND and "找不到 OAuth 客户端文件" in err and "Traceback" not in err

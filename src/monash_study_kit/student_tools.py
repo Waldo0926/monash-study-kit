@@ -8,8 +8,9 @@
   * attendance_enabled         → 考勤的读取、同步、找签到码、导出，加 student_job_status
   * attendance_submit_enabled  → attendance_prepare_submit + execute_student_action
 
-写操作默认一个都不注册。开了以后也是先返回完整预览和一次性凭据，用户确认这一项后
-才能 execute_student_action。
+登录前什么都不注册；monash gmail login、monash attendance login 成功后，对应的四个设置
+都会打开（Gmail 用 --read-only 登录时只开读）。写操作每次都先返回完整预览和一次性凭据，
+用户确认这一项后才能 execute_student_action。
 
 远程 MCP 用的是另一套名字（student_services.TOOLS 加上 REMOTE_EXTRA），按每个客户端
 配对时勾选的功能给，再和服务器自己的设置取交集：服务器没开的，哪个客户端都拿不到。
