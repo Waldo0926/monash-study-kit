@@ -17,7 +17,8 @@ def run(args):
     try:
         if args.acmd == "login":
             result = attendance.login(timeout=args.timeout)
-            save_settings({"attendance_enabled": True})
+            # 登录后读取和签到提交都打开；提交只在用户说自己到课了、看过预览并确认后才会执行
+            save_settings({"attendance_enabled": True, "attendance_submit_enabled": True})
         elif args.acmd == "status":
             result = attendance.status()
         elif args.acmd == "sync":

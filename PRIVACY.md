@@ -17,7 +17,7 @@ Depending on which parts you set up, the software signs in as you and reads:
 - **Gmail** (optional): if you connect a Google account, messages, threads, labels and attachments, through the Gmail API.
 - **Attendance** (optional): your attendance records on the university attendance portal.
 
-Gmail access is requested only when you choose to connect it. The default permission is read-only (`gmail.readonly`). The broader permission (`gmail.modify`) is requested only if you opt in to mailbox actions such as creating drafts, sending a draft or changing labels. Those actions run only after you review and confirm the specific change. The software never permanently deletes email.
+Gmail access is requested only when you choose to connect it. By default the software asks for `gmail.modify`, which lets it read mail and, when you ask for it, create drafts, send a draft you reviewed or change labels (archive, mark as read, star). It cannot permanently delete email. If you only want reading, log in with `--read-only` and it asks for `gmail.readonly` instead. Every mailbox action and every attendance check-in runs only after you review the full preview and confirm that specific action.
 
 ## How the data is used
 

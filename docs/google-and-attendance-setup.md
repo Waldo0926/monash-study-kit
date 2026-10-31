@@ -43,9 +43,10 @@ Windows PowerShell 里先 `$env:MONASH_KIT_GMAIL_ACCOUNT="你的学校邮箱"`�
 - 浏览器里选**学校邮箱**，走 Monash 的 Okta 登录和 MFA。
 - 设了 `MONASH_KIT_GMAIL_ACCOUNT` 时，会核对授权的账号是不是它，选错账号会拒绝保存。
 - 如果看到 “Monash University has not granted access”，说明学校管理员拦截了第三方应用，这条路走不通。
-- 默认只申请只读权限 `gmail.readonly`，不会改邮箱，连未读状态都不动。想让 AI 帮你起草、发草稿、改标签，加 `--manage` 再授权一次，见第五步。
+- 默认申请 `gmail.modify`：能读邮件，也能让 AI 帮你起草、发草稿、改标签（归档、标已读、加星标），不能彻底删除邮件。Google 授权页上会写“查看和修改邮件”。每次操作都要你看过预览、确认后才执行，见第七步。
+- 只想让它读邮件，加 `--read-only`，只申请 `gmail.readonly`，邮箱里什么都不会变，连未读状态都不动。
 
-授权成功后本地 MCP 会自动打开只读邮件工具（设置 `gmail_enabled`）。接着下载邮件：
+授权成功后，邮件工具和邮箱操作在本地 AI 软件里都会自动打开（设置 `gmail_enabled`、`gmail_manage_enabled`；用了 `--read-only` 就只开前一个）。接着下载邮件：
 
 ```sh
 monash gmail sync          # 默认先下最近 90 天，一次最多 5 页，没下完再运行一次
@@ -66,7 +67,7 @@ monash attendance status
 ```
 
 - 第一次用要先给 playwright 装浏览器：macOS/Linux 运行 `"$(uv tool dir)/monash-study-kit/bin/python" -m playwright install chromium`，Windows 运行 `& "$(uv tool dir)\monash-study-kit\Scripts\python.exe" -m playwright install chromium`。
-- `login` 会打开浏览器让你登录考勤门户（Okta + MFA），保存的是门户的登录状态，不保存密码。成功后本地 MCP 会自动打开只读考勤工具（设置 `attendance_enabled`）。
+- `login` 会打开浏览器让你登录考勤门户（Okta + MFA），保存的是门户的登录状态，不保存密码。成功后本地 AI 软件里的考勤工具和签到提交都会自动打开（设置 `attendance_enabled`、`attendance_submit_enabled`）。
 - `sync` 读取最近几天（`--days`，最多 14）和本周还没到的班次及签到状态，存到本地。AI 软件里也能让它自己读（“刷新一下我的考勤”），在后台跑，读完再告诉你。
 - `codes` 找到的只是候选签到码，每个都标了来自哪条公告、帖子或邮件。同一节课找到两个不同的码会标成冲突，一定要自己核对。
 - 默认是**马来西亚校区**门户 `https://attendance.monash.edu.my`，时区 `Asia/Kuala_Lumpur`。其他校区可以设置 `MONASH_ATTENDANCE_ORIGIN` 和 `MONASH_ATTENDANCE_TZ`，但页面解析只在马来西亚校区验证过，换校区前要先确认页面结构。
@@ -119,17 +120,18 @@ monash attendance probe
 3. 每个软件分开授权。比如手机上的 Claude 只勾考勤，ChatGPT 只勾邮箱，互不影响。`monash remote clients` 能看到每个软件拿到了哪些功能。
 4. 之前已经配对过的软件不会自动多出邮箱和考勤。要加，就在软件里断开再用新配对码连一次；要收回，用 `monash remote revoke --client 客户端ID` 后重新配对。服务器上把某个功能的设置关掉，所有软件马上都用不了它。
 
-## 五、可选：让 AI 帮你操作邮箱和签到
+## 五、邮箱操作和签到提交
 
-默认 AI 只能读。起草、发送草稿、改标签（归档、标已读、加星标）和考勤签到提交，要你在设置里明确打开：
+登录以后，起草、发送草稿、改标签和签到提交在本地 AI 软件里默认就能用，不用另外设置。每次都要你确认，见第七步。
+
+不想要哪一项，就关掉它，改完重启 AI 软件：
 
 ```sh
-monash gmail login --client /私有路径/google-client.json --manage   # 邮箱操作要 gmail.modify 权限
-monash config gmail_manage_enabled true
-monash config attendance_submit_enabled true
+monash config gmail_manage_enabled false
+monash config attendance_submit_enabled false
 ```
 
-改完重启 AI 软件。不想要了就把对应设置改回 `false`。远程使用时，这两项还要在配对页上给具体的软件勾上才有。
+想连 Google 的写权限都不给，就用 `monash gmail login --client ... --read-only` 重新登录一次。远程使用时，这两项还要在配对页上给具体的软件勾上才有。
 
 ## 六、常见问题
 
@@ -150,7 +152,7 @@ monash config attendance_submit_enabled true
 
 起草、发信、改标签、考勤提交都分两步：先返回完整预览和一次性确认凭据，用户确认后才执行。
 
-- 本地 MCP 默认不注册这些工具，要按第五步打开；远程还要在配对时给那个软件勾上。
+- 本地登录后默认打开，可以按第五步关掉；远程还要在配对时给那个软件勾上。
 - 确认凭据按软件分开，一个软件准备的操作，另一个软件执行不了。
 - AI 必须把预览原样给你看，你确认了这一项，它才能带着 `user_confirmed=true` 去执行，不能自己替你确认。
 - 凭据 10 分钟有效、只能用一次，绑定预览时的内容；发送草稿前会核对草稿在预览后有没有被改过。

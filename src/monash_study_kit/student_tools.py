@@ -54,7 +54,7 @@ def _require_manage(name: str) -> None:
     """只读授权下准备邮箱操作，执行时 Gmail 才会拒绝，那时凭据已经记成“结果未知”。先查好。"""
     if name == "gmail_prepare_action" and gmail.MANAGE_SCOPE not in (gmail.Client()._credentials().scopes or []):
         raise PermissionError("现在的 Gmail 授权只能读，邮箱操作要写权限。请用户在终端运行 "
-                              "monash gmail login --client <OAuth 客户端 JSON> --manage，再重启 AI 软件。")
+                              "monash gmail login --client <OAuth 客户端 JSON>（不加 --read-only），再重启 AI 软件。")
 
 
 def _runner(name: str, granted: set[str]):
@@ -68,7 +68,7 @@ def _runner(name: str, granted: set[str]):
             return S.call(name, arguments, granted, OWNER)
         except GmailAuthError as e:
             raise PermissionError(f"Gmail 授权失效或权限不够（{e}）。请用户在终端运行 "
-                                  "monash gmail login --client <OAuth 客户端 JSON>，写操作要加 --manage。") from e
+                                  "monash gmail login --client <OAuth 客户端 JSON>。") from e
         except RuntimeError as e:
             from .attendance import AttendanceAuthError
             if isinstance(e, AttendanceAuthError):

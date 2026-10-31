@@ -13,8 +13,10 @@ modules. The feature is listed under Unreleased in the changelog and is not on P
 
 ## Reading is compatible with downloading
 
-The default authorization is `gmail.readonly`. It is enough to download messages and
-attachments, and it cannot change the mailbox, including unread status. Bodies, the
+`monash gmail login --read-only` asks for `gmail.readonly`. It is enough to download messages
+and attachments, and it cannot change the mailbox, including unread status. Without the flag
+login asks for `gmail.modify` (see Mailbox actions); downloading works the same way and still
+never marks mail as read. Bodies, the
 original Gmail `format=full` JSON payload, labels and attachment metadata go into a
 private SQLite database with an FTS5 full-text index. This is a real local copy, not a
 browser session that has to keep Gmail open. The payload JSON is not a byte-for-byte
@@ -76,7 +78,7 @@ reads only the cache and reports `as_of`, the time of the last successful sync.
 
 ## Mailbox actions
 
-With the optional `gmail.modify` authorization (`monash gmail login --manage`) the code can
+With the `gmail.modify` authorization (the default of `monash gmail login`) the code can
 create drafts, send an existing draft and change labels, which also covers archive, mark as
 read and star. Labels can be changed on one message or a whole thread, and can be given by
 name or by a common alias (星标, 未读, 收件箱, 重要). Nothing permanently deletes mail.
@@ -106,9 +108,12 @@ checking. Attendance submission uses the same tickets.
 
 ## What the local and remote MCP expose
 
-The local MCP registers these only when the matching setting is on. Logging in with
-`monash gmail login` or `monash attendance login` turns on the read-only part; the write
-switches stay off until set by hand with `monash config`.
+The local MCP registers these only when the matching setting is on. Nothing is on before
+the student logs in. `monash gmail login` turns on both Gmail settings (only the first with
+`--read-only`), and `monash attendance login` turns on both attendance settings, so everything
+works right after login. Each one can be turned off with `monash config`. The write tools
+still need a preview and the user's confirmation every time; see
+[ADR 0004](adr/0004-confirmed-mail-and-attendance-actions.md).
 
 | Setting | Tools added |
 |---|---|

@@ -1,6 +1,7 @@
 """Gmail commands: durable mirror and optional mailbox management."""
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from email import policy
@@ -24,8 +25,10 @@ def run(args):
 
 def _run(args):
     if args.gcmd == "login":
-        result = gmail.login(Path(args.client), manage=args.manage)
-        save_settings({"gmail_enabled": True})
+        # 登录后就全部能用：默认连起草、发草稿、改标签的权限一起要。每次操作仍然先预览、确认才执行
+        manage = not args.read_only
+        result = gmail.login(Path(args.client), manage=manage)
+        save_settings({"gmail_enabled": True, "gmail_manage_enabled": manage})
     else:
         store = gmail.Store()
         try:
@@ -100,7 +103,9 @@ def add_commands(sub):
 
     p = command("login", "用系统浏览器授权 Gmail；凭据只保存在本机")
     p.add_argument("--client", required=True, help="Google OAuth Desktop app client JSON")
-    p.add_argument("--manage", action="store_true", help="可选：授权草稿、发信及标签修改")
+    p.add_argument("--read-only", action="store_true",
+                   help="只要读邮件的权限，不让 AI 起草、发草稿或改标签（默认这些都可以，每次都要你确认）")
+    p.add_argument("--manage", action="store_true", help=argparse.SUPPRESS)   # 以前的写法，现在是默认
     command("status", "查看本地 Gmail 镜像的覆盖范围和同步状态")
     p = command("sync", "分页下载正文及完整消息 payload；每页单独保存，中断后再运行会接着下")
     p.add_argument("--query", default="newer_than:90d", help="初次同步 Gmail 搜索范围；空字符串为全部")

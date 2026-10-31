@@ -185,7 +185,7 @@ def test_cli_attendance_login_status_and_expired_session(monkeypatch, capsys):
     monkeypatch.setattr("monash_study_kit.cli_attendance.save_settings", saved.update)
     monkeypatch.setattr(attendance, "login", lambda timeout=600: {"status": "connected", "saved": True})
     args = cli.build_parser().parse_args(["attendance", "login"])
-    assert args.fn(args) == 0 and saved == {"attendance_enabled": True}
+    assert args.fn(args) == 0 and saved == {"attendance_enabled": True, "attendance_submit_enabled": True}
     capsys.readouterr()
 
     monkeypatch.setattr(attendance, "status", lambda: {"configured": False, "cached_records": 0})
@@ -330,7 +330,7 @@ def test_read_only_gmail_login_cannot_prepare_a_mailbox_action(monkeypatch):
     monkeypatch.setattr(gmail, "Client", ReadOnly)
     use(monkeypatch, gmail_enabled=True, gmail_manage_enabled=True)
     result = call("gmail_prepare_action", {"operation": "labels", "message_id": "m1", "add": "STARRED"})["result"]
-    assert result["isError"] and "--manage" in result["content"][0]["text"]
+    assert result["isError"] and "--read-only" in result["content"][0]["text"]
     reply = remote_call("gmail_prepare_action", {"operation": "labels", "message_id": "m1", "add": "STARRED"},
                         {"monash", "gmail.manage"})["result"]
     assert reply["isError"] and "服务器的终端" in reply["content"][0]["text"]
@@ -393,3 +393,19 @@ def test_status_and_doctor_cover_enabled_optional_features(monkeypatch, capsys):
     assert "@" not in names["学校邮箱"]["detail"]          # 体检输出要能发给别人，不带邮箱
     monkeypatch.setattr(cli, "load_settings", lambda: {"gmail_enabled": True})
     assert "gmail" in cli._optional_status()
+
+
+def test_gmail_login_turns_everything_on_unless_read_only(monkeypatch, capsys, tmp_path):
+    # 登录后就全部能用；只想读的人加 --read-only。以前的 --manage 照样能用
+    from monash_study_kit import cli_gmail
+    calls, saved = [], {}
+    monkeypatch.setattr(gmail, "login", lambda path, manage=False: calls.append(manage) or {"mode": "x"})
+    monkeypatch.setattr(cli_gmail, "save_settings", saved.update)
+    client = str(tmp_path / "client.json")
+    for argv, manage in ((["gmail", "login", "--client", client], True),
+                         (["gmail", "login", "--client", client, "--read-only"], False),
+                         (["gmail", "login", "--client", client, "--manage"], True)):
+        args = cli.build_parser().parse_args(argv)
+        assert args.fn(args) == 0
+        assert calls[-1] is manage and saved == {"gmail_enabled": True, "gmail_manage_enabled": manage}
+    capsys.readouterr()
