@@ -71,7 +71,9 @@ def _fold(line: str) -> list[str]:
         part, length = part + char, length + n
     return chunks + ([part] if part else [])
 
-def _stamp(raw: str) -> datetime | None:
+def _stamp(raw: str | None) -> datetime | None:
+    if not isinstance(raw, str) or not raw:
+        return None
     try:
         stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         return stamp.astimezone(timezone.utc) if stamp.tzinfo else None
