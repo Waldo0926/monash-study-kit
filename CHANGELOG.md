@@ -4,6 +4,8 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## 1.7.0
 
+This is also the first release on PyPI with the 1.6.0 changes below (the local semester week view and private calendar export); 1.6.0 was never published on its own.
+
 Ed Lessons materials are organised like Ed and can be taken away as one zip, matching Ed Web's "download all".
 
 - `monash ed export FIT2109` (and `--module`, `--to`, `--open`) packs the synced Ed Lessons of a unit into a zip in Downloads: one folder per module, files in Ed's order, a `Links.md` per lesson for reading pages and the Ed page, and a `README.md` with progress and any files that failed to download. It reads only local files.

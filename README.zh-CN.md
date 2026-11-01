@@ -1,7 +1,5 @@
 # Monash Study Kit
 
-运行**`monash semester --days 7`**可以把Moodle截止、Ed未完成Lesson和未读回复、本地考勤缓存放到一份周视图里；加上**`--ics`**可把Moodle截止日期导出到本机私有日历文件。它不会自动更新，也不会把个人课表上传到MonashHub。请以Moodle实际截止时间为准。 · Monash 学习助手
-
 [![类型](https://img.shields.io/badge/%E7%B1%BB%E5%9E%8B-MCP_%E6%9C%8D%E5%8A%A1_%2B_CLI-2563eb?style=for-the-badge)](#它由两部分组成)
 [![技术](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF-Python_%C2%B7_MCP_%C2%B7_%E6%9C%AC%E5%9C%B0%E4%BC%98%E5%85%88-7c3aed?style=for-the-badge)](#开发)
 [![版本](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=%E7%89%88%E6%9C%AC&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
@@ -21,6 +19,8 @@
 - “FIT2102 哪一周讲了 monad？在哪份讲义第几页？”
 - “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
 - “用 FIT2109 第 3 周的测验题考考我。”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
+
+还可以运行 `monash semester --days 7`，把 Moodle 截止、Ed 没做完的 lesson 和未读回复、本地考勤缓存放进一份周视图；加 `--ics` 把 Moodle 截止日期导出成本机的私有日历文件。它是一次性的快照，不会自动更新，也不会把你的课表上传到 Monash Hub。具体截止时间以 Moodle 为准。
 
 默认把课件、登录状态和数据库保存在**你自己的电脑上**。但你用AI软件查询时，工具返回的课程、邮件或考勤信息会交给你连接的AI服务，具体如何处理由该服务的隐私政策决定。可选远程模式由你自行托管，不经过本项目维护者的服务器。
 
