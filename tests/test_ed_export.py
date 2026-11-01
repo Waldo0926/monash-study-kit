@@ -32,7 +32,7 @@ class FakeEd:
         }
 
     def get(self, path, params=None):
-        if path == "/courses/39026/lessons":
+        if path == "/courses/4242/lessons":
             return {"modules": [{"id": 2, "name": "Week 3: Editor/Modern IDE"}, {"id": 1, "name": "Week 1: Shell"}],
                     "lessons": [{"id": 12, "module_id": 2, "index": 1, "title": "W3 Workshop", "status": "completed"},
                                 {"id": 11, "module_id": 1, "index": 0, "title": "W1 Pre-Class", "status": "attempted"}]}
@@ -63,7 +63,7 @@ def ed(tmp_path, monkeypatch):
 
     monkeypatch.setattr(L.urllib.request, "urlopen", urlopen)
     conn = edlib.db_connect(tmp_path / "ed.db")
-    conn.execute("INSERT INTO courses (id, code, name, tracked) VALUES (39026, 'FIT2109 S2 2026 Malaysia', 'Workshop', 1)")
+    conn.execute("INSERT INTO courses (id, code, name, tracked) VALUES (4242, 'FIT2109 S2 2026 Malaysia', 'Workshop', 1)")
     conn.commit()
     yield conn, files, fetched, FakeEd()
     conn.close()
@@ -75,7 +75,7 @@ def _paths(conn):
 
 def test_files_use_course_code_week_and_lesson_names(ed):
     conn, files, fetched, client = ed
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     paths = _paths(conn)
     week3 = "FIT2109/02 Week 3 - Editor-Modern IDE/02 W3 Workshop"
     assert paths["Workshop 3 Slides.pdf"] == f"{week3}/01 Workshop 3 Slides.pdf"
@@ -91,27 +91,27 @@ def test_files_use_course_code_week_and_lesson_names(ed):
 def test_old_numeric_layout_is_moved_not_downloaded_again(ed):
     conn, files, fetched, client = ed
     L.ensure_lessons_schema(conn)
-    old = files / "39026" / "12" / "201_Workshop 3 Slides.pdf.pdf"
+    old = files / "4242" / "12" / "201_Workshop 3 Slides.pdf.pdf"
     old.parent.mkdir(parents=True)
     old.write_bytes(b"downloaded by 1.5")
     conn.execute("INSERT INTO lesson_files (id, lesson_id, course_id, type, title, file_url, local_path, idx) "
-                 "VALUES (201, 12, 39026, 'pdf', 'Workshop 3 Slides.pdf', ?, '39026/12/201_Workshop 3 Slides.pdf.pdf', 0)",
+                 "VALUES (201, 12, 4242, 'pdf', 'Workshop 3 Slides.pdf', ?, '4242/12/201_Workshop 3 Slides.pdf.pdf', 0)",
                  (PDF1,))
     conn.commit()
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     new = files / _paths(conn)["Workshop 3 Slides.pdf"]
     assert new.read_bytes() == b"downloaded by 1.5" and PDF1 not in fetched
-    assert not old.exists() and not (files / "39026").exists()      # 空了的旧文件夹也删掉
+    assert not old.exists() and not (files / "4242").exists()      # 空了的旧文件夹也删掉
 
 
 def test_replaced_file_is_downloaded_again_and_removed_slide_is_deleted(ed):
     conn, files, fetched, client = ed
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     starter = files / _paths(conn)["starter.zip"]
     client.slides[12][0]["file_url"] = PDF2                        # 老师换了 PDF
     client.slides[12] = [s for s in client.slides[12] if s["type"] != "document"]   # 删了说明页
     fetched.clear()
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     assert fetched == [PDF2]
     assert (files / _paths(conn)["Workshop 3 Slides.pdf"]).read_bytes() == f"content of {PDF2}".encode()
     assert not starter.exists() and "starter.zip" not in _paths(conn)
@@ -120,14 +120,14 @@ def test_replaced_file_is_downloaded_again_and_removed_slide_is_deleted(ed):
 def test_oversized_attachment_is_skipped(ed, monkeypatch):
     conn, files, fetched, client = ed
     monkeypatch.setattr(L, "ATTACHMENT_MAX", 5)
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     assert _paths(conn)["starter.zip"] is None and _paths(conn)["Workshop 3 Slides.pdf"]
     assert not list(files.rglob("*.part"))
 
 
 def test_export_zip_is_grouped_by_week_with_links_and_readme(ed, tmp_path):
     conn, files, fetched, client = ed
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     d = edexport.export(conn, "FIT2109", tmp_path / "out")
     assert d["files"] == 3 and d["lessons"] == 2 and d["missing"] == 0
     assert d["path"].endswith(".zip") and "FIT2109 Ed Lessons" in d["path"]
@@ -137,7 +137,7 @@ def test_export_zip_is_grouped_by_week_with_links_and_readme(ed, tmp_path):
         assert f"{root}/02 Week 3 - Editor-Modern IDE/02 W3 Workshop/01 Workshop 3 Slides.pdf" in names
         assert f"{root}/02 Week 3 - Editor-Modern IDE/02 W3 Workshop/02 starter.zip" in names
         links = z.read(f"{root}/01 Week 1 - Shell/01 W1 Pre-Class/Links.md").decode()
-        assert "https://notes.example/w1" in links and "edstem.org/au/courses/39026/lessons/11" in links
+        assert "https://notes.example/w1" in links and "edstem.org/au/courses/4242/lessons/11" in links
         readme = z.read(f"{root}/README.md").decode()
         assert "## Week 1: Shell" in readme and "W3 Workshop" in readme and "不要再公开分发" in readme
     only = edexport.export(conn, "FIT2109", tmp_path / "out", module="Week 3")
@@ -149,7 +149,7 @@ def test_export_lists_missing_files_and_needs_a_sync_first(ed, tmp_path):
     conn, files, fetched, client = ed
     with pytest.raises(LookupError, match="monash sync"):
         edexport.export(conn, "FIT2109", tmp_path)
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     (files / _paths(conn)["Workshop 3 Slides.pdf"]).unlink()
     d = edexport.export(conn, "FIT2109", tmp_path)
     with zipfile.ZipFile(d["path"]) as z:
@@ -168,7 +168,7 @@ def test_course_folder_names():
 
 def test_library_lists_synced_ed_files_and_serves_the_zip(ed, tmp_path, monkeypatch):
     conn, files, fetched, client = ed
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     monkeypatch.setattr(library, "DATA_DIR", tmp_path)
     monkeypatch.setattr(library, "ED_DB", tmp_path / "ed.db")
     monkeypatch.setattr(library, "ED_DIR", files)
@@ -178,8 +178,8 @@ def test_library_lists_synced_ed_files_and_serves_the_zip(ed, tmp_path, monkeypa
     try:
         page = OPEN(base + "/", timeout=5).read().decode()
         assert "Workshop 3 Slides.pdf" in page and "Ed · Week 3: Editor/Modern IDE · W3 Workshop" in page
-        assert "/export?course=39026" in page
-        with OPEN(base + "/export?course=39026", timeout=5) as r:
+        assert "/export?course=4242" in page
+        with OPEN(base + "/export?course=4242", timeout=5) as r:
             assert r.headers["Content-Type"] == "application/zip"
             body = r.read()
         assert "FIT2109 Ed Lessons/README.md" in zipfile.ZipFile(io.BytesIO(body)).namelist()
@@ -193,7 +193,7 @@ def test_library_lists_synced_ed_files_and_serves_the_zip(ed, tmp_path, monkeypa
 
 def test_mcp_lists_ed_files_and_exports(ed, tmp_path, monkeypatch):
     conn, files, fetched, client = ed
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     monkeypatch.setattr(M, "_ed", lambda: edlib.db_connect(tmp_path / "ed.db"))
     monkeypatch.setattr(edexport, "default_dir", lambda: tmp_path / "Downloads")
     rows = M._ed_files({"course": "FIT2109", "week": 3})
@@ -207,7 +207,7 @@ def test_mcp_lists_ed_files_and_exports(ed, tmp_path, monkeypatch):
 
 def test_cli_export(ed, tmp_path, monkeypatch, capsys):
     conn, files, fetched, client = ed
-    L.sync_lessons(conn, client, 39026, log=lambda m: None)
+    L.sync_lessons(conn, client, 4242, log=lambda m: None)
     monkeypatch.setattr(edlib, "db_connect", lambda *a, **k: conn)
     assert cli.main(["ed", "export", "FIT2109", "--to", str(tmp_path / "out"), "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
