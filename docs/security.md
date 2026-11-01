@@ -1,5 +1,7 @@
 # Security review
 
+> **Version scope:** This is the recorded **v1.1.0** review, not a current certification of the complete package. Optional remote MCP/OAuth, Gmail and Attendance were added later and introduce additional credentials, network exposure and confirmed write actions. See [the v1.5 review scope and verification checklist](SECURITY-REVIEW-1.5-SCOPE.md), [ADR 0004](adr/0004-confirmed-mail-and-attendance-actions.md) and the [privacy policy](../PRIVACY.md). Do not interpret the \"GO\" conclusions below as covering these newer features.
+
 Scope: the `monash-study-kit` package in `src/monash_study_kit`, its tests, and the release workflow. The package runs on the student's own computer. It holds three secrets: the Moodle session cookie, the Moodle iCal calendar URL (it has an `authtoken` in it), and the Ed API token. It also stores course files and a local copy of Ed posts.
 
 Every claim below points to the code line that does it and to a test that checks it. The tests in `tests/test_security.py` were written for this review. Line numbers are for version 1.1.0.

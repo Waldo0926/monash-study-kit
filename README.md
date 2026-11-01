@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=Release&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
 [![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)](LICENSE)
-[![Access](https://img.shields.io/badge/Access-Read--only-475569?style=for-the-badge)](#privacy-and-security)
+[![Moodle/Ed read-only](https://img.shields.io/badge/Moodle%20%2F%20Ed-read--only-475569?style=for-the-badge)](#privacy-and-security)
 [![Docs](https://img.shields.io/badge/Docs-docs.secureview.tech-1e5eff?style=for-the-badge)](https://docs.secureview.tech/study-kit/)
 
 [![CI](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml/badge.svg)](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml) [![Monash Study Kit MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit/badges/score.svg)](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit)
@@ -20,7 +20,9 @@ Connect Monash **Moodle** and **Ed** to the AI app on your computer (Claude, Cod
 - "What does the A2 spec ask for?", "What's my current grade in FIT2109?"
 - "Quiz me on FIT2109 week 3." In apps that support MCP Apps, to-dos, lesson progress and quiz questions also show up as small panels you can click
 
-By default, everything stays **on your own computer**: course files, login state and the database live locally and never pass through a third-party server.
+You can also run **`monash semester --days 7`** for a combined private week view of Moodle deadlines, Ed lessons/replies and any locally cached attendance records. Add **`--ics`** to export a private `semester.ics` into the Study Kit data directory, or **`--ics /path/to/file.ics`** to choose a path. This is a one-time calendar snapshot, not a live subscription; deadline times must be verified with Moodle. No personal semester data is uploaded to Monash Hub.
+
+By default, synced course files, login state and the local database stay **on your own computer**. Results returned by MCP tools go to the AI app you connect; its privacy policy applies. Optional remote access sends those results through the AI provider's connection, not through a server run by this project's maintainer.
 All Moodle and Ed tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed. The optional school mail and attendance parts can draft mail, change labels or check you in, and only after you confirm each action.
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
@@ -30,6 +32,8 @@ Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work
 The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Your AI app reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
 
 ---
+
+For the original v1.1 security review and the [1.5 feature review checklist](docs/SECURITY-REVIEW-1.5-SCOPE.md), see [security documentation](docs/security.md). The earlier review does not automatically certify features added later.
 
 ## Two parts, one codebase
 
@@ -132,6 +136,7 @@ Then open your AI app. In Claude Desktop, **"+" → Connectors** in the chat box
 
 ## What's new in 1.6
 
+- **Semester week view.** `monash semester --days 7` puts Moodle deadlines, Ed lessons and replies and cached attendance in one view; `--ics` exports the deadlines as a private calendar file.
 - **Download a whole unit's Ed materials as one zip.** `monash ed export FIT2109` packs the Ed Lessons you have synced into a zip in your Downloads folder: one folder per week with the PDFs, text pages and attachments, a `Links.md` per lesson (reading pages and the original Ed page) and a top-level `README.md` with your progress. `--module "Week 3"` packs one week, `--open` shows the zip in Finder. You can also ask your AI app "zip up my FIT2109 Ed materials", or use the button next to each unit on the `monash library --open` page. It works offline from files already on your computer.
 - **Ed files are stored by unit code.** Folders change from numeric ids to `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf`, in the same order as on Ed. `monash open ed` opens them. The first sync after upgrading moves existing files instead of downloading them again.
 - **Files attached inside Ed pages are downloaded too.** Starter-code zips, handouts and other files that Ed hosts inside a lesson page are now downloaded and searchable; single files over 200 MB are skipped. A replaced PDF is downloaded again, and pages removed on Ed are removed locally.

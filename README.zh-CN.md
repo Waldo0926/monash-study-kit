@@ -1,11 +1,13 @@
-# Monash Study Kit · Monash 学习助手
+# Monash Study Kit
+
+运行**`monash semester --days 7`**可以把Moodle截止、Ed未完成Lesson和未读回复、本地考勤缓存放到一份周视图里；加上**`--ics`**可把Moodle截止日期导出到本机私有日历文件。它不会自动更新，也不会把个人课表上传到MonashHub。请以Moodle实际截止时间为准。 · Monash 学习助手
 
 [![类型](https://img.shields.io/badge/%E7%B1%BB%E5%9E%8B-MCP_%E6%9C%8D%E5%8A%A1_%2B_CLI-2563eb?style=for-the-badge)](#它由两部分组成)
 [![技术](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF-Python_%C2%B7_MCP_%C2%B7_%E6%9C%AC%E5%9C%B0%E4%BC%98%E5%85%88-7c3aed?style=for-the-badge)](#开发)
 [![版本](https://img.shields.io/github/v/release/Waldo0926/monash-study-kit?style=for-the-badge&label=%E7%89%88%E6%9C%AC&color=16a34a)](https://github.com/Waldo0926/monash-study-kit/releases)
 [![PyPI](https://img.shields.io/pypi/v/monash-study-kit?style=for-the-badge&label=PyPI&color=0ea5e9)](https://pypi.org/project/monash-study-kit/)
 [![许可证](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-16a34a?style=for-the-badge)](LICENSE)
-[![访问](https://img.shields.io/badge/%E8%AE%BF%E9%97%AE-%E5%8F%AA%E8%AF%BB-475569?style=for-the-badge)](#隐私和安全)
+[![Moodle和Ed只读](https://img.shields.io/badge/Moodle%2FEd-%E5%8F%AA%E8%AF%BB-475569?style=for-the-badge)](#隐私和安全)
 [![文档](https://img.shields.io/badge/%E6%96%87%E6%A1%A3-docs.secureview.tech-1e5eff?style=for-the-badge)](https://docs.secureview.tech/zh-cn/study-kit/)
 
 [![CI](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml/badge.svg)](https://github.com/Waldo0926/monash-study-kit/actions/workflows/test.yml) [![Monash Study Kit MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit/badges/score.svg)](https://glama.ai/mcp/servers/Waldo0926/monash-study-kit)
@@ -20,7 +22,9 @@
 - “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
 - “用 FIT2109 第 3 周的测验题考考我。”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
 
-默认所有东西都在**你自己的电脑上**：课件、登录状态、数据库都存在本机，不经过任何第三方服务器。Moodle 和 Ed 的工具全部是**只读**的：不会帮你交作业、做测验或在 Ed 上发帖。可选的学校邮箱和考勤可以帮你起草邮件、改标签、签到，每一项都要你确认才执行。
+默认把课件、登录状态和数据库保存在**你自己的电脑上**。但你用AI软件查询时，工具返回的课程、邮件或考勤信息会交给你连接的AI服务，具体如何处理由该服务的隐私政策决定。可选远程模式由你自行托管，不经过本项目维护者的服务器。
+
+Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选的学校邮箱和考勤可以帮你起草邮件、改标签、签到，每一项都要先由你确认。
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
 
@@ -29,6 +33,8 @@
 图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的。AI 软件通过 MCP 工具读到的是同样的数据。带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)。
 
 ---
+
+之前的[1.1安全审计](docs/security.md)只覆盖当时的功能；新增的远程连接、邮箱与考勤另列有[1.5审查清单](docs/SECURITY-REVIEW-1.5-SCOPE.md)，不能直接沿用旧版结论。
 
 ## 它由两部分组成
 
@@ -127,6 +133,7 @@ monash setup
 
 ## 1.6 新增了什么
 
+- **学期周视图。** `monash semester --days 7` 把 Moodle 截止、Ed lesson 和回复、本地考勤缓存放在一份视图里；`--ics` 把截止日期导出成本机私有日历文件。
 - **一键打包整门课的 Ed 课件。** `monash ed export FIT2109` 把已经同步下来的 Ed Lessons 打成一个 zip，存到“下载”文件夹：按周分文件夹，里面是 PDF、正文页和附件，每节附一个 `Links.md`（阅读网页和 Ed 原页面链接），最上层的 `README.md` 列出每节的进度。`--module "Week 3"` 只打包一周，`--open` 打包完在访达里显示。在 AI 里说“把 FIT2109 的 Ed 课件打包给我”也行；`monash library --open` 的课件页上每门课旁边也有打包按钮。不联网，只打包本地已有的文件。
 - **Ed 课件按课号存。** 文件夹从数字 id 改成 `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf` 这样，跟 Ed 页面上的顺序一致。`monash open ed` 直接打开。升级后第一次同步会把旧文件挪过去，不会重新下载。
 - **正文页里附的文件也下载。** starter code 的 zip、讲义之类附在 Ed 正文里的文件（Ed 自己存的那种）现在也会下载、能搜到。单个文件超过 200 MB 跳过。老师换了 PDF 会重新下载，Ed 上删掉的页本地也删掉。

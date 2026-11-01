@@ -2,7 +2,15 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
-## 1.6.0
+## 1.6.0 (unreleased)
+
+**Semester overview**
+
+- `monash semester --days 7` combines Moodle deadlines, local Ed lesson/reply/announcement summaries and the optional attendance cache into one local-first view. No account data is sent to Monash Hub.
+- `monash semester --ics [PATH]` exports verified timestamped Moodle deadlines as a private `.ics` file; it is a snapshot, not a background subscription or an attendance record.
+- This is a CLI view; it does not create an externally hosted dashboard. Missing Moodle/Ed data remains explicitly marked as missing.
+
+**Ed Lessons materials**
 
 Ed Lessons materials are organised like Ed and can be taken away as one zip, matching Ed Web's "download all".
 
