@@ -131,13 +131,16 @@ monash setup
 
 完成后打开你的 AI 软件。Claude Desktop 在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行；其他软件可以运行 `monash connect` 看哪些已经接上。
 
-## 1.6 新增了什么
+## 1.7 新增了什么
 
-- **学期周视图。** `monash semester --days 7` 把 Moodle 截止、Ed lesson 和回复、本地考勤缓存放在一份视图里；`--ics` 把截止日期导出成本机私有日历文件。
 - **一键打包整门课的 Ed 课件。** `monash ed export FIT2109` 把已经同步下来的 Ed Lessons 打成一个 zip，存到“下载”文件夹：按周分文件夹，里面是 PDF、正文页和附件，每节附一个 `Links.md`（阅读网页和 Ed 原页面链接），最上层的 `README.md` 列出每节的进度。`--module "Week 3"` 只打包一周，`--open` 打包完在访达里显示。在 AI 里说“把 FIT2109 的 Ed 课件打包给我”也行；`monash library --open` 的课件页上每门课旁边也有打包按钮。不联网，只打包本地已有的文件。
 - **Ed 课件按课号存。** 文件夹从数字 id 改成 `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf` 这样，跟 Ed 页面上的顺序一致。`monash open ed` 直接打开。升级后第一次同步会把旧文件挪过去，不会重新下载。
 - **正文页里附的文件也下载。** starter code 的 zip、讲义之类附在 Ed 正文里的文件（Ed 自己存的那种）现在也会下载、能搜到。单个文件超过 200 MB 跳过。老师换了 PDF 会重新下载，Ed 上删掉的页本地也删掉。
 - **AI 列课件时带上 Ed。** 问“FIT2109 第 3 周有哪些课件”时，`list_files` 会一起列出 Ed Lessons 的文件，可以直接读。
+
+## 1.6 新增了什么
+
+- **学期周视图。** `monash semester --days 7` 把 Moodle 截止、Ed lesson 和回复、本地考勤缓存放在一份视图里；`--ics` 把截止日期导出成本机私有日历文件。
 
 ## 1.5 新增了什么
 

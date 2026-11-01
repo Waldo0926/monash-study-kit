@@ -134,13 +134,16 @@ At the end you can choose to sync right away. The first sync downloads all cours
 
 Then open your AI app. In Claude Desktop, **"+" → Connectors** in the chat box lists **monash**; leave it switched on. For other apps, `monash connect` shows which ones are connected.
 
-## What's new in 1.6
+## What's new in 1.7
 
-- **Semester week view.** `monash semester --days 7` puts Moodle deadlines, Ed lessons and replies and cached attendance in one view; `--ics` exports the deadlines as a private calendar file.
 - **Download a whole unit's Ed materials as one zip.** `monash ed export FIT2109` packs the Ed Lessons you have synced into a zip in your Downloads folder: one folder per week with the PDFs, text pages and attachments, a `Links.md` per lesson (reading pages and the original Ed page) and a top-level `README.md` with your progress. `--module "Week 3"` packs one week, `--open` shows the zip in Finder. You can also ask your AI app "zip up my FIT2109 Ed materials", or use the button next to each unit on the `monash library --open` page. It works offline from files already on your computer.
 - **Ed files are stored by unit code.** Folders change from numeric ids to `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf`, in the same order as on Ed. `monash open ed` opens them. The first sync after upgrading moves existing files instead of downloading them again.
 - **Files attached inside Ed pages are downloaded too.** Starter-code zips, handouts and other files that Ed hosts inside a lesson page are now downloaded and searchable; single files over 200 MB are skipped. A replaced PDF is downloaded again, and pages removed on Ed are removed locally.
 - **The AI sees Ed files when listing materials.** "What materials are there for FIT2109 week 3?" now lists Ed Lessons files through `list_files`, ready to read.
+
+## What's new in 1.6
+
+- **Semester week view.** `monash semester --days 7` puts Moodle deadlines, Ed lessons and replies and cached attendance in one view; `--ics` exports the deadlines as a private calendar file.
 
 ## What's new in 1.5
 
