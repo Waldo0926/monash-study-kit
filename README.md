@@ -130,6 +130,13 @@ At the end you can choose to sync right away. The first sync downloads all cours
 
 Then open your AI app. In Claude Desktop, **"+" → Connectors** in the chat box lists **monash**; leave it switched on. For other apps, `monash connect` shows which ones are connected.
 
+## What's new in 1.6
+
+- **Download a whole unit's Ed materials as one zip.** `monash ed export FIT2109` packs the Ed Lessons you have synced into a zip in your Downloads folder: one folder per week with the PDFs, text pages and attachments, a `Links.md` per lesson (reading pages and the original Ed page) and a top-level `README.md` with your progress. `--module "Week 3"` packs one week, `--open` shows the zip in Finder. You can also ask your AI app "zip up my FIT2109 Ed materials", or use the button next to each unit on the `monash library --open` page. It works offline from files already on your computer.
+- **Ed files are stored by unit code.** Folders change from numeric ids to `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf`, in the same order as on Ed. `monash open ed` opens them. The first sync after upgrading moves existing files instead of downloading them again.
+- **Files attached inside Ed pages are downloaded too.** Starter-code zips, handouts and other files that Ed hosts inside a lesson page are now downloaded and searchable; single files over 200 MB are skipped. A replaced PDF is downloaded again, and pages removed on Ed are removed locally.
+- **The AI sees Ed files when listing materials.** "What materials are there for FIT2109 week 3?" now lists Ed Lessons files through `list_files`, ready to read.
+
 ## What's new in 1.5
 
 - **School mail (optional).** Ask "anything in my email I need to deal with?" and get recent unread school mail, offline search, whole threads and attachment text. The AI can draft a reply, send a draft or archive mail, and only after you confirm each action.
@@ -281,7 +288,7 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
 `monash grep` and the AI's course-material search cover:
 
 - Moodle course files (PDF, Word, PowerPoint, text and code)
-- PDFs in Ed Lessons, plus content pages written directly in Ed
+- PDFs in Ed Lessons, files attached inside Ed pages, plus content pages written directly in Ed
 - **Course-notes websites**: many units publish notes on a lecturer's public site, e.g. tgdwyer.github.io for FIT2102 or
   yqtian-se.github.io for FIT2109. Pages of this kind linked from Moodle or Ed are fetched, converted to text and stored in the
   `Course notes (web)` folder of your course files. Only pages the unit links to directly are fetched (no site-wide crawling), and each page is re-fetched at most once a week.
@@ -295,7 +302,7 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
   - Windows: `%LOCALAPPDATA%\monash-study-kit`
 
   It contains course files (`files`), the database (`data`), login credentials (`secrets`, readable only by your own user account) and the dedicated login window's profile (`browser-profile`).
-  Run `monash open` to open the course-files folder.
+  Run `monash open` to open the course-files folder, or `monash open ed` for Ed Lessons files (in `data/ed-files`, by unit code).
 - **Stored credentials**: the Moodle session cookie, the Ed API token and the Moodle calendar subscription link. They stay on your computer and are only used to talk to Moodle / Ed.
   **Never send the `secrets` folder to anyone.**
 - **What the AI can see**: only what a tool returns when you ask something (e.g. a list of deadlines, the full text of a post, the text of a course file).
@@ -358,7 +365,7 @@ You can also query directly in the terminal without any AI:
 | `monash sync` | Sync now |
 | `monash login` / `monash login ed` | Log in to Moodle / replace the Ed token |
 | `monash courses` | Re-pick tracked units |
-| `monash open` | Open the course-files folder |
+| `monash open [ed]` | Open the course-files folder (`ed`: Ed Lessons files) |
 | `monash library [--open]` | Browse and download synced files in your browser (only on this computer) |
 | `monash moodle grades [FIT2102]` | Grades and feedback |
 | `monash moodle assignments --missing` | Possibly missed assignments |
@@ -366,6 +373,7 @@ You can also query directly in the terminal without any AI:
 | `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed updates / new replies to my posts / search / read a post |
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed lesson progress / quiz questions (for revision) |
 | `monash ed read FIT2109 "W3 Pre-Class"` | A whole lesson as Markdown: text slides, reading pages and PDFs in order, plus its quiz questions |
+| `monash ed export FIT2109 [--module "Week 3"] [--open]` | Zip a unit's Ed materials by week into Downloads |
 | `monash config` | View / change settings (restart your AI app afterwards) |
 | `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
 | `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |

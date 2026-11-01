@@ -1,20 +1,26 @@
 """Ed 课程内容（Lessons）抓取和存储，独立于 threads/replies 那一套。
 
-表结构用 CREATE TABLE IF NOT EXISTS 追加在同一个 ed.db 里。课件 PDF 下载到 ED_FILES_DIR，
-全文索引（content_index）会一起索引。
+表结构用 CREATE TABLE IF NOT EXISTS 追加在同一个 ed.db 里。课件 PDF、正文页里附的文件和
+文字页下载到 ED_FILES_DIR，按 课号/模块/lesson 分文件夹（跟 Ed 页面上的顺序一致），
+全文索引（content_index）会一起索引，edexport 直接把这棵目录打成 zip。
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
 import sqlite3
+import urllib.parse
 import urllib.request
+from pathlib import Path
 
-from .edlib import UA, EdClient, doc_to_text, now_iso
+from .edlib import UA, EdClient, doc_attachments, doc_to_text, now_iso
 from .paths import ED_FILES_DIR as FILES_DIR
 _UNSAFE_NAME = re.compile(r'[\\/:*?"<>|]+')
+NAME_MAX = 80                       # 每一级目录/文件名的长度上限：Windows 整条路径不能超过 260
+ATTACHMENT_MAX = 200 * 1024 * 1024  # 正文里附的单个文件最多 200 MB，再大的多半是数据集或录像
 
 
 def _safe_name(name: str) -> str:
@@ -22,19 +28,78 @@ def _safe_name(name: str) -> str:
     return name[:120]
 
 
-def download_pdf(url: str, dest, log=print) -> bool:
-    """下载一个 PDF。已经存在就跳过，不重复下载。file_url 是 Ed 那边签发的直链，
-    不用带 x-token（这个域名不是 edstem.org，带了反而可能被拒）。
+def _label(name: str | None, fallback: str) -> str:
+    """文件夹/文件名里能看懂的标题：“Week 3: Editor/IDE” -> “Week 3 - Editor-IDE”。
+    Windows 不允许结尾是点或空格。"""
+    s = re.sub(r"\s*:\s*", " - ", (name or "").strip())
+    s = re.sub(r"\s+", " ", _UNSAFE_NAME.sub("-", s)).strip(" .")
+    return s[:NAME_MAX].rstrip(" .") or fallback
+
+
+def course_folder(code: str | None, course_id: int) -> str:
+    """课号做文件夹名：“FIT2109 S2 2026 Malaysia” -> “FIT2109”，“FIT3162/FIT3164” -> “FIT3162+FIT3164”。"""
+    short = (code or "").split()[0] if (code or "").strip() else ""
+    return _label(short.replace("/", "+"), str(course_id))
+
+
+def module_folders(modules: list[dict], lessons: list[dict]) -> dict:
+    """module_id -> “03 Week 3 - Editor-Modern IDE”。编号按模块里第一节 lesson 在 Ed 上的位置排，
+    这样 Week 10 不会排到 Week 2 前面；不属于任何模块的放在最后的 “Other”。"""
+    first: dict = {}
+    for pos, l in enumerate(lessons):
+        first.setdefault(l.get("module_id"), pos)
+    names = {m["id"]: m.get("name") for m in modules}
+    order = sorted((mid for mid in first if mid in names), key=first.get)
+    out = {mid: f"{n:02d} {_label(names[mid], f'Module {n}')}" for n, mid in enumerate(order, 1)}
+    out[None] = f"{len(order) + 1:02d} Other"
+    return out
+
+
+def lesson_folder(lesson: dict, pos: int) -> str:
+    n = lesson["index"] + 1 if isinstance(lesson.get("index"), int) else pos + 1
+    fallback = f"Lesson {lesson['id']}"
+    return f"{n:02d} {_label(lesson.get('title'), fallback)}"
+
+
+def _file_name(idx: int, title: str | None, fallback: str, ext: str) -> str:
+    """“03 Workshop 3 Slides.pdf”：前面是这页在 lesson 里的顺序。标题本来就带扩展名的不重复加。"""
+    base = _label(title, fallback)
+    if ext and base.lower().endswith(ext.lower()):
+        base = base[: -len(ext)].rstrip(" .") or fallback
+    return f"{idx + 1:02d} {base[:NAME_MAX]}{ext}"
+
+
+def attachment_id(url: str) -> int:
+    """正文页附件在 lesson_files 里的 id。Ed 的 slide id 都是正数，附件用 URL 算一个固定的负数，
+    不会和它们撞，每次同步也一样（下次能找回上次下好的文件）。"""
+    return -int.from_bytes(hashlib.sha256(url.encode()).digest()[:7], "big") - 1
+
+
+def is_ed_file_url(url: str) -> bool:
+    """只下载 Ed 自己存的附件（static.edusercontent.com 这类直链），正文里别的外链不碰。"""
+    u = urllib.parse.urlsplit(url or "")
+    host = (u.hostname or "").lower()
+    return u.scheme == "https" and (host == "edusercontent.com" or host.endswith(".edusercontent.com")) \
+        and not u.username and not u.port
+
+
+def download_pdf(url: str, dest, log=print, force: bool = False, max_bytes: int | None = None) -> bool:
+    """下载一个课件文件。已经存在就跳过，不重复下载（force：Ed 上换了文件，重新下）。
+    file_url 是 Ed 那边签发的直链，不用带 x-token（这个域名不是 edstem.org，带了反而可能被拒）。
 
     先写到 .part 再改名：下到一半断网的话，留下的半个文件不会被当成“已经下好了”。"""
-    if dest.exists():
+    if dest.exists() and not force:
         return True
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
     try:
         req = urllib.request.Request(url, headers={"user-agent": UA})
         with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as f:
+            size = 0
             while chunk := resp.read(1 << 16):
+                size += len(chunk)
+                if max_bytes is not None and size > max_bytes:
+                    raise ValueError(f"超过 {max_bytes // (1024 * 1024)} MB，跳过")
                 f.write(chunk)
         os.replace(tmp, dest)
         return True
@@ -42,6 +107,35 @@ def download_pdf(url: str, dest, log=print) -> bool:
         tmp.unlink(missing_ok=True)
         log(f"  Ed 课件下载失败 {dest.name}: {e}")
         return False
+
+
+def _move_old(old: str | None, new: str) -> None:
+    """老版本按数字 id 存（课程id/lessonid/slideid_标题.pdf），lesson 改名后路径也会变：
+    把上次下好的文件挪到新位置，不用重新下载。"""
+    if not old or old == new:
+        return
+    src, dest = FILES_DIR / old, FILES_DIR / new
+    if src.is_file() and not dest.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(src, dest)
+
+
+def _remove_empty_dirs(start: Path) -> None:
+    """删掉文件后，往上把空了的文件夹也删掉，停在 FILES_DIR。"""
+    root = FILES_DIR.resolve()
+    d = start.resolve()
+    while d != root and root in d.parents:
+        try:
+            d.rmdir()
+        except OSError:
+            return
+        d = d.parent
+
+
+def _unlink(rel: str) -> None:
+    path = FILES_DIR / rel
+    path.unlink(missing_ok=True)
+    _remove_empty_dirs(path.parent)
 
 LESSONS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS modules (
@@ -114,18 +208,31 @@ def fetch_lesson_files(client: EdClient, lesson_id: int, slides: list[dict] | No
         elif s.get("type") == "webpage" and s.get("url"):
             out.append({"id": s["id"], "type": "webpage", "title": s.get("title") or "",
                         "file_url": None, "url": s["url"], "idx": idx})
-        elif s.get("type") in ("document", "code") and (text := slide_text(s)):
-            # 正文直接写在 Ed 里的页：存成 .md，全文索引就能搜到
-            out.append({"id": s["id"], "type": s["type"], "title": s.get("title") or "",
-                        "file_url": None, "url": None, "text": text, "idx": idx})
+        elif s.get("type") in ("document", "code"):
+            if text := slide_text(s):
+                # 正文直接写在 Ed 里的页：存成 .md，全文索引就能搜到
+                out.append({"id": s["id"], "type": s["type"], "title": s.get("title") or "",
+                            "file_url": None, "url": None, "text": text, "idx": idx})
+            # 正文里附的文件（starter code 的 zip、讲义、数据表）：跟 Ed Web 一样一起下载
+            seen = set()
+            for a in doc_attachments(_slide_raw(s)):
+                if a["kind"] == "file" and is_ed_file_url(a["url"]) and a["url"] not in seen:
+                    seen.add(a["url"])
+                    out.append({"id": attachment_id(a["url"]), "type": "attachment", "title": a["name"],
+                                "file_url": a["url"], "url": None, "idx": idx})
     return out
+
+
+def _slide_raw(slide: dict) -> str:
+    data = slide.get("data") if isinstance(slide.get("data"), dict) else {}
+    raw = slide.get("content") or slide.get("passage") or data.get("content") or data.get("passage") or ""
+    return raw if isinstance(raw, str) else ""
 
 
 def slide_text(slide: dict) -> str:
     """document / code 页的正文（字段位置不固定：content、passage，或者包在 data 里）。"""
-    data = slide.get("data") if isinstance(slide.get("data"), dict) else {}
-    raw = slide.get("content") or slide.get("passage") or data.get("content") or data.get("passage") or ""
-    text = doc_to_text(raw) if isinstance(raw, str) else ""
+    raw = _slide_raw(slide)
+    text = doc_to_text(raw) if raw else ""
     return text if len(text.strip()) >= 40 else ""      # 只有一个链接的页没什么可搜的
 
 
@@ -164,20 +271,28 @@ def prune_lessons(conn: sqlite3.Connection, course_id: int, keep: set[int]) -> i
     gone = [r[0] for r in conn.execute("SELECT id FROM lessons WHERE course_id=?", (course_id,))
             if r[0] not in keep]
     for lid in gone:
+        for (rel,) in conn.execute("SELECT local_path FROM lesson_files WHERE lesson_id=? AND local_path IS NOT NULL",
+                                   (lid,)).fetchall():
+            _unlink(rel)                                    # 全文索引下次就不再搜到
         conn.execute("DELETE FROM lesson_files WHERE lesson_id=?", (lid,))
         conn.execute("DELETE FROM quiz_questions WHERE lesson_id=?", (lid,))
         conn.execute("DELETE FROM lessons WHERE id=?", (lid,))
-        shutil.rmtree(FILES_DIR / str(course_id) / str(lid), ignore_errors=True)   # 全文索引下次就不再搜到
+        shutil.rmtree(FILES_DIR / str(course_id) / str(lid), ignore_errors=True)   # 老版本的目录布局
     return len(gone)
 
 
 def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log=print) -> tuple[int, int]:
     """全量覆盖这门课的 modules/lessons。数据量小（一门课几十条），不用跟 threads
-    那样做增量，Ed 的 lesson.updated_at 目前观察下来基本不维护，没法当指纹用。"""
+    那样做增量，Ed 的 lesson.updated_at 目前观察下来基本不维护，没法当指纹用。
+
+    文件存在 课号/模块/lesson/ 下面，名字前面带 Ed 上的顺序号，和 Ed 页面一样排。"""
     ensure_lessons_schema(conn)
     modules, lessons = fetch_lessons(client, course_id)
     ts = now_iso()
     prune_lessons(conn, course_id, {l["id"] for l in lessons})
+    row = conn.execute("SELECT code FROM courses WHERE id=?", (course_id,)).fetchone()
+    cdir = course_folder(row[0] if row else None, course_id)
+    mdirs = module_folders(modules, lessons)
 
     for m in modules:
         conn.execute(
@@ -185,7 +300,7 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
             "VALUES (?, ?, ?, ?)",
             (m["id"], course_id, m.get("name"), m.get("created_at")),
         )
-    for l in lessons:
+    for pos, l in enumerate(lessons):
         conn.execute(
             "INSERT OR REPLACE INTO lessons "
             "(id, course_id, module_id, idx, kind, type, title, status, slide_count, "
@@ -203,23 +318,42 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
         if slides is None:
             log(f"  lesson {l['id']} 的内容没取到，先保留上次的")
             continue
+        before = {r[0]: (r[1], r[2]) for r in conn.execute(
+            "SELECT id, local_path, file_url FROM lesson_files WHERE lesson_id = ?", (l["id"],))}
         conn.execute("DELETE FROM lesson_files WHERE lesson_id = ?", (l["id"],))
         sync_quizzes(conn, client, course_id, l["id"], slides, log)
+        ldir = f"{cdir}/{mdirs.get(l.get('module_id'), mdirs[None])}/{lesson_folder(l, pos)}"
+        kept = set()
         for f in fetch_lesson_files(client, l["id"], slides):
             local_path = None
-            if f["type"] == "pdf" and f["file_url"]:
-                fname = f"{f['id']}_{_safe_name(f['title'] or 'slides')}.pdf"
-                rel = f"{course_id}/{l['id']}/{fname}"
-                if download_pdf(f["file_url"], FILES_DIR / rel, log):
+            old_path, old_url = before.get(f["id"], (None, None))
+            if f["type"] in ("pdf", "attachment") and f["file_url"]:
+                if f["type"] == "pdf":
+                    fname = _file_name(f["idx"], f["title"], "Slides", ".pdf")
+                else:
+                    ext = Path(f["title"]).suffix if 1 < len(Path(f["title"]).suffix) <= 10 else ""
+                    fname = _file_name(f["idx"], f["title"], "Attachment", ext)
+                rel = f"{ldir}/{fname}"
+                if rel in kept:                 # 同一页附了两个同名文件
+                    stem, ext = os.path.splitext(fname)
+                    rel = f"{ldir}/{stem} ({abs(f['id']) % 10000}){ext}"
+                _move_old(old_path, rel)
+                # Ed 上换了文件，file_url 也会换（每次上传一个新链接）：重新下载
+                changed = bool(old_url) and old_url != f["file_url"]
+                if download_pdf(f["file_url"], FILES_DIR / rel, log, force=changed,
+                                max_bytes=ATTACHMENT_MAX if f["type"] == "attachment" else None):
                     local_path = rel
             elif f.get("text"):
-                rel = f"{course_id}/{l['id']}/{f['id']}_{_safe_name(f['title'] or f['type'])}.md"
+                rel = f"{ldir}/{_file_name(f['idx'], f['title'], f['type'].title(), '.md')}"
+                _move_old(old_path, rel)
                 dest = FILES_DIR / rel
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 body = f"# {l.get('title')} · {f['title']}\n\n{f['text']}\n"
                 if not dest.exists() or dest.read_text(encoding="utf-8") != body:
                     dest.write_text(body, encoding="utf-8")
                 local_path = rel
+            if local_path:
+                kept.add(local_path)
             conn.execute(
                 "INSERT OR REPLACE INTO lesson_files "
                 "(id, lesson_id, course_id, type, title, file_url, url, local_path, idx) "
@@ -227,5 +361,9 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
                 (f["id"], l["id"], course_id, f["type"], f["title"], f["file_url"], f["url"], local_path,
                  f.get("idx")),
             )
+        # Ed 上删掉的页、改名前的旧位置：本地文件也去掉
+        for old_path, _ in before.values():
+            if old_path and old_path not in kept:
+                _unlink(old_path)
     conn.commit()
     return len(modules), len(lessons)

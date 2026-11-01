@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import sys
 import threading
 import time
@@ -515,11 +516,18 @@ def t_list_files(args):
             q += " AND folder LIKE ?"
             params.append(f"Week {int(args['week']):02d}%")
         return [dict(r) for r in con.execute(q + " ORDER BY folder, rowid LIMIT 200", params)]
+    ed = [] if args.get("since_days") else _ed_files(args)   # Ed 课件没有“同步时间”，since_days 只看 Moodle
     q = "SELECT f.path, f.size, f.title, f.synced_at FROM files f WHERE f.removed_at IS NULL"
     params = []
     if args.get("course"):
+        try:
+            cid = _local_course_id(args["course"])
+        except (LookupError, MoodleAuthError):
+            if ed:                               # 只在 Ed 上的课（Moodle 里没有）
+                return ed
+            raise
         q += " AND f.course_id=?"
-        params.append(_local_course_id(args["course"]))
+        params.append(cid)
     if args.get("week"):
         q += " AND f.path LIKE ?"
         params.append(f"%/Week {int(args['week']):02d}%")
@@ -535,9 +543,49 @@ def t_list_files(args):
         return [{"path": r["path"], "bytes": r["size"], "activity": r["title"], "synced_at": r["synced_at"]}
                 for r in rows]
     rows = con.execute(q + " ORDER BY f.path LIMIT 200", params).fetchall()
-    if not rows and not con.execute("SELECT 1 FROM files LIMIT 1").fetchone():
+    if not rows and not ed and not con.execute("SELECT 1 FROM files LIMIT 1").fetchone():
         return {"files": [], "note": "还没同步过 Moodle 课件（没登录，或者第一次同步还没跑完；看 get_monash_status）"}
-    return [{"path": r["path"], "bytes": r["size"], "activity": r["title"]} for r in rows]
+    return ([{"path": r["path"], "bytes": r["size"], "activity": r["title"]} for r in rows] + ed)[:200]
+
+
+def _ed_files(args) -> list[dict]:
+    """Ed Lessons 下载下来的课件，path 带 ed: 前缀，read_file 直接能读。"""
+    if not load_settings().get("use_ed", True):
+        return []
+    from . import content_index as CI
+    from .lessons import ensure_lessons_schema
+    try:
+        conn = _ed()
+        ensure_lessons_schema(conn)
+        where, params = "f.local_path IS NOT NULL", []
+        if args.get("course"):
+            where += " AND l.course_id=?"
+            params.append(edquery.resolve_course(conn, args["course"])["id"])
+        rows = conn.execute(f"""SELECT f.local_path, f.title, l.title AS lesson, m.name AS module
+            FROM lesson_files f JOIN lessons l ON l.id=f.lesson_id LEFT JOIN modules m ON m.id=l.module_id
+            WHERE {where} ORDER BY l.course_id, l.idx, f.idx""", params).fetchall()
+    except (LookupError, sqlite3.Error):
+        return []
+    week = re.compile(rf"\b(?:week\s*|w)0?{int(args['week'])}\b", re.I) if args.get("week") else None
+    query = (args.get("query") or "").lower()
+    out = []
+    for r in rows:
+        where_in = " · ".join(x for x in ("Ed", r["module"], r["lesson"]) if x)
+        if week and not week.search(f"{r['module'] or ''} {r['lesson'] or ''}"):
+            continue
+        if query and query not in f"{r['local_path']} {r['title']} {where_in}".lower():
+            continue
+        path = CI.ED_FILES_DIR / r["local_path"]
+        if (rel := CI.readable_path(path)) and path.is_file():
+            out.append({"path": rel, "bytes": path.stat().st_size, "activity": where_in})
+    return out[:200]
+
+
+def t_ed_export(args):
+    from . import edexport
+    d = edexport.export(_ed(), args["course"], module=args.get("module"))
+    d["note"] = "zip 已经存在用户电脑上（不用再下载）；把路径告诉用户即可"
+    return d
 
 
 def t_read_file(args):
@@ -722,6 +770,8 @@ TOOLS = {
                        {"course": (S, True), "module": (S, False), "lesson": (S, False),
                         "status": (S, False, STATUS), "quiz": (B, False),
                         "offset": (I, False), "max_chars": (I, False)}),
+    "export_ed_lessons": (t_ed_export, "把一门课已同步的 Ed Lessons 课件按周打包成 zip，存到用户电脑的“下载”文件夹；用户要整门课课件时用。返回 zip 路径。",
+                          {"course": (S, True), "module": (S, False)}, False),
 }
 
 # Old public names still work for tools/call, but tools/list exposes only the consistent names above.
@@ -796,6 +846,8 @@ PARAM_HELP = {
     ("get_ed_lessons", "quiz"): "true=返回测验而非 Lesson 列表",
     ("get_ed_lessons", "offset"): "正文字符起点，默认0",
     ("get_ed_lessons", "max_chars"): "最大字符数，默认30000，最高100000",
+    ("export_ed_lessons", "course"): "课程号，如 FIT2109",
+    ("export_ed_lessons", "module"): "只打包某个模块，如 Week 3",
     ("start_school_service_setup", "service"): "gmail=学校邮箱，attendance=考勤",
     ("start_school_service_setup", "read_only"): "true=邮箱只读，不让 AI 起草或改标签",
     ("get_gmail_inbox_todo", "days"): "最近几天，默认7",
@@ -808,7 +860,7 @@ PARAM_HELP = {
     ("gmail_read_attachment", "part_id"): "read_gmail_cached_thread 里附件的 part_id",
 }
 
-ED_TOOLS = ("list_ed_updates", "search_ed_threads", "read_ed_thread", "get_ed_lessons")
+ED_TOOLS = ("list_ed_updates", "search_ed_threads", "read_ed_thread", "get_ed_lessons", "export_ed_lessons")
 
 
 def available_tools() -> dict:

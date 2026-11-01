@@ -8,6 +8,7 @@
     monash ed lessons FIT2109 --module "Week 3"
     monash ed quiz FIT2109               # Lessons 里的测验题（复习用；Ed 不公开答案）
     monash ed read FIT2109 "W3 Pre-Class"  # 整节 lesson 的正文（Markdown，按页序，附测验题）
+    monash ed export FIT2109 [--open]    # 整门课的 Ed 课件打包成 zip（按周分文件夹），默认存到“下载”
 """
 from __future__ import annotations
 
@@ -186,6 +187,24 @@ def cmd_quiz(args):
                  edquery.quiz_markdown)
 
 
+def _render_export(d: dict) -> str:
+    lines = [f"已打包 {d['course']}：{d['lessons']} 节 lesson、{d['files']} 个文件（{d['bytes'] / 1e6:.1f} MB）",
+             f"  {d['path']}"]
+    if d["missing"]:
+        lines.append(f"  有 {d['missing']} 个文件上次同步没下载到，zip 里的 README.md 列出了它们和 Ed 原页面链接")
+    return "\n".join(lines)
+
+
+def cmd_export(args):
+    from . import edexport
+    d = edexport.export(edlib.db_connect(), args.course, args.to, args.module)
+    code = _emit(args, d, _render_export)
+    if args.open:
+        from .cli import reveal
+        reveal(d["path"])
+    return code
+
+
 def add_commands(sub) -> None:
     def out(name, fn, **kw):
         p = sub.add_parser(name, **kw)
@@ -230,6 +249,11 @@ def add_commands(sub) -> None:
     p = out("read", cmd_read, help="整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题")
     p.add_argument("course")
     p.add_argument("lesson", help="lesson id 或标题的一部分，如 'W3 Pre-Class'")
+    p = out("export", cmd_export, help="整门课的 Ed 课件打包成一个 zip（按周分文件夹，附链接和进度）")
+    p.add_argument("course")
+    p.add_argument("--module", help="只打包模块名包含这段文字的，如 'Week 3'")
+    p.add_argument("--to", help="存到哪个文件夹（默认“下载”）")
+    p.add_argument("--open", action="store_true", help="打包完在访达/资源管理器里显示")
     for name, fn, h in (("lessons", cmd_lessons, "课程内容（Lessons）和课件"),
                         ("quiz", cmd_quiz, "Lessons 里的测验题（题面+选项）")):
         p = out(name, fn, help=h)

@@ -85,6 +85,9 @@ def lesson_markdown(conn, course, lesson) -> dict:
             text = "\n\n".join(f"[第 {i} 页] {' '.join(p.split())}" for i, p in enumerate(pages, 1) if p.strip())
             parts.append(f"## {title}（PDF）\n\n{text or '（这个 PDF 抽不出文字，可能是图片）'}")
             readable += bool(text)
+        elif r["type"] == "attachment" and r["local_path"]:
+            # 正文页附的文件（zip、讲义）：给出 read_file 能用的路径，不把内容整段塞进来
+            parts.append(f"## 附件：{title}\n\n已下载，路径 ed:{r['local_path']}（用 read_file 读）")
     quiz = [q for q in edquery.quizzes(conn, course) if q["url"] == l["url"]]
     md = [f"# {l['title']}", f"{l['module'] or ''} · {l['status']} · {l['url']}", ""]
     md.append("\n\n---\n\n".join(parts) if parts else "（这节没有能读的内容，可能全是视频或测验）")

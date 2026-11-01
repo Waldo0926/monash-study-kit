@@ -21,7 +21,8 @@ def test_tools_cover_both_sides_and_only_login_sync_are_not_read_only():
     assert {"get_study_todo", "list_moodle_due", "read_file", "search_content", "list_ed_updates", "read_ed_thread", "get_monash_status"} <= set(tools)
     assert not any("submit" in n or n == "moodle_quiz" or "post" in n for n in tools)
     writable = {n for n, t in tools.items() if not t["annotations"]["readOnlyHint"]}
-    assert writable == {"start_monash_login", "sync_monash_data", "start_school_service_setup"}
+    # export_ed_lessons 往用户的“下载”文件夹写一个 zip，所以不算只读（远程模式也因此不列它）
+    assert writable == {"start_monash_login", "sync_monash_data", "start_school_service_setup", "export_ed_lessons"}
     assert tools["read_file"]["inputSchema"]["required"] == ["path"]
 
 
@@ -32,7 +33,7 @@ def test_unknown_tool_and_method():
 
 def test_public_tool_names_are_consistent_and_legacy_aliases_work(monkeypatch):
     tools = {t["name"] for t in call("tools/list")["result"]["tools"]}
-    prefixes = ("get_", "list_", "search_", "read_", "start_", "sync_")
+    prefixes = ("get_", "list_", "search_", "read_", "start_", "sync_", "export_")
     assert all(name.startswith(prefixes) for name in tools)
     assert "study_todo" not in tools and "ed_threads" not in tools
 
@@ -94,7 +95,8 @@ def test_catalog_stays_small():
     tools = call("tools/list")["result"]["tools"]
     size = len(json.dumps(tools, ensure_ascii=False))
     # 1.5.0 加了 start_school_service_setup（在 AI 里接邮箱和考勤），两样都接好后不再列出
-    assert len(tools) <= 19 and size <= 9200, (len(tools), size)
+    # 1.6.0 加了 export_ed_lessons（整门课 Ed 课件打包），不用 Ed 的人不列
+    assert len(tools) <= 20 and size <= 9200, (len(tools), size)
     assert len(M.INSTRUCTIONS) <= 400
     enums = tools[[t["name"] for t in tools].index("search_ed_threads")]["inputSchema"]["properties"]["only"]["enum"]
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}

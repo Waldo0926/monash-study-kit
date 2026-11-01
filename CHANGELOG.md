@@ -2,6 +2,18 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.6.0
+
+Ed Lessons materials are organised like Ed and can be taken away as one zip, matching Ed Web's "download all".
+
+- `monash ed export FIT2109` (and `--module`, `--to`, `--open`) packs the synced Ed Lessons of a unit into a zip in Downloads: one folder per module, files in Ed's order, a `Links.md` per lesson for reading pages and the Ed page, and a `README.md` with progress and any files that failed to download. It reads only local files.
+- The same export is a button per unit on the `monash library` page and the `export_ed_lessons` tool for AI apps (not read-only, so remote mode does not expose it; it adds about 360 characters to the tool list and is hidden with `use_ed false`).
+- Ed files are stored as `<unit code>/<NN module>/<NN lesson>/<NN title>`, instead of numeric course and lesson ids. The first sync moves files from the old layout instead of downloading them again. `monash open ed` opens the folder.
+- Files that Ed hosts inside document and code pages (`<file>` on `edusercontent.com`) are downloaded and indexed, up to 200 MB each. Links to other sites are not followed.
+- A PDF replaced on Ed (new file URL) is downloaded again; files of slides removed on Ed are deleted, and empty folders are cleaned up.
+- `list_files` includes Ed Lessons files (with `ed:` paths for `read_file`), filtered by unit, week or name.
+- Fix: the `monash library` page now lists Ed files synced by this package (it expected absolute paths and skipped the relative ones in `ed.db`).
+
 ## 1.5.0
 
 Optional school mail and attendance. Both are off until you connect them, the core still depends only on pypdf, and Moodle and Ed stay read-only.

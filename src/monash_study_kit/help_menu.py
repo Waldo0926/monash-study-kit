@@ -29,6 +29,7 @@ FEATURES = [
         ("整节读 Ed lesson：正文、阅读网页、PDF 按页序拼好，附测验题", "带我过一遍 FIT2109 第 3 周的 pre-class",
          "monash ed read FIT2109 'W3 Pre-Class'"),
         ("Ed Lessons 进度和测验题（复习用）", "用第 3 周的测验题帮我复习", "monash ed quiz FIT2109 --module 'Week 3'"),
+        ("整门课的 Ed 课件按周打包成 zip", "把 FIT2109 的 Ed 课件打包给我", "monash ed export FIT2109"),
     ]),
     ("成绩和通知", [
         ("各课总分、每项得分和反馈", "我 FIT2109 现在成绩多少？", "monash moodle grades FIT2109"),

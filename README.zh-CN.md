@@ -125,6 +125,13 @@ monash setup
 
 完成后打开你的 AI 软件。Claude Desktop 在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行；其他软件可以运行 `monash connect` 看哪些已经接上。
 
+## 1.6 新增了什么
+
+- **一键打包整门课的 Ed 课件。** `monash ed export FIT2109` 把已经同步下来的 Ed Lessons 打成一个 zip，存到“下载”文件夹：按周分文件夹，里面是 PDF、正文页和附件，每节附一个 `Links.md`（阅读网页和 Ed 原页面链接），最上层的 `README.md` 列出每节的进度。`--module "Week 3"` 只打包一周，`--open` 打包完在访达里显示。在 AI 里说“把 FIT2109 的 Ed 课件打包给我”也行；`monash library --open` 的课件页上每门课旁边也有打包按钮。不联网，只打包本地已有的文件。
+- **Ed 课件按课号存。** 文件夹从数字 id 改成 `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf` 这样，跟 Ed 页面上的顺序一致。`monash open ed` 直接打开。升级后第一次同步会把旧文件挪过去，不会重新下载。
+- **正文页里附的文件也下载。** starter code 的 zip、讲义之类附在 Ed 正文里的文件（Ed 自己存的那种）现在也会下载、能搜到。单个文件超过 200 MB 跳过。老师换了 PDF 会重新下载，Ed 上删掉的页本地也删掉。
+- **AI 列课件时带上 Ed。** 问“FIT2109 第 3 周有哪些课件”时，`list_files` 会一起列出 Ed Lessons 的文件，可以直接读。
+
 ## 1.5 新增了什么
 
 - **学校邮箱（可选）。** 问“我邮箱里有什么要处理的？”，列出最近没读的学校邮件，也能离线搜索、读整个对话和附件里的文字。AI 可以帮你起草回复、发送草稿、归档邮件，每一项都要你确认才执行。
@@ -269,7 +276,7 @@ npx skills add Waldo0926/monash-study-kit
 `monash grep` 和 AI 的课件搜索覆盖：
 
 - Moodle 上的课件（PDF、Word、PowerPoint、文本和代码）
-- Ed Lessons 里的 PDF，以及直接写在 Ed 里的正文页
+- Ed Lessons 里的 PDF、正文页里附的文件，以及直接写在 Ed 里的正文页
 - **课程笔记网页**：很多课的讲义在老师的公开网站上，比如 FIT2102 的 tgdwyer.github.io、FIT2109 的 yqtian-se.github.io。Moodle 和 Ed 里链接到的这类页面会被抓下来转成文字，存在课件文件夹的 `Course notes (web)` 里。只抓课程直接链接的页面，不会顺着链接整站爬；每页最多一周重抓一次。学校官网、视频、Google 文档之类不抓。不想要的话：`monash config web_notes false`
 - 录播字幕稿（装了 `[media]` 才有）
 
@@ -279,7 +286,7 @@ npx skills add Waldo0926/monash-study-kit
   - macOS：`~/Library/Application Support/monash-study-kit`
   - Windows：`%LOCALAPPDATA%\monash-study-kit`
 
-  里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）。运行 `monash open` 可以打开课件文件夹。
+  里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）。运行 `monash open` 可以打开课件文件夹，`monash open ed` 打开 Ed Lessons 的课件（在 `data/ed-files` 里，按课号分）。
 - **存了哪些凭据**：Moodle 的会话 cookie、Ed 的 API 令牌、Moodle 日历订阅链接。都只在你电脑上，只用来访问 Moodle / Ed 本身。**别把 `secrets` 文件夹发给别人。**
 - **AI 能看到什么**：只有你提问时 AI 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字）。令牌和 cookie 永远不会发给 AI。**也不要把 Ed 令牌贴进聊天里**，令牌只在终端里输入。
 - **课件浏览页**：`monash library` 只监听 `127.0.0.1`，只提供同步时登记过的文件。页面没有密码，不要把它转发到公网。
@@ -340,7 +347,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash sync` | 立刻同步 |
 | `monash login` / `monash login ed` | 登录 Moodle / 换 Ed 令牌 |
 | `monash courses` | 重新选要跟踪的课 |
-| `monash open` | 打开课件文件夹 |
+| `monash open [ed]` | 打开课件文件夹（`ed`：Ed Lessons 的课件） |
 | `monash library [--open]` | 在浏览器里翻和下载已同步的课件（只在本机） |
 | `monash moodle grades [FIT2102]` | 成绩和反馈 |
 | `monash moodle assignments --missing` | 可能漏交的作业 |
@@ -348,6 +355,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed 新动态 / 我的帖子有没有新回复 / 搜索 / 读帖子 |
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
 | `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
+| `monash ed export FIT2109 [--module "Week 3"] [--open]` | 整门课的 Ed 课件按周打包成 zip，存到“下载” |
 | `monash config` | 看/改设置（改完重启 AI 软件） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |

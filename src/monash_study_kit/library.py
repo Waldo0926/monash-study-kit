@@ -4,12 +4,13 @@ from __future__ import annotations
 import html
 import shutil
 import sqlite3
+import tempfile
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from . import content_index
-from .paths import DATA_DIR, ED_DB
+from .paths import DATA_DIR, ED_DB, ED_FILES_DIR as ED_DIR
 
 STYLE = """body{margin:0;background:#f5f5f2;color:#20251f;font:16px/1.6 system-ui,sans-serif}
 main{max-width:1040px;margin:auto;padding:40px 24px}header{border-bottom:1px solid #d8ddd5;margin-bottom:28px}
@@ -17,7 +18,8 @@ h1{font-size:36px;letter-spacing:-1px;margin:0}p,small{color:#596253}form{displa
 input,button{font:inherit;border:1px solid #ccd3c7;border-radius:8px;padding:10px 14px;background:white}
 input{flex:1;min-width:160px}button{cursor:pointer;background:#1e4937;color:white}ul{padding:0;list-style:none}
 li{background:white;border:1px solid #dbe0d7;border-radius:10px;padding:16px;margin:10px 0;overflow-wrap:anywhere}
-a{color:#1b573c}small{display:block}h2{font-size:20px;margin-top:30px}.empty{padding:32px;background:white;border-radius:12px}
+a{color:#1b573c}a:focus-visible{outline:3px solid #1e4937;outline-offset:2px}small{display:block}
+.zip{display:inline-block;margin-left:12px;font-size:15px;font-weight:500;padding:6px 12px;border:1px solid #1e4937;border-radius:8px;text-decoration:none}h2{font-size:20px;margin-top:30px}.empty{padding:32px;background:white;border-radius:12px}
 @media(prefers-color-scheme:dark){body{background:#171d19;color:#e8eee8}li,.empty,input{background:#222c25;color:#e8eee8}a{color:#9bdfb5}p,small{color:#adbcad}}
 """
 
@@ -49,13 +51,18 @@ def catalog() -> list[dict]:
     conn = _read_db(ED_DB)
     if conn is not None:
         try:
-            for row in conn.execute("SELECT f.local_path, f.title, l.title AS lesson, c.code "
+            for row in conn.execute("SELECT f.local_path, f.title, l.title AS lesson, m.name AS module, c.id AS cid, c.code "
                                     "FROM lesson_files f JOIN lessons l ON l.id=f.lesson_id "
-                                    "JOIN courses c ON c.id=l.course_id WHERE f.local_path IS NOT NULL"):
-                rel = content_index.readable_path(Path(row["local_path"]))
+                                    "LEFT JOIN modules m ON m.id=l.module_id "
+                                    "JOIN courses c ON c.id=l.course_id WHERE f.local_path IS NOT NULL "
+                                    "ORDER BY c.id, l.idx, f.idx"):
+                rel = content_index.readable_path(ED_DIR / row["local_path"])
                 if rel:
-                    out.append({"path": rel, "title": row["title"] or Path(rel).name,
-                                "course": row["code"] or "Ed", "section": row["lesson"], "bytes": None})
+                    # 课号取第一段（“FIT2109 S2 2026 …” -> FIT2109），跟同一门课的 Moodle 课件放在一组
+                    code = (row["code"] or "").split()[0] if (row["code"] or "").strip() else "Ed"
+                    section = " · ".join(x for x in ("Ed", row["module"], row["lesson"]) if x)
+                    out.append({"path": rel, "title": row["title"] or Path(rel).name, "course": code,
+                                "section": section, "bytes": None, "ed_course": row["cid"]})
         except sqlite3.OperationalError:
             pass
         finally:
@@ -71,13 +78,22 @@ def page(rows: list[dict], query: str = "", course: str = "", offset: int = 0) -
     for row in filtered[offset:offset + 200]:
         groups.setdefault(row["course"], []).append(row)
     sections = []
+    ed_courses = {}
+    for row in rows:                 # 打包按钮看整门课，不受当前筛选和分页影响
+        if row.get("ed_course"):
+            ed_courses.setdefault(row["course"], row["ed_course"])
     for name, items in groups.items():
         links = []
         for row in items:
             href = "/download?" + urllib.parse.urlencode({"path": row["path"]})
             links.append(f'<li><a href="{esc(href, quote=True)}">{esc(row["title"])}</a>'
                          f'<small>{esc(row["section"])} · {esc(row["path"])}</small></li>')
-        sections.append(f"<h2>{esc(name)}</h2><ul>{''.join(links)}</ul>")
+        zip_link = ""
+        if name in ed_courses:
+            href = "/export?" + urllib.parse.urlencode({"course": ed_courses[name]})
+            zip_link = (f' <a class="zip" href="{esc(href, quote=True)}">'
+                        'Download all Ed files (.zip) / 一键打包 Ed 课件</a>')
+        sections.append(f"<h2>{esc(name)}{zip_link}</h2><ul>{''.join(links)}</ul>")
     more = ""
     if offset + 200 < len(filtered):
         url = "/?" + urllib.parse.urlencode({"q": query, "course": course, "offset": offset + 200})
@@ -133,6 +149,8 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 return self._send(400, b"Invalid offset")
             return self._send(200, page(rows, args.get("q", [""])[0], args.get("course", [""])[0], offset).encode())
+        if url.path == "/export":
+            return self._export(rows, args.get("course", [""])[0])
         if url.path == "/download":
             rel = args.get("path", [""])[0]
             if rel not in {row["path"] for row in rows}:
@@ -154,6 +172,36 @@ class Handler(BaseHTTPRequestHandler):
                     shutil.copyfileobj(file, self.wfile)
             return
         self._send(404, b"Not found")
+
+
+    def _export(self, rows, course: str):
+        """整门课的 Ed 课件打成 zip 发给浏览器。只接受课件页上列出的课程 id。"""
+        from . import edexport
+        if course not in {str(row["ed_course"]) for row in rows if row.get("ed_course")}:
+            return self._send(404, b"Course not found")
+        conn = _read_db(ED_DB)
+        if conn is None:
+            return self._send(404, b"Course not found")
+        try:
+            plan = edexport.plan(conn, int(course))
+        except (LookupError, ValueError):
+            return self._send(404, b"Course not found")
+        finally:
+            conn.close()
+        with tempfile.TemporaryFile() as tmp:
+            edexport.write_zip(plan, tmp)
+            size = tmp.tell()
+            tmp.seek(0)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(size))
+            self.send_header("Content-Disposition", "attachment; filename*=UTF-8''"
+                             + urllib.parse.quote(edexport.zip_name(plan)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            if self.command != "HEAD":
+                shutil.copyfileobj(tmp, self.wfile)
 
 
 def make_server(port: int = 8766) -> ThreadingHTTPServer:

@@ -13,13 +13,13 @@
     monash due [FIT2102]         # 截止日期
     monash grep "monad" [FIT2102]  # 全文搜课件、字幕稿，带页码/时间戳
     monash moodle …              # 更多 Moodle 查询：grades、news、assignments、find、get、messages…
-    monash ed …                  # Ed 查询：new、threads、search、show、following、lessons、quiz
+    monash ed …                  # Ed 查询：new、threads、search、show、following、lessons、quiz、export
 
     monash gmail …               # 可选：学校邮箱同步、邮件待办、离线搜索（要装 [gmail]）
     monash attendance …          # 可选：考勤 login、status、sync、overview、codes、probe（要装 [attendance]）
 
     monash media                 # 录播：取 YouTube 字幕、下载 Zoom 录像并转写（要装 [media]）
-    monash open                  # 打开课件文件夹
+    monash open [ed]             # 打开课件文件夹（ed：Ed Lessons 的，按 课号/周/lesson 分好）
     monash library --open        # 在浏览器里翻已同步的课件（只在本机）
     monash config                # 看/改设置
     monash update                # 更新到最新版
@@ -293,16 +293,26 @@ def cmd_sync(args):
         print(f"  ! {k}：{v}")
 
 
-def cmd_open(args):
-    FILES_DIR.mkdir(parents=True, exist_ok=True)
-    path = str(FILES_DIR)
+def reveal(path: str, select: bool = True) -> None:
+    """在访达/资源管理器里打开文件夹；给的是文件就打开它所在的文件夹并选中。"""
+    is_file = os.path.isfile(path)
     if sys.platform == "darwin":
-        subprocess.run(["open", path])
+        subprocess.run(["open", "-R", path] if is_file and select else ["open", path])
     elif os.name == "nt":
-        os.startfile(path)  # noqa: S606
+        if is_file and select:
+            subprocess.run(["explorer", "/select,", path])
+        else:
+            os.startfile(path)  # noqa: S606
     else:
-        subprocess.run(["xdg-open", path])
-    print(path)
+        subprocess.run(["xdg-open", os.path.dirname(path) if is_file else path])
+
+
+def cmd_open(args):
+    from .paths import ED_FILES_DIR
+    folder = ED_FILES_DIR if getattr(args, "what", None) == "ed" else FILES_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    reveal(str(folder))
+    print(folder)
 
 
 def parse_setting(key: str, raw: str, current):
@@ -806,7 +816,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--match", help="只转写路径里含这段文字的视频")
     p.add_argument("--model", help="whisper 模型（默认 small.en；慢的电脑可以用 base.en）")
     p.add_argument("--dry-run", action="store_true")
-    cmd(sub, "open", cmd_open, help="打开课件文件夹")
+    p = cmd(sub, "open", cmd_open, help="打开课件文件夹（monash open ed：Ed Lessons 的课件）")
+    p.add_argument("what", nargs="?", choices=["ed"], help="ed=Ed Lessons 的课件文件夹")
     p = cmd(sub, "config", cmd_config, help="看/改设置")
     p.add_argument("key", nargs="?"); p.add_argument("value", nargs="?")
     p = cmd(sub, "connect", cmd_connect, help="接进别的 AI 软件：Codex、Cursor、VS Code、Windsurf、Gemini CLI")
