@@ -20,6 +20,8 @@ Connect Monash **Moodle** and **Ed** to the AI app on your computer (Claude, Cod
 - "What does the A2 spec ask for?", "What's my current grade in FIT2109?"
 - "Quiz me on FIT2109 week 3." In apps that support MCP Apps, to-dos, lesson progress and quiz questions also show up as small panels you can click
 
+You can also run **`monash semester --days 7`** for a combined private week view of Moodle deadlines, Ed lessons/replies and any locally cached attendance records. Add **`--ics`** to export a private `semester.ics` into the Study Kit data directory, or **`--ics /path/to/file.ics`** to choose a path. This is a one-time calendar snapshot, not a live subscription; deadline times must be verified with Moodle. No personal semester data is uploaded to Monash Hub.
+
 By default, synced course files, login state and the local database stay **on your own computer**. Results returned by MCP tools go to the AI app you connect; its privacy policy applies. Optional remote access sends those results through the AI provider's connection, not through a server run by this project's maintainer.
 All Moodle and Ed tools are **read-only**: they never submit assignments, attempt quizzes or post on Ed. The optional school mail and attendance parts can draft mail, change labels or check you in, and only after you confirm each action.
 
