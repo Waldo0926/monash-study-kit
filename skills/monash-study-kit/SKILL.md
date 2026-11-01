@@ -32,6 +32,7 @@ Talk to the student in the language they use with you. Command output is in Chin
 | Read one Ed post with all replies | `monash ed show FIT2102#42` |
 | Read an Ed lesson | `monash ed read FIT2109 "W3 Pre-Class"` |
 | Revise with Ed lesson quiz questions | `monash ed quiz FIT2109 --module "Week 3"` |
+| Download a unit's Ed materials as one zip | `monash ed export FIT2109` |
 | Something doesn't work | `monash doctor` |
 | Anything in my school email to deal with (optional, only if set up) | `monash gmail todo` |
 | Find a school email (optional) | `monash gmail search exchange` |
