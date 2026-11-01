@@ -1,4 +1,6 @@
-# Monash Study Kit · Monash 学习助手
+# Monash Study Kit
+
+运行**`monash semester --days 7`**可以把Moodle截止、Ed未完成Lesson和未读回复、本地考勤缓存放到一份周视图里；加上**`--ics`**可把Moodle截止日期导出到本机私有日历文件。它不会自动更新，也不会把个人课表上传到MonashHub。请以Moodle实际截止时间为准。 · Monash 学习助手
 
 [![类型](https://img.shields.io/badge/%E7%B1%BB%E5%9E%8B-MCP_%E6%9C%8D%E5%8A%A1_%2B_CLI-2563eb?style=for-the-badge)](#它由两部分组成)
 [![技术](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF-Python_%C2%B7_MCP_%C2%B7_%E6%9C%AC%E5%9C%B0%E4%BC%98%E5%85%88-7c3aed?style=for-the-badge)](#开发)

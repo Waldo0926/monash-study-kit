@@ -10,6 +10,7 @@
     monash courses               # 选要跟踪的课
 
     monash todo                  # 本周待办：Moodle 截止/漏交 + Ed 没做完的 lesson、公告、未读回复
+    monash semester --days 7     # 本地周视图，另加 --ics 可保存私有日历
     monash due [FIT2102]         # 截止日期
     monash grep "monad" [FIT2102]  # 全文搜课件、字幕稿，带页码/时间戳
     monash moodle …              # 更多 Moodle 查询：grades、news、assignments、find、get、messages…
@@ -476,6 +477,34 @@ def _courses_for(client, con, refs: list[str] | None) -> list[dict]:
     return jobs.tracked_courses(con, courses)
 
 
+def cmd_semester(args):
+    """A single private week view; optional .ics file never leaves this device."""
+    from . import semester, todo
+    try:
+        client = MoodleClient()
+        courses = _courses_for(client, db_connect(), None)
+    except MoodleAuthError:
+        client, courses = None, []
+    data = todo.build(client, courses, args.days)
+    attendance_data = None
+    if load_settings().get("attendance_enabled"):
+        try:
+            from . import attendance
+            attendance_data = attendance.overview(days=args.days)
+        except (OSError, ValueError, RuntimeError):
+            data["notes"].append("考勤本地缓存暂时无法读取")
+    view = semester.semester_data(data, attendance_data)
+    if args.ics is not None:
+        target = semester.write_calendar(view, args.ics or None)
+        view["calendar_export"] = str(target)
+    if want_json(args):
+        return emit_json(view)
+    print(semester.render(view))
+    if args.ics is not None:
+        print(f"\n日历已写入本机：{view['calendar_export']}")
+    print("重要：日历是本地快照，不会自动更新；请核对原始Moodle截止日期。")
+
+
 def cmd_todo(args):
     from . import todo
     try:
@@ -797,6 +826,9 @@ def build_parser() -> argparse.ArgumentParser:
     cmd(sub, "courses", cmd_courses, help="选要跟踪的课")
     p = cmd(sub, "todo", cmd_todo, json_flag=True, help="本周待办")
     p.add_argument("--days", type=int, default=7)
+    p = cmd(sub, "semester", cmd_semester, json_flag=True, help="本周视图：Moodle、Ed及本地考勤；可导出私有日历")
+    p.add_argument("--days", type=int, default=7, choices=range(1, 32))
+    p.add_argument("--ics", nargs="?", const="", metavar="PATH", help="导出本机ICS文件（默认保存到Study Kit数据目录）")
     p = cmd(sub, "due", cmd_due, json_flag=True, help="截止日期")
     p.add_argument("course", nargs="?"); p.add_argument("--days", type=int, default=14)
     p = cmd(sub, "grep", cmd_grep, json_flag=True, help="全文搜课件和字幕稿")
