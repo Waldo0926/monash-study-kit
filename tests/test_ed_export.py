@@ -212,3 +212,75 @@ def test_cli_export(ed, tmp_path, monkeypatch, capsys):
     assert cli.main(["ed", "export", "FIT2109", "--to", str(tmp_path / "out"), "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["files"] == 3 and d["path"].startswith(str(tmp_path / "out"))
+
+
+def test_document_images_cached_and_export_paths_resolve(ed, tmp_path):
+    import posixpath
+    from monash_study_kit import export as X
+    conn, files, fetched, client = ed
+    image = "https://static.edusercontent.com/images/sample.png"
+    client.slides[12][1]["content"] = '<document><paragraph>Invented instructions for the sample image in this lesson.</paragraph><image src="' + image + '"/></document>'
+    L.sync_lessons(conn, client, 4242, log=lambda _: None)
+    L.sync_lessons(conn, client, 4242, log=lambda _: None)
+    md = files / _paths(conn)["Instructions"]
+    body = md.read_text()
+    assert image not in body and "../../assets/" in body
+    assert fetched.count(image) == 1
+    assert conn.execute("SELECT sha FROM ed_assets WHERE url=?", (image,)).fetchone()[0]
+    plans = [edexport.plan(conn, "FIT2109")]
+    for combined in (False, True):
+        if combined:
+            p = X.plan("FIT2109", moodle_con=None, ed_conn=conn)
+            out = io.BytesIO()
+            X.write_zip(p, out)
+        else:
+            out = io.BytesIO()
+            edexport.write_zip(plans[0], out)
+        with zipfile.ZipFile(out) as z:
+            name = next(n for n in z.namelist() if n.endswith("Instructions.md"))
+            import re
+            ref = re.search(r"!\[[^\]]*\]\(([^)]+)\)", z.read(name).decode())[1]
+            assert posixpath.normpath(posixpath.join(posixpath.dirname(name), ref)) in z.namelist()
+
+
+def test_document_image_failure_is_kept_and_indexed(ed, monkeypatch):
+    conn, files, fetched, client = ed
+    image = "https://static.edusercontent.com/images/missing.png"
+    client.slides[12][1]["content"] = '<document><paragraph>Invented instructions for a missing image in this lesson.</paragraph><image src="' + image + '"/></document>'
+    monkeypatch.setattr(L, "download_pdf", lambda *a, **kw: False)
+    L.sync_lessons(conn, client, 4242, log=lambda _: None)
+    assert image in (files / _paths(conn)["Instructions"]).read_text()
+    assert conn.execute("SELECT error FROM ed_assets WHERE url=?", (image,)).fetchone()[0]
+
+
+def test_webpage_google_file_survives_lessons_resync(ed):
+    conn, files, fetched, client = ed
+    L.sync_lessons(conn, client, 4242, log=lambda _:None)
+    path=files/"FIT2109/01 Week 1 - Shell/01 W1 Pre-Class/Reading.pdf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"google export")
+    rel=path.relative_to(files).as_posix()
+    conn.execute("UPDATE lesson_files SET local_path=? WHERE id=101",(rel,))
+    L.sync_lessons(conn,client,4242,log=lambda _:None)
+    assert path.is_file() and _paths(conn)["Reading"] == rel
+
+
+def test_same_image_content_deduplicates_and_failed_image_retries(ed, monkeypatch):
+    conn, files, fetched, client = ed
+    L.ensure_lessons_schema(conn)
+    image1="https://static.edusercontent.com/a.png"
+    image2="https://static.edusercontent.com/b.jpg"
+    calls=[]
+    def download(url,dest,*a,**kw):
+        calls.append(url)
+        dest.parent.mkdir(parents=True,exist_ok=True)
+        dest.write_bytes(b"same image")
+        return True
+    monkeypatch.setattr(L,"download_pdf",download)
+    text=f"![A]({image1}) ![B]({image2})"
+    body=L.localize_images(conn,text,"FIT2109",files/"FIT2109/module/lesson")
+    assert len(list((files/"FIT2109/assets").iterdir())) == 1
+    assert body.count("../../assets/") == 2
+    assert len(calls) == 2
+    conn.execute("INSERT INTO ed_assets VALUES ('https://static.edusercontent.com/f.png',NULL,NULL,'上次失败','x')")
+    assert "https://" not in L.localize_images(conn,"![C](https://static.edusercontent.com/f.png)","FIT2109",files/"FIT2109/module/lesson")

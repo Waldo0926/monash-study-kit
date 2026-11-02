@@ -69,6 +69,11 @@ def plan(conn: sqlite3.Connection, course, module: str | None = None) -> dict:
                                "folder": folder, "files": nfiles, "links": links})
     if module and not out["lessons"]:
         raise LookupError(f"{code} 里没有模块名包含 “{module}” 的 lesson")
+    assets = ED_FILES_DIR / code / "assets"
+    if assets.is_dir():
+        for path in sorted(assets.iterdir()):
+            if path.is_file() and not path.name.endswith((".part", ".download")) and ED_FILES_DIR.resolve() in path.resolve().parents:
+                out["files"].append((f"{root}/assets/{path.name}", path))
     return out
 
 
