@@ -13,12 +13,19 @@
 """
 from __future__ import annotations
 
+import hashlib
 import html
+import json
+import os
+import posixpath
 import re
+import time
 import urllib.parse
+import zipfile
 from dataclasses import dataclass, field
 
-from .moodlelib import (FILES_DIR, HOST, MoodleClient, collect_links, filename_from,
+from . import htmlmd, moodle_content
+from .moodlelib import (BASE_URL, FILES_DIR, HOST, MoodleClient, collect_links, filename_from,
                         is_attachment, now_iso)
 from .paths import load_settings
 
@@ -30,6 +37,10 @@ VIDEO_EXT = (".mp4", ".mov", ".m4v", ".webm", ".mkv")
 # 这些活动里没有能下载的东西（论坛、测验、外部工具…），也不去点开它们
 SKIP_MODULES = {"forum", "quiz", "lti", "shadow", "feedback", "choice", "attendance",
                 "turnitintooltwo", "zoom", "h5pactivity", "scorm", "questionnaire", "workshop"}
+# 课程页上链到本站这几类活动的链接，跟进去把内容存下来，而不是只记一个链接
+MOD_LINK_RE = re.compile(r"/mod/(resource|page|folder|book)/view\.php")
+FOLDER_REFRESH_DAYS = 7          # 文件夹整包下载最多每 7 天重下一次（Moodle 不给文件夹的修改时间）
+ASSETS = "assets"                # 页面里的图片放在课程目录的 assets/，按内容哈希命名，相同的只存一份
 
 
 def clean(text: str) -> str:
@@ -136,6 +147,8 @@ class CourseSync:
         self.log = log
         self.stats = SyncStats()
         self.seen_sources: set[str] = set()
+        self.done_cms: set[str] = set()
+        self.cms: dict = {}
         self.videos = load_settings().get("download_videos", False)
 
     # ------------------------------------------------------------ 入口
@@ -144,9 +157,12 @@ class CourseSync:
         state = self.c.course_state(self.cid)
         layout = plan_layout(state)
         cms = {str(cm["id"]): cm for cm in state["cm"]}
+        self.cms = cms
         sections = {s["number"]: s for s in state["section"]}
         if not self.dry:
             self.clean_partials()
+            # 说明表每轮重写（Google 导出的记录由 google_export 自己管）
+            self.con.execute("DELETE FROM notes WHERE course_id=? AND kind NOT LIKE 'google%'", (self.cid,))
 
         for num in sorted(sections):
             for cmid in sections[num].get("cmlist") or []:
@@ -210,8 +226,9 @@ class CourseSync:
     def handle_cm(self, cm: dict, folder: str, section_title: str) -> None:
         mod = cm.get("module")
         url = cm.get("url")
-        if mod in SKIP_MODULES or not url:
+        if mod in SKIP_MODULES or not url or str(cm["id"]) in self.done_cms:
             return
+        self.done_cms.add(str(cm["id"]))
         if mod == "resource":
             local, external, resp = self.c.resolve(url + "&redirect=1")
             if external is None and resp.status == 200 and "text/html" in (resp.headers.get("Content-Type") or ""):
@@ -222,25 +239,257 @@ class CourseSync:
                 return
             self.fetch_file(local, folder, cm, section_title, resolved=True)
         elif mod == "folder":
-            page = self.c.html(url)
-            sub = f"{folder}/{safe_name(cm['name'])}"
-            for h, _ in collect_links(page).all:
-                if "/mod_folder/content/" in h:
-                    self.fetch_file(h, sub, cm, section_title)
+            self.fetch_folder(cm, folder, section_title)
         elif mod == "url":
             local, external, _ = self.c.resolve(url + "&redirect=1")
             target = external or local
+            inner = self.internal_cm(target, clean(cm.get("name")))
             if urllib.parse.urlsplit(target).hostname == HOST and "/pluginfile.php/" in target:
                 self.fetch_file(target, folder, cm, section_title)
+            elif inner is not None:
+                # 指向本站 Page / 资源 / 文件夹 / Book 的链接：把那个活动的内容存下来
+                self.handle_cm(inner, folder, section_title)
             else:
                 self.add_link(folder, section_title, clean(cm["name"]), target)
-        elif mod in ("assign", "page", "book"):
-            # 作业说明、页面里挂的附件（spec PDF、starter code）才是要的东西
+        elif mod == "page":
             page = self.c.html(url)
-            for h, _ in collect_links(page).all:
-                if is_attachment(h) and f"/{self._context_hint(mod)}" in h:
-                    self.fetch_file(h, folder, cm, section_title)
-            self.add_link(folder, section_title, clean(cm["name"]), url)
+            self.save_page(cm, folder, section_title, page)
+            self._attachments(page, "page", folder, cm, section_title)
+        elif mod == "book":
+            # 打印视图一次给出全部章节；打开它 Moodle 只记“打印”，不算“查看”
+            page = self.c.html(f"{BASE_URL}/mod/book/tool/print/index.php?id={cm['id']}")
+            self.save_book(cm, folder, section_title, page)
+            self._attachments(page, "book", folder, cm, section_title)
+        elif mod == "assign":
+            # 作业说明里挂的附件（spec PDF、starter code）+ 说明正文 + 学生能看到的评分细则
+            page = self.c.html(url)
+            self.save_assign(cm, folder, section_title, page, url)
+            self._attachments(page, "assign", folder, cm, section_title)
+
+    def _attachments(self, page: str, mod: str, folder: str, cm: dict, section_title: str) -> None:
+        for h, _ in collect_links(page).all:
+            if is_attachment(h) and f"/{self._context_hint(mod)}" in h:
+                self.fetch_file(h, folder, cm, section_title)
+
+    def internal_cm(self, href: str, text: str = "") -> dict | None:
+        """本站 /mod/<page|resource|folder|book>/view.php?id=N 链接对应的活动。
+
+        课程结构里有就用它；没有（“隐身”活动：不在课程页上、只被别处链接）就按链接现做一个。"""
+        parts = urllib.parse.urlsplit(href or "")
+        m = MOD_LINK_RE.search(parts.path)
+        if parts.hostname != HOST or not m:
+            return None
+        cmid = (urllib.parse.parse_qs(parts.query).get("id") or [""])[0]
+        if not cmid.isdigit():
+            return None
+        return self.cms.get(cmid) or {"id": int(cmid), "module": m.group(1), "name": text or f"{m.group(1)} {cmid}",
+                                      "url": f"{BASE_URL}/mod/{m.group(1)}/view.php?id={cmid}"}
+
+    # ------------------------------------------------------------ 正文存成 Markdown
+
+    def save_markdown(self, folder: str, name: str, md: str, cm: dict, section_title: str, kind: str) -> None:
+        source = f"md:{kind}:{cm['id']}"
+        self.seen_sources.add(source)
+        rel = f"{self.root}/{folder}/{safe_name(name)}.md"
+        if self.dry:
+            self.log(f"  + {rel}")
+            return
+        dest = FILES_DIR / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if not dest.exists() or dest.read_text(encoding="utf-8") != md:
+            dest.write_text(md, encoding="utf-8")
+            self.stats.downloaded += 1
+            self.log(f"  ✎ {rel}")
+        else:
+            self.stats.skipped += 1
+        self.con.execute(
+            "INSERT INTO files (course_id, source, cmid, path, size, section, title, synced_at)"
+            " VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(course_id, source) DO UPDATE SET"
+            " path=excluded.path, size=excluded.size, synced_at=excluded.synced_at, removed_at=NULL",
+            (self.cid, source, int(cm["id"]), rel, dest.stat().st_size, section_title, clean(cm.get("name")), now_iso()))
+        self.con.commit()
+
+    def _md(self, node, folder: str, cm: dict) -> str:
+        md_dir = f"{self.root}/{folder}"
+        return htmlmd.to_markdown(node, BASE_URL, on_image=lambda u: self.asset(u, md_dir, cm))
+
+    def save_page(self, cm: dict, folder: str, section_title: str, page: str) -> None:
+        body = moodle_content.page_body(page)
+        name = clean(cm.get("name"))
+        if body is None:
+            self.add_note("page_empty", folder, name, cm["url"], "页面上没找到正文")
+            return
+        md = f"# {name}\n\n来源：{cm['url']}\n\n" + self._md(body, folder, cm)
+        self.save_markdown(folder, name, md, cm, section_title, "page")
+
+    def save_book(self, cm: dict, folder: str, section_title: str, page: str) -> None:
+        name = clean(cm.get("name"))
+        chapters = moodle_content.book_chapters(page)
+        if not chapters:
+            self.add_note("book_empty", folder, name, cm["url"], "Book 打印视图里没有章节")
+            return
+        md = f"# {name}\n\n来源：{cm['url']}\n"
+        for title, node in chapters:
+            md += f"\n## {title}\n\n" + self._md(node, folder, cm)
+        self.save_markdown(folder, name, md, cm, section_title, "book")
+
+    def save_assign(self, cm: dict, folder: str, section_title: str, page: str, url: str) -> None:
+        name = clean(cm.get("name"))
+        intro = moodle_content.assign_intro(page)
+        grading, kind = moodle_content.grading_markdown(page)
+        md = f"# {name}\n\n来源：{url}\n\n"
+        md += self._md(intro, folder, cm) if intro is not None else "（Moodle 上没有作业说明正文）\n"
+        if grading:
+            md += "\n## " + ("评分细则（Rubric）" if kind == "rubric" else "评分指南（Marking guide）") + "\n\n" + grading
+        else:
+            self.add_note("grading_hidden", folder, name, url,
+                          "作业页面上没有给学生看评分细则（可能没设、只在打分后显示，或在说明附件里）")
+        self.save_markdown(folder, name, md, cm, section_title, "assign")
+
+    def asset(self, url: str, md_dir: str, cm: dict) -> str:
+        """页面里的本站图片下载到 课程/assets/<内容哈希>.<扩展名>，返回相对 md_dir 的路径。
+        站外图片和下载失败的原样返回（导出的索引里会列出远程图片）。"""
+        parts = urllib.parse.urlsplit(url)
+        if parts.hostname != HOST or "/pluginfile.php/" not in parts.path or self.dry:
+            return url
+        source = url.split("?", 1)[0]
+        self.seen_sources.add(source)
+        row = self.con.execute("SELECT path FROM files WHERE course_id=? AND source=?", (self.cid, source)).fetchone()
+        if not (row and (FILES_DIR / row["path"]).exists()):
+            tmp = FILES_DIR / self.root / ASSETS / f".dl-asset-{os.getpid()}"
+            try:
+                self.c.download(source, tmp)
+            except Exception as e:  # noqa: BLE001
+                if e.__class__.__name__ == "MoodleAuthError":
+                    raise
+                self.add_note("image_failed", md_dir.split("/", 1)[-1], posixpath.basename(parts.path), source, f"图片下载失败：{e}")
+                tmp.unlink(missing_ok=True)
+                return url
+            ext = os.path.splitext(urllib.parse.unquote(parts.path))[1][:10]
+            digest = hashlib.sha256(tmp.read_bytes()).hexdigest()[:16]
+            rel = f"{self.root}/{ASSETS}/{digest}{ext}"
+            if (FILES_DIR / rel).exists():
+                tmp.unlink()
+            else:
+                tmp.replace(FILES_DIR / rel)
+            self.con.execute(
+                "INSERT INTO files (course_id, source, cmid, path, size, section, title, synced_at) VALUES (?,?,?,?,?,?,?,?)"
+                " ON CONFLICT(course_id, source) DO UPDATE SET path=excluded.path, synced_at=excluded.synced_at,"
+                " removed_at=NULL",
+                (self.cid, source, int(cm["id"]), rel, (FILES_DIR / rel).stat().st_size, ASSETS,
+                 posixpath.basename(parts.path), now_iso()))
+            self.con.commit()
+            path = rel
+        else:
+            path = row["path"]
+        return os.path.relpath(FILES_DIR / path, FILES_DIR / md_dir).replace(os.sep, "/")
+
+    def add_note(self, kind: str, folder: str, title: str, url: str, reason: str) -> None:
+        if self.dry:
+            return
+        self.con.execute("INSERT OR REPLACE INTO notes (course_id, kind, folder, title, url, reason, synced_at)"
+                         " VALUES (?,?,?,?,?,?,?)", (self.cid, kind, folder, title, url, reason, now_iso()))
+        self.con.commit()
+
+    # ------------------------------------------------------------ 文件夹
+
+    def fetch_folder(self, cm: dict, folder: str, section_title: str) -> None:
+        """整个文件夹用 download_folder.php 打成 zip 下下来，按原来的子目录和原文件名放好。
+
+        这个地址打开不算“查看”（view.php 才算）。Moodle 不给文件夹的修改时间，所以最多每
+        FOLDER_REFRESH_DAYS 天重下一次；文件夹关了“下载”按钮的，退回去一个个下。"""
+        sub = f"{folder}/{safe_name(cm['name'])}"
+        prefix = f"folder:{cm['id']}:"
+        rows = self.con.execute("SELECT source, path, synced_at FROM files WHERE course_id=? AND source LIKE ?",
+                                (self.cid, prefix.replace("%", r"\%") + "%")).fetchall()
+        fresh = rows and all((FILES_DIR / r["path"]).exists() for r in rows) and \
+            time.time() - max(_ts(r["synced_at"]) for r in rows) < FOLDER_REFRESH_DAYS * 86400
+        if fresh:
+            self.seen_sources.update(r["source"] for r in rows)
+            self.stats.skipped += len(rows)
+            return
+        if self.dry:
+            self.log(f"  + {self.root}/{sub}/（整个文件夹）")
+            return
+        tmp = FILES_DIR / self.root / folder / f".dl-folder-{cm['id']}"
+        try:
+            self.c.download(f"{BASE_URL}/mod/folder/download_folder.php?id={cm['id']}", tmp)
+            ok = zipfile.is_zipfile(tmp)
+        except Exception as e:  # noqa: BLE001
+            if e.__class__.__name__ == "MoodleAuthError":
+                raise
+            ok = False
+        if not ok:
+            tmp.unlink(missing_ok=True)
+            self._folder_by_page(cm, sub, section_title)
+            return
+        with zipfile.ZipFile(tmp) as z:
+            members = [i for i in z.infolist() if not i.is_dir()]
+            names = [_zip_parts(i.filename) for i in members]
+            # 有的 zip 外面包了一层和文件夹同名的目录，去掉
+            if names and all(len(n) > 1 and n[0] == names[0][0] for n in names):
+                names = [n[1:] for n in names]
+            written = []
+            for info, parts in zip(members, names):
+                if not parts:
+                    continue
+                rel = f"{self.root}/{sub}/" + "/".join(parts)
+                dest = FILES_DIR / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(info) as src, open(dest, "wb") as out:
+                    while chunk := src.read(1 << 16):
+                        out.write(chunk)
+                source = prefix + "/".join(parts)
+                self.seen_sources.add(source)
+                self.con.execute(
+                    "INSERT INTO files (course_id, source, cmid, path, size, section, title, synced_at)"
+                    " VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(course_id, source) DO UPDATE SET"
+                    " path=excluded.path, size=excluded.size, synced_at=excluded.synced_at, removed_at=NULL",
+                    (self.cid, source, int(cm["id"]), rel, dest.stat().st_size, section_title,
+                     clean(cm.get("name")), now_iso()))
+                self.stats.downloaded += 1
+                self.stats.bytes += dest.stat().st_size
+                written.append(rel)
+        tmp.unlink(missing_ok=True)
+        self.con.commit()
+        self.log(f"  ↓ {self.root}/{sub}/（{len(written)} 个文件）")
+        self.check_notebooks(written, sub)
+
+    def _folder_by_page(self, cm: dict, sub: str, section_title: str) -> None:
+        """退路：打开文件夹页面（会记一次“查看”），一个个下载，保留 content/<rev>/ 后面的子目录。"""
+        page = self.c.html(cm["url"])
+        for h, _ in collect_links(page).all:
+            m = re.search(r"/mod_folder/content/\d+/(.+)$", urllib.parse.urlsplit(h).path)
+            if not m:
+                continue
+            inner = posixpath.dirname(urllib.parse.unquote(m.group(1)))
+            target = sub + ("/" + "/".join(_zip_parts(inner)) if inner else "")
+            self.fetch_file(h, target, cm, section_title)
+
+    def check_notebooks(self, rels: list[str], folder: str) -> None:
+        """Notebook 里引用的本地图片（images/x.PNG）要在对应位置；找不到、或者只是大小写对不上，记下来。"""
+        for rel in rels:
+            if not rel.lower().endswith(".ipynb"):
+                continue
+            nb = FILES_DIR / rel
+            try:
+                cells = json.loads(nb.read_text(encoding="utf-8")).get("cells", [])
+            except (OSError, ValueError):
+                continue
+            text = "\n".join("".join(c.get("source") or []) if isinstance(c.get("source"), list) else str(c.get("source"))
+                             for c in cells)
+            refs = re.findall(r"!\[[^\]]*\]\(([^)\s]+)", text) + re.findall(r"<img[^>]+src=[\"']([^\"']+)", text)
+            for ref in dict.fromkeys(refs):
+                if re.match(r"^[a-z]+:", ref) or ref.startswith("/"):
+                    continue
+                target = nb.parent / urllib.parse.unquote(ref)
+                if target.exists():
+                    continue
+                twin = next((p for p in target.parent.glob("*") if p.name.lower() == target.name.lower()), None) \
+                    if target.parent.is_dir() else None
+                reason = (f"Notebook 引用 {ref}，Moodle 上的文件名是 {twin.name}（只差大小写，区分大小写的系统上会显示不出来）"
+                          if twin else f"Notebook 引用的 {ref} 不在 Moodle 的文件夹里")
+                self.add_note("notebook_image", folder, nb.name, f"{rel}#{ref}", reason)
 
     @staticmethod
     def _context_hint(mod: str) -> str:
@@ -268,9 +517,14 @@ class CourseSync:
                 folder = layout.folders.get(num, "General")
                 title = layout.titles.get(num, "")
                 for href, text in links:
-                    if is_attachment(href):
+                    inner = None if is_attachment(href) else self.internal_cm(href, clean(text))
+                    if is_attachment(href) or inner is not None:
                         try:
-                            self.fetch_file(href, folder, cm, title)
+                            if inner is not None:
+                                # 标签和说明里链到本站 Page / 资源 / 文件夹 / Book：存内容，不记链接
+                                self.handle_cm(inner, folder, title)
+                            else:
+                                self.fetch_file(href, folder, cm, title)
                         except Exception as e:  # noqa: BLE001
                             if e.__class__.__name__ == "MoodleAuthError":
                                 raise
@@ -349,6 +603,26 @@ class CourseSync:
             " VALUES (?,?,?,?,?,?)", (self.cid, folder, section, title, url, now_iso()))
         self.stats.links += cur.rowcount
         self.con.commit()
+
+
+def _ts(iso: str | None) -> float:
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(iso).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _zip_parts(name: str) -> list[str]:
+    """zip 里的路径拆成安全的几段：去掉 .. 和开头的 /，每段只换掉文件系统不认的字符，不截短、不改大小写。"""
+    out = []
+    for part in name.replace("\\", "/").split("/"):
+        if part in ("", ".", ".."):
+            continue
+        part = re.sub(r'[\\:*?"<>|\x00-\x1f]', "_", part).strip(" ")
+        if part:
+            out.append(part)
+    return out
 
 
 def _same_file(a: str, b: str) -> bool:
