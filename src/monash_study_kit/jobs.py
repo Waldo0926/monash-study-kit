@@ -108,10 +108,11 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
     return total
 
 
-def sync_ed(log=print, course_code: str | None = None) -> dict:
+def sync_ed(log=print, course_code: str | None = None, lessons_only: bool = False) -> dict:
+    """lessons_only：只同步 Lessons 课件，不抓论坛帖子（导出课程资料时用）。"""
     client = edlib.EdClient()
     ids = None
-    materials = load_settings().get("materials_only", False)
+    materials = lessons_only or load_settings().get("materials_only", False)
     listing = client.courses() if materials or course_code else None
     if course_code:
         ids = [c["id"] for c in listing if course_code.upper() in re.split(r"[/\s]+", (c.get("code") or "").upper())]

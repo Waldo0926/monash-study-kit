@@ -33,8 +33,8 @@ class Renderer:
         self.cdp = self.proc = None
 
     def __enter__(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="monash-pdf-")
-        self.root = Path(self.temp.name)
+        self.temp = tempfile.mkdtemp(prefix="monash-pdf-")
+        self.root = Path(self.temp)
         flags = [self.executable, f"--user-data-dir={self.root / 'profile'}", "--headless=new",
                  "--no-first-run", "--no-default-browser-check", "--disable-sync",
                  "--disable-background-networking", "--disable-component-update",
@@ -125,10 +125,25 @@ class Renderer:
                         self.proc.wait(timeout=5)
             finally:
                 if self.temp:
-                    self.temp.cleanup()
+                    _remove_tree(self.temp)
+                    self.temp = None
 
     def __exit__(self, *exc):
         self.close()
+
+
+def _remove_tree(path: str, tries: int = 20) -> None:
+    """删临时浏览器目录。Windows 上 Chrome 主进程退出后，子进程还会占着文件一会儿，
+    所以重试几秒；还删不掉就留给系统清理，不能因此让导出失败。"""
+    for _ in range(tries):
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.25)
+    shutil.rmtree(path, ignore_errors=True)
 
 
 def cache_dir() -> Path:

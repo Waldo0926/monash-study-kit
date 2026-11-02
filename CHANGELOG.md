@@ -2,6 +2,16 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.11.1
+
+- `monash login` no longer crashes with “Browser context management is not supported” when the login window is closed before signing in finishes (on macOS Chrome keeps running without a window); it says the window was closed and how to retry.
+- PDF export on Windows no longer fails when Chrome's helper processes still hold the temporary profile for a moment after closing; cleanup retries and never fails the export.
+- `monash export` says where it is saving up front and shows progress while rendering PDFs and writing the zip, so a long first export no longer looks stuck.
+- `monash export --sync` only syncs Ed Lessons, not forum threads; the package never contained threads.
+- On Windows the default export folder is the system Downloads folder even when it was moved (another drive, OneDrive), instead of falling back to the current directory.
+- `monash export` run in a terminal first opens the system folder picker to choose where to save (defaulting to the last choice, else Downloads), before syncing; `--to` or `--no-ask` skip the dialog, and setting `export_dir` remembers the choice.
+- `monash export` accepts `--refresh-google` (implies `--sync`) to re-export the course's Google files before packaging.
+
 ## 1.11.0
 
 - Course exports now turn Markdown body pages, link lists, quizzes and the index into PDFs by default, keeping original course files. `monash export --format pdf|both|md` overrides the `export_format` setting; synced Markdown and MCP indexing are unchanged.

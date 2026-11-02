@@ -80,7 +80,7 @@ MCP 只注册 `list_files`、`read_file`、`search_content`、`get_ed_lessons`�
 - Google Slides / Docs 默认导出 PDF，Sheets 导出 XLSX，Drive 普通文件按原格式下载。只处理 Moodle 和 Ed Lessons 里出现过的文件链接；Google 表单不能导出。文件还在时跳过，`monash sync --refresh-google` 强制重新导出。
 - 每次同步检查新出现的 Ed 课程：课号与已跟踪 Moodle 课程相同就自动跟踪，包括归档课程和 `FIT1045/FIT1053` 这样的联合课号；处理过的课程保留用户选择。
 - `monash export <课号>` 导出包里的正文页、链接清单、测验和索引默认是 **PDF（给人看）**，课件原件照常保留。本机同步的 md 不变，继续供 AI、全文搜索和 MCP 使用。用 `--format both` 同时放 PDF 和 md，`--format md` 只放 md；例如 `monash config export_format both` 可将默认值设为同时导出两种格式。需要安装 Chrome / Edge / Brave 才能生成 PDF；没有浏览器时自动回退 md，并在索引和终端说明。PDF 在全新的临时浏览器配置中离线生成，只内嵌本次导出的本地图片，远程图片仅保留替代文字。缓存放在数据目录的 `pdf-cache/`，最多 500 MB；`--json` 新增 `pdf.generated`、`pdf.cached`、`pdf.skipped_reason`。`monash ed export` 的行为不变。
-- `monash export FIT1045 --sync` 先同步这门 Moodle 课及对应 Ed 课再导出。普通导出继续只读本机缓存。README 索引列出未导出内容和原因，并统计链接清单数量、Markdown 远程图片数、Google 总数 / 成功 / 按原因分组的失败数；`--json` 的 `statistics` 提供相同数字。
+- `monash export FIT1045 --sync` 先同步这门 Moodle 课和对应的 Ed Lessons（不抓论坛帖子）再导出；加 `--refresh-google` 会重新导出 Google 文件。在终端里运行 `monash export` 时，会先弹出系统的“选择文件夹”窗口选保存位置（默认上次选的，没有就是“下载”），选好才开始；用 `--to 文件夹` 或 `--no-ask` 跳过弹窗。导出过程中会显示保存位置和 PDF 排版进度。普通导出继续只读本机缓存。README 索引列出未导出内容和原因，并统计链接清单数量、Markdown 远程图片数、Google 总数 / 成功 / 按原因分组的失败数；`--json` 的 `statistics` 提供相同数字。
 
 ```bash
 # Google 授权依赖与 Gmail 共用，但授权流程和 token 分开
@@ -94,7 +94,7 @@ monash export FIT1045 --sync --json
 monash google logout                 # 先向 Google 吊销，再删除本机令牌
 ```
 
-自带 OAuth 客户端目前处于 Google 的“测试”状态，授权账号需要先由客户端维护者加入测试用户名单。`drive.readonly` 在 Google 属于受限 scope，允许读取 Drive 文件；本工具仅下载课程链接里出现的文件，不遍历整个 Drive。令牌单独存在数据目录的 `secrets/google-drive-token.json`（可通过 `MONASH_KIT_SECRETS` 改位置），不修改 Gmail 的授权流程或 `gmail-token.json`。令牌只在终端 / 浏览器授权流程中流转，不要贴进聊天。
+自带 OAuth 客户端已发布、但没有经过 Google 验证：第一次授权时 Google 会提示“Google 尚未验证此应用”，点 **高级 → 转至 Monash Student MCP（不安全）** 继续即可。未验证的应用最多 100 个用户；学校管理的账号也可能被管理员拦下，这时 Google 链接会保留为链接，索引里写明原因。`drive.readonly` 在 Google 属于受限 scope，允许读取 Drive 文件；本工具仅下载课程链接里出现的文件，不遍历整个 Drive。令牌单独存在数据目录的 `secrets/google-drive-token.json`（可通过 `MONASH_KIT_SECRETS` 改位置），不修改 Gmail 的授权流程或 `gmail-token.json`。令牌只在终端 / 浏览器授权流程中流转，不要贴进聊天。
 
 课程下载走只读 GET。Drive API 报大小限制或管理员限制时，会尝试专用登录浏览器中已有的 Google 会话；cookie 只在内存使用，不写日志或另存文件，跳转离开 Google 域名会停止。后备路径不能保证绕过管理员限制，仍失败时保留原链接并在索引说明原因。未授权时提示 `monash google login`。Moodle Page、Resource、作业仍会打开 `view.php`，Moodle 会记录查看；文件夹正常下载和 Book 打印视图不打开各自的 `view.php`。文件夹整包下载失败后的逐文件回退需要打开文件夹页，也会记录一次查看。
 
@@ -433,7 +433,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
 | `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
 | `monash ed export FIT2109 [--module "Week 3"] [--open]` | 整门课的 Ed 课件按周打包成 zip，存到“下载” |
-| `monash export FIT1043 [--format pdf\|both\|md] [--dir] [--open]` | 导出一门课的课程资料（Moodle + Ed Lessons），附索引，写明没导出的内容和原因 |
+| `monash export FIT1043 [--sync] [--to 文件夹\|--no-ask] [--format pdf\|both\|md] [--dir] [--open]` | 导出一门课的课程资料（Moodle + Ed Lessons），附索引，写明没导出的内容和原因 |
 | `monash config` | 看/改设置（改完重启 AI 软件） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |

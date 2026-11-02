@@ -157,9 +157,13 @@ def login_moodle(interactive: bool = True, timeout: float = 300, log=print) -> d
             time.sleep(1.5)
             try:
                 urls = browser.page_urls()
+                # Mac 上关掉最后一个窗口，Chrome 进程还在但没有页面了；这时再读 cookie 会报
+                # “Browser context management is not supported”，一样当成窗口被关掉
+                if interactive and not urls:
+                    raise LoginFailed("登录窗口被关掉了，没有完成登录（重新运行 monash login，登录完窗口会自己关）")
                 jar = browser.cookies()
-            except (WebSocketClosed, OSError):
-                raise LoginFailed("登录窗口被关掉了，没有完成登录") from None
+            except (WebSocketClosed, OSError, RuntimeError):
+                raise LoginFailed("登录窗口被关掉了，没有完成登录（重新运行 monash login，登录完窗口会自己关）") from None
             if not interactive and _on_okta(urls) and time.monotonic() - started > 20:
                 raise LoginFailed("自动登录不行（Okta 要重新输入密码或 MFA）")
             session = jar.get("MoodleSession")
