@@ -2,7 +2,7 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
-## 1.8.0 (unreleased)
+## 1.8.0
 
 One export for a whole unit, and this package is now the only copy of the Moodle, Ed, Google and attendance code (the author's private server deployment depends on it instead of carrying its own copies).
 
