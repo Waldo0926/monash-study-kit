@@ -4,12 +4,14 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## 1.9.0
 
-- Moodle Page、Book、作业正文和学生可见的 rubric / marking guide 保存为 Markdown，正文图片本地化，内部课程活动链接跟进；用合成页面测试覆盖 HTML 转换、下载和只读请求路径。
-- 文件夹整包下载保留子目录、大小写和原文件名，七天缓存，失败逐文件回退；检查 notebook 图片缺失或大小写不一致，缓存命中时也保留说明。
-- Ed Lessons 正文中的 Ed 图片本地化并缓存、按内容去重，失败保留链接；Ed 和整课导出包含 assets，测试验证包内相对路径。
-- 新增独立的 `monash google login/status/logout` 和 Drive 只读导出：Slides / Docs PDF、可配置 Docs DOCX、Sheets XLSX 和 Drive 普通文件。大小或管理员限制时尝试专用浏览器会话，cookie 只在内存使用，阻止跨域凭据跳转；失败记录中文原因，成功隐藏链接，`sync --refresh-google` 强制刷新。
-- 每次同步按已跟踪 Moodle 课号自动跟踪新出现的 Ed 课，包括 archived 和联合课号，保留后续用户选择；`export --sync` 先同步 Moodle，再同步对应 Ed 课。
-- 导出索引补齐 notes 和失败的 Ed 图片，新增链接清单、远程图片与 Google 导出统计，JSON 同步提供统计。README 说明测试中的 OAuth 客户端、测试用户名单、受限 scope 和独立令牌。
+Course exports now contain what used to be left as links, with the reason for anything still missing.
+
+- Moodle Page, Book and assignment text, and the rubric or marking guide students can see, are saved as Markdown. Images in them are downloaded to `assets/` (named by content hash, so duplicates are stored once). Links to this unit's pages, files, folders and books are followed instead of listed. Books are read through the print view, which Moodle does not count as a view.
+- Folders are downloaded whole (`download_folder.php`, not counted as a view), keeping subfolders, case and original file names. They are refreshed at most weekly, and if the zip is unavailable the files are fetched one by one. Images that a notebook references but that are missing (or differ only in case) are reported.
+- Images in Ed lesson pages are downloaded and de-duplicated, with links rewritten to relative paths. Failed downloads keep the remote link and are listed in the export index. Ed and whole-unit exports include `assets/`.
+- Google Slides, Docs, Sheets and Drive files linked from a unit are exported read-only through the Drive API: Slides and Docs to PDF (Docs optionally DOCX with `monash config google_docs_format docx`), Sheets to XLSX, Drive files as they are. When a file is too large or an administrator blocks the API, the dedicated login browser's Google session is tried; its cookies stay in memory. Failures keep the link and record the reason. New `monash google login` / `status` / `logout` use a separate token with only `drive.readonly` (`logout` revokes it first); `monash sync --refresh-google` exports again.
+- Ed units whose code matches a tracked Moodle unit are tracked automatically, including archived and combined units. This is why a past unit's Ed Lessons could be missing. A choice made in `monash courses` is kept. `monash export --sync` syncs the unit's Moodle and Ed content first.
+- The export index lists everything not exported with its reason, and gains a statistics section (links files, remote images left, Google links exported or failed by reason), also in `--json`.
 
 ## 1.8.0
 
