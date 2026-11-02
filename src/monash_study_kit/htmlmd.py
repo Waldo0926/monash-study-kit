@@ -55,6 +55,8 @@ class _Converter:
         if tag == "code":
             return f"`{inner.strip()}`" if inner.strip() else ""
         if tag == "a":
+            if (node.get("href") or "").startswith("#"):       # 页面内的跳转锚点，导出后没有意义
+                return inner
             href = self.url(node.get("href"))
             text = " ".join(inner.split()) or href
             if not href or href.startswith(("javascript:", "#")):

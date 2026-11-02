@@ -170,3 +170,9 @@ def test_only_content_links_are_listed_and_stale_links_pruned(tmp_path, monkeypa
     s.prune_links()
     rows = [(r["title"], r["url"]) for r in con.execute("SELECT title, url FROM links")]
     assert rows == [("Week 1 recording", "https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=1")]
+
+
+def test_in_page_anchors_are_plain_text():
+    from monash_study_kit import htmlmd
+    md = htmlmd.to_markdown('<ol><li><a href="#respondus">Respondus</a></li></ol>', "https://learning.monash.edu/mod/page/view.php?id=1")
+    assert md.strip() == "1. Respondus"
