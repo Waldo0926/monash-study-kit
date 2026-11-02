@@ -223,7 +223,7 @@ def test_document_images_cached_and_export_paths_resolve(ed, tmp_path):
     L.sync_lessons(conn, client, 4242, log=lambda _: None)
     L.sync_lessons(conn, client, 4242, log=lambda _: None)
     md = files / _paths(conn)["Instructions"]
-    body = md.read_text()
+    body = md.read_text(encoding="utf-8")
     assert image not in body and "../../assets/" in body
     assert fetched.count(image) == 1
     assert conn.execute("SELECT sha FROM ed_assets WHERE url=?", (image,)).fetchone()[0]
@@ -250,7 +250,7 @@ def test_document_image_failure_is_kept_and_indexed(ed, monkeypatch):
     client.slides[12][1]["content"] = '<document><paragraph>Invented instructions for a missing image in this lesson.</paragraph><image src="' + image + '"/></document>'
     monkeypatch.setattr(L, "download_pdf", lambda *a, **kw: False)
     L.sync_lessons(conn, client, 4242, log=lambda _: None)
-    assert image in (files / _paths(conn)["Instructions"]).read_text()
+    assert image in (files / _paths(conn)["Instructions"]).read_text(encoding="utf-8")
     assert conn.execute("SELECT error FROM ed_assets WHERE url=?", (image,)).fetchone()[0]
     p = X.plan("FIT2109", moodle_con=None, ed_conn=conn)
     assert any(m["url"] == image and "失败" in m["reason"] for m in p.missing)

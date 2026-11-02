@@ -1,6 +1,7 @@
 """monash export：Moodle 和 Ed Lessons 合成一份课程资料，索引写明没导出的内容和原因。
 
 库和文件都是合成的，不联网。"""
+import io
 import json
 import zipfile
 
@@ -64,7 +65,8 @@ def _ed_course(env, code="FIT1043 S2 2025", cid=24100, tracked=1, lessons=True):
 
 def _zip(env, **kw):
     d = X.export("FIT1043", env["tmp"] / "out", moodle_con=env["m"], ed_conn=env["e"], **kw)
-    return d, zipfile.ZipFile(d["path"])
+    # 读进内存再打开：Windows 上打开着的 zip 不能被下一次导出覆盖
+    return d, zipfile.ZipFile(io.BytesIO(open(d["path"], "rb").read()))
 
 
 def test_moodle_and_ed_in_one_tree(env):
@@ -153,7 +155,7 @@ def test_google_sync_hides_success_and_caches(env, monkeypatch):
     G.sync_course(env["m"],course,log=lambda _:None)
     syncer.write_links_md(env["m"],7,syncer.course_folder(course))
     local=next(env["files"].rglob("links.md"))
-    assert "docs.google.com" not in local.read_text()
+    assert "docs.google.com" not in local.read_text(encoding="utf-8")
     _,z=_zip(env)
     assert "docs.google.com" not in z.read("FIT1043/Moodle/Week 01 - Intro/links.md").decode()
     G.sync_course(env["m"],course,log=lambda _:None)
@@ -175,7 +177,7 @@ def test_google_failure_notes_and_statistics(env,monkeypatch):
     G.sync_course(env["m"],{"id":7,"fullname":"FIT1043 Sample"},log=lambda _:None)
     env["m"].execute("INSERT INTO notes VALUES (7,'grading_hidden','Week 1','Sample brief','https://example.com/brief','尚未显示评分细则','x')")
     md=env["files"]/"remote.md"
-    md.write_text("![sample](https://example.com/image.png)")
+    md.write_text("![sample](https://example.com/image.png)", encoding="utf-8")
     env["m"].execute("INSERT INTO files (course_id,source,path,synced_at) VALUES (7,'synthetic', 'remote.md','x')")
     result,z=_zip(env)
     index=z.read("FIT1043/README.md").decode()

@@ -62,7 +62,7 @@ def test_page_images_are_local_and_deduplicated(env):
     client = FakeMoodle([c], {c["url"]: f'<main id="region-main"><div class="generalbox"><h2>Topic</h2><img src="{a}"><img src="{b}"></div></main>'}, {a: b"image", b: b"image"})
     run(env, client)
     assert len(list(env[1].rglob("assets/*.png"))) == 1
-    body = next(env[1].rglob("*.md")).read_text()
+    body = next(env[1].rglob("*.md")).read_text(encoding="utf-8")
     assert "../assets/" in body and a not in body and "## Topic" in body
 
 
@@ -72,7 +72,7 @@ def test_book_print_only(env):
     client = FakeMoodle([c], {url: '<div class="book_chapter"><h2>First chapter</h2><p>Made up text.</p></div>'})
     run(env, client)
     assert c["url"] not in client.requests
-    assert "## First chapter" in next(env[1].rglob("*.md")).read_text()
+    assert "## First chapter" in next(env[1].rglob("*.md")).read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("kind", ["rubric", "guide", "hidden"])
@@ -83,7 +83,7 @@ def test_assignment_grading(env, kind):
         "guide": '<table class="gradingform_guide"><tr class="criterion"><td class="criterionshortname">Clarity</td><td class="criteriondescription">Explain steps</td><td class="score">5</td></tr></table>',
         "hidden": ""}[kind]
     run(env, FakeMoodle([c], {c["url"]: '<div id="intro">Invented brief</div>' + grading}))
-    body = next(env[1].rglob("*.md")).read_text()
+    body = next(env[1].rglob("*.md")).read_text(encoding="utf-8")
     if kind == "hidden":
         assert env[0].execute("SELECT kind FROM notes").fetchone()[0] == "grading_hidden"
     else:
@@ -134,7 +134,7 @@ def test_internal_pages_from_url_and_label(env, hidden):
     else:
         pages[outer["url"] + "&redirect=1"] = page["url"]
     run(env, FakeMoodle([outer] + ([] if hidden else [page]), pages))
-    assert any("Invented inner content" in p.read_text() for p in env[1].rglob("*.md"))
+    assert any("Invented inner content" in p.read_text(encoding="utf-8") for p in env[1].rglob("*.md"))
     assert not env[0].execute("SELECT * FROM links WHERE url=?", (page["url"],)).fetchall()
 
 

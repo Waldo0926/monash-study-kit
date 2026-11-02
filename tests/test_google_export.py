@@ -146,7 +146,7 @@ def test_refresh_invalid_grant(tmp_path,monkeypatch):
 
 def test_logout_revokes_before_deleting(tmp_path,monkeypatch,http):
     token=tmp_path/"drive-token.json"
-    token.write_text('{"refresh_token":"synthetic"}')
+    token.write_text('{"refresh_token":"synthetic"}', encoding="utf-8")
     monkeypatch.setattr(G,"TOKEN_FILE",token)
     seen, answers=http
     class Revoked(Response):
@@ -160,7 +160,7 @@ def test_logout_revokes_before_deleting(tmp_path,monkeypatch,http):
 
 def test_logout_keeps_token_on_failure(tmp_path,monkeypatch,http):
     token=tmp_path/"drive-token.json"
-    token.write_text('{"refresh_token":"synthetic"}')
+    token.write_text('{"refresh_token":"synthetic"}', encoding="utf-8")
     monkeypatch.setattr(G,"TOKEN_FILE",token)
     http[1].append(OSError("network"))
     with pytest.raises(G.GoogleError,match="已保留"):
@@ -179,7 +179,7 @@ def test_browser_cookies_are_filtered_and_browser_closed(monkeypatch):
 
 def test_login_only_drive_scope_and_separate_token(tmp_path,monkeypatch):
     client=tmp_path/"client.json"
-    client.write_text('{"installed":{}}')
+    client.write_text('{"installed":{}}', encoding="utf-8")
     token=tmp_path/"drive-token.json"
     monkeypatch.setattr(G,"TOKEN_FILE",token)
     seen={}
