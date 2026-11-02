@@ -441,3 +441,35 @@ def test_browser_detection_rejects_stale_settings(configured, monkeypatch):
     monkeypatch.setattr(pdfrender, '_find_browser', lambda: executable)
     found = pdfrender.find_browser()
     assert bool(found) == (configured == 'existing')
+
+
+def test_temp_profile_cleanup_retries_and_never_fails(tmp_path, monkeypatch):
+    """Windows 上 Chrome 子进程会短暂占着临时配置里的文件：重试，删不掉也不让导出失败。"""
+    import shutil
+    from monash_study_kit import pdfrender as R
+    target = tmp_path / "monash-pdf-x"
+    (target / "profile").mkdir(parents=True)
+    real = shutil.rmtree
+    calls = []
+
+    def flaky(path, ignore_errors=False):
+        calls.append(ignore_errors)
+        if len(calls) < 3:
+            raise PermissionError(13, "Permission denied")
+        real(path, ignore_errors=ignore_errors)
+
+    monkeypatch.setattr(R.shutil, "rmtree", flaky)
+    monkeypatch.setattr(R.time, "sleep", lambda s: None)
+    R._remove_tree(str(target))
+    assert not target.exists() and len(calls) == 3
+
+    calls.clear()
+
+    def locked(path, ignore_errors=False):
+        calls.append(ignore_errors)
+        if not ignore_errors:
+            raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(R.shutil, "rmtree", locked)
+    R._remove_tree(str(target), tries=2)
+    assert calls == [False, False, True]
