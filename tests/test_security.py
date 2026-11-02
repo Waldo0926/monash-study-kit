@@ -492,3 +492,31 @@ def test_no_server_paths_in_the_public_package():
                 text = f.read_text(encoding="utf-8", errors="ignore")
                 hits += [f"{f.relative_to(root)}: {m}" for m in SERVER_PATHS if m in text]
     assert hits == []
+
+
+def test_closing_the_login_window_is_a_clear_failure(monkeypatch):
+    """Mac 上关掉登录窗口后 Chrome 还在、但没有页面了：不该崩溃，要说清楚是窗口被关掉了。"""
+    from monash_study_kit import browser_login as B
+
+    class NoWindow:
+        def __init__(self, *a, **k):
+            pass
+
+        def page_urls(self):
+            return []
+
+        def cookies(self):
+            raise RuntimeError("Storage.getCookies: Browser context management is not supported.")
+
+        def close(self):
+            pass
+
+    class ErrorOnCookies(NoWindow):
+        def page_urls(self):
+            return ["https://learning.monash.edu/my/"]
+
+    monkeypatch.setattr(B.time, "sleep", lambda s: None)
+    for fake in (NoWindow, ErrorOnCookies):
+        monkeypatch.setattr(B, "Browser", fake)
+        with pytest.raises(B.LoginFailed, match="窗口被关掉"):
+            B.login_moodle(interactive=True, log=lambda *_: None)

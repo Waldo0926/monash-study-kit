@@ -2,6 +2,10 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.11.1
+
+- `monash login` no longer crashes with “Browser context management is not supported” when the login window is closed before signing in finishes (on macOS Chrome keeps running without a window); it says the window was closed and how to retry.
+
 ## 1.11.0
 
 - Course exports now turn Markdown body pages, link lists, quizzes and the index into PDFs by default, keeping original course files. `monash export --format pdf|both|md` overrides the `export_format` setting; synced Markdown and MCP indexing are unchanged.
