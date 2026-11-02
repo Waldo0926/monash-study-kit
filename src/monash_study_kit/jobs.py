@@ -111,12 +111,22 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
 def sync_ed(log=print, course_code: str | None = None) -> dict:
     client = edlib.EdClient()
     ids = None
+    materials = load_settings().get("materials_only", False)
+    listing = client.courses() if materials or course_code else None
     if course_code:
-        listing = client.courses()
         ids = [c["id"] for c in listing if course_code.upper() in re.split(r"[/\s]+", (c.get("code") or "").upper())]
         if not ids:
             return {"new_threads": 0, "new_replies": 0}
-    out = edsync.sync(course_ids=ids, log=log, client=client)
+    if materials:
+        conn = edlib.db_connect()
+        try:
+            edsync.upsert_courses(conn, listing)
+            edsync.auto_track(conn, listing)
+        finally:
+            conn.close()
+        out = {"new_threads": 0, "new_replies": 0}
+    else:
+        out = edsync.sync(course_ids=ids, log=log, client=client)
     conn = edlib.db_connect()
     try:
         targets = ids if ids is not None else [r[0] for r in conn.execute("SELECT id FROM courses WHERE tracked=1")]

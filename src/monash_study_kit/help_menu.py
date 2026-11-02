@@ -93,6 +93,16 @@ def features(settings: dict | None = None) -> list:
 
 def render(cli: bool = True, settings: dict | None = None) -> str:
     """cli=True 给终端看（带命令）；False 给 Claude 看（只有功能和问法）。"""
+    if settings is None:
+        from .paths import load_settings
+        settings = load_settings()
+    if settings.get("materials_only"):
+        return ("只导课程资料模式：\n"
+                "登录：monash login [moodle|ed]；monash google login/status/logout\n"
+                "同步导出：monash sync；monash export <课号> [--sync]；monash ed export <课号>\n"
+                "查资料：monash grep；monash ed lessons/read/quiz；monash moodle ls/get\n"
+                "管理：monash courses/status/doctor/open/library/config；默认账号下 monash profile list/remove\n"
+                "MCP：monash mcp，只提供课程资料工具。邮箱、考勤、成绩、私信、帖子和个人待办已禁用。")
     out = ["能做的事（直接用自己的话问就行，下面只是例子）：" if not cli else "monash 能做的事：", ""]
     for cat, items in features(settings):
         out.append(f"■ {cat}")

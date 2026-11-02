@@ -181,7 +181,9 @@ def cmd_setup(args):
         code = claude_setup.install_code()
         return 0 if desktop or code else 1
     from . import location
-    if location.first_run():
+    from .paths import is_default_profile
+    materials = load_settings().get("materials_only", False)
+    if is_default_profile() and location.first_run():
         print(f"Monash 学习助手 {__version__}\n")
         choice = location.ask()
         if choice is not None:
@@ -208,6 +210,9 @@ def cmd_setup(args):
         login_moodle()
     print("\n== 3/4 选课 ==")
     choose_courses(interactive=_yes("默认跟踪本学期的课。要自己挑吗？", default=False))
+    if materials:
+        print("\n完成！已登录并选课。只导课程资料模式下，请运行 monash sync，再用 monash export <课号> 导出。")
+        return 0
     print("\n== 4/4 接进 Claude ==")
     claude_setup.install_code()
     claude_setup.install_desktop()
@@ -256,6 +261,8 @@ def cmd_status(args):
 def _optional_status() -> dict:
     """开了的可选功能各给一行；坏了也不影响 Moodle 和 Ed 的状态。"""
     settings, out = load_settings(), {}
+    if settings.get("materials_only"):
+        return out
     try:
         if settings.get("gmail_enabled"):
             from . import gmail
@@ -1033,6 +1040,11 @@ def main(argv: list[str] | None = None) -> int:
             pass
     ap = build_parser()
     args = ap.parse_args(argv)
+    from .materials_policy import command_error
+    error = command_error(args, load_settings())
+    if error:
+        print(error, file=sys.stderr)
+        return 1
     ensure_private_dir(HOME)      # 库里有同学的名字和私密帖，只给自己读
     quiet = args.cmd in ("mcp", "update", "doctor", "remote", "library")
     if not quiet:

@@ -264,6 +264,8 @@ def run() -> list[dict]:
     out = []
     try:
         for fn in DEEP_CHECKS:
+            if load_settings().get("materials_only") and fn.__name__ not in {"deep_files", "deep_index"}:
+                continue
             try:
                 out.append(fn(ctx))
             except MoodleAuthError:
