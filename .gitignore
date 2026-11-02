@@ -5,3 +5,9 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+.DS_Store
+.ruff_cache/
+# 凭据和课程资料一律不进仓库
+*.token
+*-token.json
+client_secret*.json

@@ -2,6 +2,15 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.8.0 (unreleased)
+
+One export for a whole unit, and this package is now the only copy of the Moodle, Ed, Google and attendance code (the author's private server deployment depends on it instead of carrying its own copies).
+
+- `monash export FIT1043` (`--to`, `--dir`, `--open`, `--json`) writes a unit's course materials into one zip (or folder): `Moodle/` with the synced files and a `links.md` per folder, `Ed Lessons/` with files, `Links.md` and a `Quiz.md` (questions only) per lesson, and a `README.md` index. The index lists what was not exported and why: a file missing on disk, an Ed file that failed to download, or an Ed unit that was never synced because it is not tracked or not in your Ed course list. It reads only local data and leaves out Ed posts, submissions, grades, feedback, mail, messages and attendance.
+- Meeting passwords (`pwd=`, `passcode=` and similar) are removed from links in the export.
+- Choose where the data lives. The first `monash setup` asks, listing each drive with its free space (another drive is recommended when C: has under 5 GB free). `monash move D:\MonashStudyKit` moves course files, database, logins and settings in one go; the default folder then keeps only a `location.json` pointer. `MONASH_KIT_HOME` still overrides both.
+- A test now fails if a server path (`/opt/`, `/root/`, `/srv/`) appears anywhere in the package or its docs.
+
 ## 1.7.0
 
 This is also the first release on PyPI with the 1.6.0 changes below (the local semester week view and private calendar export); 1.6.0 was never published on its own.

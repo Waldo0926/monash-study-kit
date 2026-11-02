@@ -309,6 +309,8 @@ The file is [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.m
   - macOS: `~/Library/Application Support/monash-study-kit`
   - Windows: `%LOCALAPPDATA%\monash-study-kit`
 
+  That is only the default. The first `monash setup` asks where to keep the data and lists each drive with its free space; if C: has less than 5 GB free it recommends another drive. To move everything later (course files, database, logins, settings): close your AI apps, then `monash move D:\MonashStudyKit`. When the data lives elsewhere, the default folder keeps only a small `location.json` that points to it, and you do not need to log in again.
+
   It contains course files (`files`), the database (`data`), login credentials (`secrets`, readable only by your own user account) and the dedicated login window's profile (`browser-profile`).
   Run `monash open` to open the course-files folder, or `monash open ed` for Ed Lessons files (in `data/ed-files`, by unit code).
 - **Stored credentials**: the Moodle session cookie, the Ed API token and the Moodle calendar subscription link. They stay on your computer and are only used to talk to Moodle / Ed.
@@ -382,6 +384,7 @@ You can also query directly in the terminal without any AI:
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed lesson progress / quiz questions (for revision) |
 | `monash ed read FIT2109 "W3 Pre-Class"` | A whole lesson as Markdown: text slides, reading pages and PDFs in order, plus its quiz questions |
 | `monash ed export FIT2109 [--module "Week 3"] [--open]` | Zip a unit's Ed materials by week into Downloads |
+| `monash export FIT1043 [--dir] [--open]` | Export a unit's course materials (Moodle + Ed Lessons) with an index of what was left out and why |
 | `monash config` | View / change settings (restart your AI app afterwards) |
 | `monash connect [client]` | Connect to Codex, Cursor, VS Code, Windsurf or Gemini CLI (see [Other AI clients](#other-ai-clients)) |
 | `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |
@@ -471,6 +474,10 @@ Install Chrome or Edge. If your browser lives somewhere unusual, point to it:
 
 By default Windows limits full paths to 260 characters, and unit name + week name + file name can exceed that. Store course files somewhere shorter:
 `monash config files_dir C:\Monash`, then `monash sync`.
+
+### My C: drive is full
+
+Move all of the kit's data to another drive with `monash move D:\MonashStudyKit` (close Claude and other AI apps first). The program itself is small; if you also want uv and Python off C:, set `UV_TOOL_DIR`, `UV_PYTHON_INSTALL_DIR` and `UV_CACHE_DIR` to folders on another drive before installing.
 
 ### My units don't use Ed
 

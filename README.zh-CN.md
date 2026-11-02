@@ -296,6 +296,8 @@ npx skills add Waldo0926/monash-study-kit
   - macOS：`~/Library/Application Support/monash-study-kit`
   - Windows：`%LOCALAPPDATA%\monash-study-kit`
 
+  这只是默认位置。第一次 `monash setup` 会问数据放在哪，列出每个盘的剩余空间；C 盘剩不到 5 GB 时会推荐别的盘。以后想整个搬走（课件、数据库、登录状态、设置）：先关掉 AI 软件，再运行 `monash move D:\MonashStudyKit`。数据放在别处时，默认目录里只留一个很小的 `location.json` 指过去，不用重新登录。
+
   里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）。运行 `monash open` 可以打开课件文件夹，`monash open ed` 打开 Ed Lessons 的课件（在 `data/ed-files` 里，按课号分）。
 - **存了哪些凭据**：Moodle 的会话 cookie、Ed 的 API 令牌、Moodle 日历订阅链接。都只在你电脑上，只用来访问 Moodle / Ed 本身。**别把 `secrets` 文件夹发给别人。**
 - **AI 能看到什么**：只有你提问时 AI 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字）。令牌和 cookie 永远不会发给 AI。**也不要把 Ed 令牌贴进聊天里**，令牌只在终端里输入。
@@ -366,6 +368,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
 | `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
 | `monash ed export FIT2109 [--module "Week 3"] [--open]` | 整门课的 Ed 课件按周打包成 zip，存到“下载” |
+| `monash export FIT1043 [--dir] [--open]` | 导出一门课的课程资料（Moodle + Ed Lessons），附索引，写明没导出的内容和原因 |
 | `monash config` | 看/改设置（改完重启 AI 软件） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
@@ -450,6 +453,10 @@ Codex、Cursor、VS Code、Windsurf 或 Gemini CLI：运行 `monash connect` 看
 ### Windows 上课件同步报“路径太长”
 
 Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + 文件名叠起来可能超。把课件放到短一点的地方：`monash config files_dir C:\Monash`，然后 `monash sync`。
+
+### C 盘满了
+
+用 `monash move D:\MonashStudyKit` 把所有数据搬到别的盘（先关掉 Claude 等 AI 软件）。程序本身不大；如果连 uv 和 Python 也不想放 C 盘，安装前把 `UV_TOOL_DIR`、`UV_PYTHON_INSTALL_DIR`、`UV_CACHE_DIR` 设成别的盘上的文件夹。
 
 ### 我的课不用 Ed
 

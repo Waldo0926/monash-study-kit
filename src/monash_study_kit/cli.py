@@ -40,6 +40,7 @@ import subprocess
 import sys
 import urllib.error
 import webbrowser
+from pathlib import Path
 
 from . import __version__, edlib, jobs
 from .gmail import GmailAuthError, GmailError
@@ -180,6 +181,16 @@ def cmd_setup(args):
         desktop = claude_setup.install_desktop()
         code = claude_setup.install_code()
         return 0 if desktop or code else 1
+    from . import location
+    if location.first_run():
+        print(f"Monash 学习助手 {__version__}\n")
+        choice = location.ask()
+        if choice is not None:
+            ensure_private_dir(choice)
+            location.write_pointer(choice)
+            print(f"好的，数据放在 {choice}。\n")
+            location.restart_setup()
+        print()
     print(f"Monash 学习助手 {__version__}\n数据都放在：{HOME}\n")
     print("== 1/4 Ed ==")
     if jobs.have_ed_token():
@@ -331,6 +342,34 @@ def parse_setting(key: str, raw: str, current):
             raise ValueError(f"{key} 要填数字，比如 monash config {key} {current}") from None
         return int(num) if num.is_integer() else num
     return raw
+
+
+def cmd_move(args):
+    """把整个数据目录（课件、数据库、登录状态、设置）搬到别的位置，比如 C 盘满了换到 D 盘。"""
+    from . import location
+    if os.environ.get("MONASH_KIT_HOME"):
+        print("现在用的是环境变量 MONASH_KIT_HOME 指定的位置，先去掉这个环境变量再搬。", file=sys.stderr)
+        return 1
+    target = Path(args.target).expanduser()
+    print(f"从 {HOME}\n搬到 {target}")
+    print("搬之前先关掉 Claude 等用着 monash 的 AI 软件（它们开着会占着数据库）。")
+    if not jobs._lock():
+        print("现在有同步正在跑，等它跑完再搬。", file=sys.stderr)
+        return 1
+    try:
+        if not args.yes and not _yes("开始搬吗？", default=True):
+            return 1
+        d = location.move(HOME, target)
+    except location.MoveError as e:
+        print(e, file=sys.stderr)
+        return 1
+    finally:
+        # 锁文件可能已经跟着搬走了，两处都清
+        jobs.LOCK_FILE.unlink(missing_ok=True)
+        (target / jobs.LOCK_FILE.name).unlink(missing_ok=True)
+    print(f"搬好了：{d['entries']} 项，{d['bytes'] / 1e9:.1f} GB。以后数据都在 {d['to']}。")
+    print("重新打开 Claude 就行，不用重新登录。")
+    return 0
 
 
 def cmd_config(args):
@@ -585,6 +624,31 @@ def cmd_due(args):
             else {"id": None, "shortname": args.course.upper(), "fullname": args.course.upper()}
     items = F.due(client, args.days, course)
     return emit_json(items) if want_json(args) else _print_due(items)
+
+
+def cmd_export(args):
+    """一门课的 Moodle 课件 + Ed Lessons 合成一份课程资料（zip 或文件夹），附索引。只用本机已同步的数据。"""
+    from . import export as X, moodlelib
+    try:
+        d = X.export(args.course, args.to, as_dir=args.dir,
+                     moodle_con=moodlelib.db_connect(), ed_conn=edlib.db_connect())
+    except LookupError as e:
+        print(e, file=sys.stderr)
+        return 1
+    if want_json(args):
+        return emit_json(d)
+    print(f"已导出 {d['course']}（{d['bytes'] / 1e6:.1f} MB）：{d['path']}")
+    if d["moodle"]:
+        print(f"  Moodle：{d['moodle']['files']} 个文件，{d['moodle']['links']} 条链接")
+    if d["ed"]:
+        print(f"  Ed Lessons：{d['ed']['lessons']} 节 lesson，{d['ed']['files']} 个文件")
+    for n in d["notes"]:
+        print(f"  ! {n}")
+    if d["missing"]:
+        print(f"  有 {d['missing']} 项没导出，原因写在 README.md 的“没导出的内容”里")
+    if args.open:
+        reveal(d["path"])
+    return 0
 
 
 def cmd_grep(args):
@@ -843,6 +907,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("course", nargs="?"); p.add_argument("--days", type=int, default=14)
     p = cmd(sub, "grep", cmd_grep, json_flag=True, help="全文搜课件和字幕稿")
     p.add_argument("query"); p.add_argument("course", nargs="?"); p.add_argument("--limit", type=int, default=15)
+    p = cmd(sub, "export", cmd_export, json_flag=True, help="导出一门课的课程资料（Moodle + Ed Lessons，附索引）")
+    p.add_argument("course", help="课号，如 FIT1043")
+    p.add_argument("--to", help="保存到哪个文件夹（默认“下载”）")
+    p.add_argument("--dir", action="store_true", help="写成文件夹，不打 zip")
+    p.add_argument("--open", action="store_true", help="导出后在文件管理器里显示")
     p = cmd(sub, "media", cmd_media, help="录播：YouTube 字幕、Zoom 录像下载和转写（要装 [media]）")
     p.add_argument("--limit", type=int, default=0, help="这次最多转写几个视频")
     p.add_argument("--match", help="只转写路径里含这段文字的视频")
@@ -850,6 +919,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p = cmd(sub, "open", cmd_open, help="打开课件文件夹（monash open ed：Ed Lessons 的课件）")
     p.add_argument("what", nargs="?", choices=["ed"], help="ed=Ed Lessons 的课件文件夹")
+    p = cmd(sub, "move", cmd_move, help="把数据（课件、数据库、登录状态）整个搬到别的位置，比如 C 盘满了换到 D 盘")
+    p.add_argument("target", help="新位置的完整路径，如 D:\\MonashStudyKit")
+    p.add_argument("--yes", action="store_true", help="不再确认")
     p = cmd(sub, "config", cmd_config, help="看/改设置")
     p.add_argument("key", nargs="?"); p.add_argument("value", nargs="?")
     p = cmd(sub, "connect", cmd_connect, help="接进别的 AI 软件：Codex、Cursor、VS Code、Windsurf、Gemini CLI")
