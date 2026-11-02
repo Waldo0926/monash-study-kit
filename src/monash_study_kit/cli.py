@@ -637,18 +637,19 @@ def cmd_due(args):
     return emit_json(items) if want_json(args) else _print_due(items)
 
 
-def sync_export_course(ref: str, log=print) -> None:
+def sync_export_course(ref: str, log=print, refresh_google: bool = False) -> None:
     """先同步指定 Moodle 课，再同步对应 Ed 课，最后补导 Ed 的 Google 链接。"""
     from . import google_export
     client, con = MoodleClient(), db_connect()
     try:
         courses = jobs.load_courses(client, con)
         course = F.find_course(courses, ref)
-        jobs.sync_moodle(only=[course], log=log)
+        jobs.sync_moodle(only=[course], log=log, refresh_google=refresh_google)
         if jobs.have_ed_token():
             jobs.sync_ed(log=log, course_code=course_code(course))
             econ = edlib.db_connect()
             try:
+                # 重新导出已在上面 Moodle 那一轮做过，这里只补 Ed 新出现的链接
                 google_export.sync_course(con, course, ed_conn=econ, log=log)
                 write_links_md(con, course["id"], course_folder(course))
             finally:
@@ -663,8 +664,10 @@ def cmd_export(args):
     """一门课的 Moodle 课件 + Ed Lessons 合成一份课程资料（zip 或文件夹），附索引。只用本机已同步的数据。"""
     from . import export as X, moodlelib
     try:
-        if getattr(args, "sync", False):
-            sync_export_course(args.course, log=(lambda text: print(text, file=sys.stderr)))
+        refresh_google = getattr(args, "refresh_google", False)
+        if getattr(args, "sync", False) or refresh_google:
+            sync_export_course(args.course, log=(lambda text: print(text, file=sys.stderr)),
+                               refresh_google=refresh_google)
         mcon, econ = moodlelib.db_connect(), edlib.db_connect()
         try:
             d = X.export(args.course, args.to, as_dir=args.dir, moodle_con=mcon, ed_conn=econ,
@@ -956,6 +959,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", action="store_true", help="写成文件夹，不打 zip")
     p.add_argument("--open", action="store_true", help="导出后在文件管理器里显示")
     p.add_argument("--sync", action="store_true", help="导出前同步这门 Moodle 和 Ed 课程")
+    p.add_argument("--refresh-google", action="store_true", help="同步时重新导出 Google 文件（隐含 --sync）")
     p.add_argument("--format", choices=["pdf", "both", "md"], help="正文格式（默认读取 export_format，初始为 pdf）")
     p = cmd(sub, "media", cmd_media, help="录播：YouTube 字幕、Zoom 录像下载和转写（要装 [media]）")
     p.add_argument("--limit", type=int, default=0, help="这次最多转写几个视频")

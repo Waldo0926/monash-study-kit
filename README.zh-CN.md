@@ -94,7 +94,7 @@ monash export FIT1045 --sync --json
 monash google logout                 # 先向 Google 吊销，再删除本机令牌
 ```
 
-自带 OAuth 客户端目前处于 Google 的“测试”状态，授权账号需要先由客户端维护者加入测试用户名单。`drive.readonly` 在 Google 属于受限 scope，允许读取 Drive 文件；本工具仅下载课程链接里出现的文件，不遍历整个 Drive。令牌单独存在数据目录的 `secrets/google-drive-token.json`（可通过 `MONASH_KIT_SECRETS` 改位置），不修改 Gmail 的授权流程或 `gmail-token.json`。令牌只在终端 / 浏览器授权流程中流转，不要贴进聊天。
+自带 OAuth 客户端已发布、但没有经过 Google 验证：第一次授权时 Google 会提示“Google 尚未验证此应用”，点 **高级 → 转至 Monash Student MCP（不安全）** 继续即可。未验证的应用最多 100 个用户；学校管理的账号也可能被管理员拦下，这时 Google 链接会保留为链接，索引里写明原因。`drive.readonly` 在 Google 属于受限 scope，允许读取 Drive 文件；本工具仅下载课程链接里出现的文件，不遍历整个 Drive。令牌单独存在数据目录的 `secrets/google-drive-token.json`（可通过 `MONASH_KIT_SECRETS` 改位置），不修改 Gmail 的授权流程或 `gmail-token.json`。令牌只在终端 / 浏览器授权流程中流转，不要贴进聊天。
 
 课程下载走只读 GET。Drive API 报大小限制或管理员限制时，会尝试专用登录浏览器中已有的 Google 会话；cookie 只在内存使用，不写日志或另存文件，跳转离开 Google 域名会停止。后备路径不能保证绕过管理员限制，仍失败时保留原链接并在索引说明原因。未授权时提示 `monash google login`。Moodle Page、Resource、作业仍会打开 `view.php`，Moodle 会记录查看；文件夹正常下载和 Book 打印视图不打开各自的 `view.php`。文件夹整包下载失败后的逐文件回退需要打开文件夹页，也会记录一次查看。
 

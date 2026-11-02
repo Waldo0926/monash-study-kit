@@ -260,3 +260,14 @@ def test_quiz_images_point_at_local_assets(env):
     quiz = z.read("FIT1043/Ed Lessons/01 Week 1 - Intro/01 W1 Pre-Class/Quiz.md").decode()
     assert url not in quiz and "](../../assets/abcd1234abcd1234.png)" in quiz
     assert "FIT1043/Ed Lessons/assets/abcd1234abcd1234.png" in z.namelist()
+
+
+def test_export_refresh_google_syncs_and_refreshes_once(env,monkeypatch):
+    seen=[]
+    monkeypatch.setattr(cli,"sync_export_course",lambda ref,log=None,refresh_google=False:seen.append(refresh_google))
+    monkeypatch.setattr(moodlelib,"db_connect",lambda:env["m"])
+    monkeypatch.setattr(edlib,"db_connect",lambda:env["e"])
+    monkeypatch.setattr(X,"export",lambda *a,**kw:{"path":"sample.zip"})
+    args=cli.build_parser().parse_args(["export","FIT1043","--refresh-google","--json"])
+    args.fn(args)
+    assert seen == [True]
