@@ -462,6 +462,12 @@ def db_connect(path: Path | None = None) -> sqlite3.Connection:
         tracked INTEGER DEFAULT 0, synced_at TEXT
     );
     CREATE TABLE IF NOT EXISTS state (k TEXT PRIMARY KEY, v TEXT);
+    -- 同步时没能存成文件的东西和原因（评分细则不可见、Google 导出失败……），导出的索引里列出来
+    CREATE TABLE IF NOT EXISTS notes (
+        course_id INTEGER NOT NULL, kind TEXT NOT NULL, folder TEXT, title TEXT, url TEXT NOT NULL,
+        reason TEXT, synced_at TEXT NOT NULL,
+        PRIMARY KEY (course_id, kind, url)
+    );
     """)
     # 1.0.3 以前的库没有 removed_at，补上
     if "removed_at" not in {r["name"] for r in con.execute("PRAGMA table_info(files)")}:

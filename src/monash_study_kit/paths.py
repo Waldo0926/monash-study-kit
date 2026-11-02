@@ -69,6 +69,7 @@ DEFAULTS = {
     "tz_offset": 8,               # Moodle 账号的时区（页面上的时间按它显示）：马来西亚 8，澳洲 10（夏令时 11）
     "files_dir": "",              # 课件放哪；空 = 数据目录下的 files。Windows 路径太长时改成 C:\\Monash 之类
     "browser": "",                # 登录窗口用哪个浏览器程序；空 = 自动找 Chrome / Edge / Brave
+    "google_docs_format": "pdf",  # Google Docs 导出格式：pdf 或 docx
     "web_notes": True,            # 抓 Moodle / Ed 链接到的课程笔记网页（老师的 github.io 讲义站之类）进全文搜索
     "update_check": True,         # 每天查一次 GitHub 上有没有新版本，有就提示
     "name_limit": 80,             # 文件名最长几个字符：Windows 整条路径不能超过 260，课程/周次/文件夹/文件四层很容易超

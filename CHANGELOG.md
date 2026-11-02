@@ -2,6 +2,17 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.9.0
+
+Course exports now contain what used to be left as links, with the reason for anything still missing.
+
+- Moodle Page, Book and assignment text, and the rubric or marking guide students can see, are saved as Markdown. Images in them are downloaded to `assets/` (named by content hash, so duplicates are stored once). Links to this unit's pages, files, folders and books are followed instead of listed. Books are read through the print view, which Moodle does not count as a view.
+- Folders are downloaded whole (`download_folder.php`, not counted as a view), keeping subfolders, case and original file names. They are refreshed at most weekly, and if the zip is unavailable the files are fetched one by one. Images that a notebook references but that are missing (or differ only in case) are reported.
+- Images in Ed lesson pages are downloaded and de-duplicated, with links rewritten to relative paths. Failed downloads keep the remote link and are listed in the export index. Ed and whole-unit exports include `assets/`.
+- Google Slides, Docs, Sheets and Drive files linked from a unit are exported read-only through the Drive API: Slides and Docs to PDF (Docs optionally DOCX with `monash config google_docs_format docx`), Sheets to XLSX, Drive files as they are. When a file is too large or an administrator blocks the API, the dedicated login browser's Google session is tried; its cookies stay in memory. Failures keep the link and record the reason. New `monash google login` / `status` / `logout` use a separate token with only `drive.readonly` (`logout` revokes it first); `monash sync --refresh-google` exports again.
+- Ed units whose code matches a tracked Moodle unit are tracked automatically, including archived and combined units. This is why a past unit's Ed Lessons could be missing. A choice made in `monash courses` is kept. `monash export --sync` syncs the unit's Moodle and Ed content first.
+- The export index lists everything not exported with its reason, and gains a statistics section (links files, remote images left, Google links exported or failed by reason), also in `--json`.
+
 ## 1.8.0
 
 One export for a whole unit, and this package is now the only copy of the Moodle, Ed, Google and attendance code (the author's private server deployment depends on it instead of carrying its own copies).

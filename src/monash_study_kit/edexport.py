@@ -27,6 +27,7 @@ from .paths import ED_FILES_DIR
 
 STORED = {".pdf", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".mp4", ".gz", ".docx", ".pptx", ".xlsx"}
 STATUS = {"completed": "已完成", "attempted": "做了一部分", "unattempted": "没开始"}
+CHALLENGE_REASON = "Code challenge 右侧的工作区文件只能连接 Ed 工作区才读得到（会在 Ed 上创建工作区），为保持只读没有导出；题目说明已存成 .md"
 
 
 def _lessons(conn: sqlite3.Connection, course_id: int) -> list[dict]:
@@ -65,10 +66,18 @@ def plan(conn: sqlite3.Connection, course, module: str | None = None) -> dict:
                 links.append((f["title"] or f["url"], f["url"]))
             elif f["type"] in ("pdf", "attachment"):
                 out["missing"].append({"lesson": l["title"], "title": f["title"], "url": url})
+            elif f["type"] == "challenge":
+                out["missing"].append({"lesson": l["title"], "title": f["title"] or "Code challenge", "url": url,
+                                       "reason": CHALLENGE_REASON})
         out["lessons"].append({"module": mname, "title": l["title"], "status": l["status"], "url": url,
                                "folder": folder, "files": nfiles, "links": links})
     if module and not out["lessons"]:
         raise LookupError(f"{code} 里没有模块名包含 “{module}” 的 lesson")
+    assets = ED_FILES_DIR / code / "assets"
+    if assets.is_dir():
+        for path in sorted(assets.iterdir()):
+            if path.is_file() and not path.name.endswith((".part", ".download")) and ED_FILES_DIR.resolve() in path.resolve().parents:
+                out["files"].append((f"{root}/assets/{path.name}", path))
     return out
 
 
@@ -86,7 +95,8 @@ def _readme(p: dict) -> str:
         md.append(f"- [{l['title']}]({l['url']}) · {STATUS.get(l['status'], l['status'] or '')} · {extra}")
     if p["missing"]:
         md += ["", "## 没下载到的文件", "", "下面这些上次同步时没下载成功（或超过大小上限），可以到 Ed 原页面看：", ""]
-        md += [f"- {m['lesson']} · {m['title']}：{m['url']}" for m in p["missing"]]
+        md += [f"- {m['lesson']} · {m['title']}：{m['url']}" + (f"（{m['reason']}）" if m.get("reason") else "")
+               for m in p["missing"]]
     return "\n".join(md) + "\n"
 
 

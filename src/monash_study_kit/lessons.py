@@ -138,6 +138,9 @@ def _unlink(rel: str) -> None:
     _remove_empty_dirs(path.parent)
 
 LESSONS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS ed_assets (
+    url TEXT PRIMARY KEY, local_path TEXT, sha TEXT, error TEXT, fetched_at TEXT
+);
 CREATE TABLE IF NOT EXISTS modules (
     id INTEGER PRIMARY KEY, course_id INTEGER, name TEXT, created_at TEXT
 );
@@ -213,6 +216,11 @@ def fetch_lesson_files(client: EdClient, lesson_id: int, slides: list[dict] | No
                 # 正文直接写在 Ed 里的页：存成 .md，全文索引就能搜到
                 out.append({"id": s["id"], "type": s["type"], "title": s.get("title") or "",
                             "file_url": None, "url": None, "text": text, "idx": idx})
+            if s.get("type") == "code" and s.get("challenge_id"):
+                # 右侧工作区（scaffold、task.txt）只能“连接”Ed 工作区才读得到（会创建工作区），
+                # 为了只读不去连，只记下来，导出的索引里说明
+                out.append({"id": attachment_id(f"challenge:{s['challenge_id']}"), "type": "challenge",
+                            "title": s.get("title") or "", "file_url": None, "url": None, "idx": idx})
             # 正文里附的文件（starter code 的 zip、讲义、数据表）：跟 Ed Web 一样一起下载
             seen = set()
             for a in doc_attachments(_slide_raw(s)):
@@ -319,9 +327,10 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
             log(f"  lesson {l['id']} 的内容没取到，先保留上次的")
             continue
         before = {r[0]: (r[1], r[2]) for r in conn.execute(
-            "SELECT id, local_path, file_url FROM lesson_files WHERE lesson_id = ?", (l["id"],))}
+            "SELECT id, local_path, COALESCE(file_url, url) FROM lesson_files WHERE lesson_id = ?", (l["id"],))}
         conn.execute("DELETE FROM lesson_files WHERE lesson_id = ?", (l["id"],))
         sync_quizzes(conn, client, course_id, l["id"], slides, log)
+        prefetch_quiz_images(conn, course_id, l["id"], cdir, log)
         ldir = f"{cdir}/{mdirs.get(l.get('module_id'), mdirs[None])}/{lesson_folder(l, pos)}"
         kept = set()
         for f in fetch_lesson_files(client, l["id"], slides):
@@ -343,12 +352,17 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
                 if download_pdf(f["file_url"], FILES_DIR / rel, log, force=changed,
                                 max_bytes=ATTACHMENT_MAX if f["type"] == "attachment" else None):
                     local_path = rel
+            elif f["type"] == "webpage" and old_path and old_url == f["url"]:
+                # Google 导出的网页文件保留到下一轮，避免每次 Lessons 同步都删掉重下。
+                if (FILES_DIR / old_path).is_file():
+                    local_path = old_path
             elif f.get("text"):
                 rel = f"{ldir}/{_file_name(f['idx'], f['title'], f['type'].title(), '.md')}"
                 _move_old(old_path, rel)
                 dest = FILES_DIR / rel
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                body = f"# {l.get('title')} · {f['title']}\n\n{f['text']}\n"
+                text = localize_images(conn, f["text"], cdir, dest.parent, log)
+                body = f"# {l.get('title')} · {f['title']}\n\n{text}\n"
                 if not dest.exists() or dest.read_text(encoding="utf-8") != body:
                     dest.write_text(body, encoding="utf-8")
                 local_path = rel
@@ -367,3 +381,54 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
                 _unlink(old_path)
     conn.commit()
     return len(modules), len(lessons)
+
+
+def localize_images(conn, text: str, cdir: str, md_dir: Path, log=print) -> str:
+    """只存 Ed 自己的正文图片，缓存按 URL 查、文件按内容去重。"""
+    def image(match):
+        url = match[2]
+        if not is_ed_file_url(url):
+            return match[0]
+        row = conn.execute("SELECT local_path, error FROM ed_assets WHERE url=?", (url,)).fetchone()
+        if row and row[0] and (FILES_DIR / row[0]).is_file():
+            path = FILES_DIR / row[0]
+        else:
+            tmp = FILES_DIR / cdir / "assets" / (hashlib.sha256(url.encode()).hexdigest() + ".download")
+            errors = []
+            if not download_pdf(url, tmp, errors.append, max_bytes=ATTACHMENT_MAX):
+                conn.execute("INSERT OR REPLACE INTO ed_assets VALUES (?,NULL,NULL,?,?)",
+                             (url, "图片下载失败或超过 200 MB", now_iso()))
+                return match[0]
+            sha = hashlib.sha256(tmp.read_bytes()).hexdigest()
+            ext = Path(urllib.parse.urlsplit(url).path).suffix.lower()
+            ext = ext if re.fullmatch(r"\.[a-z0-9]{1,8}", ext) else ".img"
+            path = next(iter(sorted(tmp.parent.glob(sha[:16] + ".*"))), tmp.parent / (sha[:16] + ext))
+            os.replace(tmp, path)
+            conn.execute("INSERT OR REPLACE INTO ed_assets VALUES (?,?,?,NULL,?)",
+                         (url, path.relative_to(FILES_DIR).as_posix(), sha, now_iso()))
+        local = FILES_DIR / cdir / "assets" / path.name
+        if path != local:
+            local.parent.mkdir(parents=True, exist_ok=True)
+            if not local.exists():
+                shutil.copy2(path, local)
+            path = local
+        rel = os.path.relpath(path, md_dir).replace(os.sep, "/")
+        return f"![{match[1]}]({rel})"
+    return re.sub(r"!\[([^\]]*)\]\((https://[^\s)]+)\)", image, text)
+
+
+def prefetch_quiz_images(conn, course_id: int, lesson_id: int, cdir: str, log=print) -> None:
+    """测验题目和选项里的 Ed 图片先下载到 assets/（Quiz.md 是导出时现生成的，导出时再换成相对路径）。"""
+    for q, opts in conn.execute("SELECT question, options FROM quiz_questions WHERE lesson_id=?", (lesson_id,)).fetchall():
+        for text in [q or "", *json.loads(opts or "[]")]:
+            if "edusercontent.com" in text:
+                localize_images(conn, text, cdir, FILES_DIR / cdir, log)
+
+
+def asset_paths(conn) -> dict[str, str]:
+    """已经下载好的 Ed 图片：远程地址 -> assets/ 里的文件名。导出时把 Quiz.md 里的地址换掉用。"""
+    out = {}
+    for url, local in conn.execute("SELECT url, local_path FROM ed_assets WHERE local_path IS NOT NULL"):
+        if (FILES_DIR / local).is_file():
+            out[url] = Path(local).name
+    return out
