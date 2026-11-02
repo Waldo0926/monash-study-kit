@@ -2,6 +2,11 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.11.2
+
+- Windows PDF browser startup retries once with a fresh isolated profile after an early exit or a startup timeout; each failed process is killed if needed and reaped before retry. Partially written port files and transient connection failures are retried within the startup deadline. A final failure explains the Markdown fallback option.
+- Align the Chinese Gmail privacy summary with the default `gmail.modify` login, and document separate read-only Drive authorization and materials-only profile boundaries in both languages.
+
 ## 1.11.1
 
 - `monash login` no longer crashes with “Browser context management is not supported” when the login window is closed before signing in finishes (on macOS Chrome keeps running without a window); it says the window was closed and how to retry.

@@ -482,3 +482,80 @@ def test_export_reports_pdf_progress(course):
     lines = []
     X.export('FIT1043', tmp / 'out', moodle_con=object(), ed_conn=None, log=lines.append)
     assert lines == [f'导出到：{tmp / "out"}', '排版 PDF：共 3 页（第一次导出较慢，做过的下次直接复用）', '  PDF 3/3', '打包 zip…']
+
+
+def test_windows_startup_reaps_failed_process_and_uses_fresh_profile(fake_cdp, monkeypatch):
+    from pathlib import Path
+    from types import SimpleNamespace
+    monkeypatch.setattr(pdfrender, 'os', SimpleNamespace(name='nt'))
+    cls, procs, profiles = pdfrender.PipeCDP, [], []
+    def launch(argv, **kwargs):
+        profile = Path(next(a.split('=', 1)[1] for a in argv if a.startswith('--user-data-dir=')))
+        profiles.append(profile)
+        profile.mkdir()
+        proc = cls(argv).proc
+        proc.poll = lambda: 1 if len(profiles) == 1 else None
+        procs.append(proc)
+        if len(profiles) == 2:
+            assert any(call[0] == 'wait' for call in fake_cdp)  # first process reaped before retry
+            (profile / 'DevToolsActivePort').write_text('12345\n/devtools/browser/ready\n', encoding='utf-8')
+        return proc
+    monkeypatch.setattr(pdfrender.subprocess, 'Popen', launch)
+    monkeypatch.setattr(pdfrender, 'CDP', lambda url: cls([url]))
+    with pdfrender.Renderer('fake') as renderer:
+        root = renderer.root
+    assert len(procs) == 2 and profiles[0] != profiles[1]
+    assert not root.exists()
+
+
+def test_windows_startup_retries_partial_file_and_connection_refusal(fake_cdp, monkeypatch):
+    from pathlib import Path
+    from types import SimpleNamespace
+    monkeypatch.setattr(pdfrender, 'os', SimpleNamespace(name='nt'))
+    cls = pdfrender.PipeCDP
+    port_file = None
+    attempts = []
+    def launch(argv, **kwargs):
+        nonlocal port_file
+        profile = Path(next(a.split('=', 1)[1] for a in argv if a.startswith('--user-data-dir=')))
+        profile.mkdir()
+        port_file = profile / 'DevToolsActivePort'
+        port_file.write_text('not-ready\n/devtools/browser/ready\n', encoding='utf-8')
+        proc = cls(argv).proc
+        proc.poll = lambda: None
+        return proc
+    def tick(*args):
+        port_file.write_text('12345\n/devtools/browser/ready\n', encoding='utf-8')
+    def connect(url):
+        attempts.append(url)
+        if len(attempts) == 1:
+            raise ConnectionRefusedError('not listening yet')
+        return cls([url])
+    monkeypatch.setattr(pdfrender.subprocess, 'Popen', launch)
+    monkeypatch.setattr(pdfrender.time, 'sleep', tick)
+    monkeypatch.setattr(pdfrender, 'CDP', connect)
+    with pdfrender.Renderer('fake'):
+        pass
+    assert len(attempts) == 2
+
+
+@pytest.mark.parametrize('early_exit', [True, False])
+def test_windows_startup_failure_is_bounded_and_cleans_profiles(fake_cdp, monkeypatch, early_exit):
+    from types import SimpleNamespace
+    monkeypatch.setattr(pdfrender, 'os', SimpleNamespace(name='nt'))
+    cls, procs = pdfrender.PipeCDP, []
+    ticks = iter(range(0, 1000, 31))
+    if not early_exit:
+        monkeypatch.setattr(pdfrender.time, 'monotonic', lambda: next(ticks))
+    def launch(argv, **kwargs):
+        proc = cls(argv).proc
+        proc.poll = lambda: 1 if early_exit else None
+        procs.append(proc)
+        return proc
+    monkeypatch.setattr(pdfrender.subprocess, 'Popen', launch)
+    renderer = pdfrender.Renderer('fake')
+    with pytest.raises(RuntimeError, match='--format md'):
+        renderer.__enter__()
+    assert len(procs) == 2 and not renderer.root.exists()
+    if not early_exit:
+        assert all(proc.killed for proc in procs)
