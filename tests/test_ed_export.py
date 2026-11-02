@@ -230,7 +230,7 @@ def test_document_images_cached_and_export_paths_resolve(ed, tmp_path):
     plans = [edexport.plan(conn, "FIT2109")]
     for combined in (False, True):
         if combined:
-            p = X.plan("FIT2109", moodle_con=None, ed_conn=conn)
+            p = X.plan("FIT2109", moodle_con=None, ed_conn=conn, export_format="md")
             out = io.BytesIO()
             X.write_zip(p, out)
         else:
@@ -252,7 +252,7 @@ def test_document_image_failure_is_kept_and_indexed(ed, monkeypatch):
     L.sync_lessons(conn, client, 4242, log=lambda _: None)
     assert image in (files / _paths(conn)["Instructions"]).read_text(encoding="utf-8")
     assert conn.execute("SELECT error FROM ed_assets WHERE url=?", (image,)).fetchone()[0]
-    p = X.plan("FIT2109", moodle_con=None, ed_conn=conn)
+    p = X.plan("FIT2109", moodle_con=None, ed_conn=conn, export_format="md")
     assert any(m["url"] == image and "失败" in m["reason"] for m in p.missing)
     assert p.statistics["remote_images"] == 1
 
@@ -298,3 +298,25 @@ def test_code_challenge_workspace_is_listed_not_fetched(tmp_path, monkeypatch):
     ch = [f for f in files if f["type"] == "challenge"]
     assert len(ch) == 1 and ch[0]["title"] == "Exercise 1" and ch[0]["file_url"] is None
     assert edexport.CHALLENGE_REASON.startswith("Code challenge")
+
+
+def test_images_without_an_extension_get_one_from_their_content(tmp_path, monkeypatch):
+    """Ed 的图片地址没有扩展名：按文件头存成 .png；旧版存成 .img 的，下次同步改名并更新 .md 引用。"""
+    assert L.image_ext(b"\x89PNG\r\n\x1a\n...") == ".png" and L.image_ext(b"\xff\xd8\xff\xe0") == ".jpg"
+    assert L.image_ext(b"RIFF\x00\x00\x00\x00WEBPVP8") == ".webp" and L.image_ext(b"<svg xmlns='x'>") == ".svg"
+    assert L.image_ext(b"hello") is None
+    files = tmp_path / "ed-files"
+    monkeypatch.setattr(L, "FILES_DIR", files)
+    conn = edlib.db_connect(tmp_path / "ed.db")
+    L.ensure_lessons_schema(conn)
+    (files / "FIT1043" / "assets").mkdir(parents=True)
+    (files / "FIT1043" / "assets" / "abc.img").write_bytes(b"\x89PNG\r\n\x1a\nrest")
+    md = files / "FIT1043" / "01 Week 1" / "01 Intro" / "02 Definition.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("See ![图片](../../assets/abc.img)\n", encoding="utf-8")
+    conn.execute("INSERT INTO ed_assets VALUES ('https://static.au.edusercontent.com/files/X','FIT1043/assets/abc.img','s',NULL,'x')")
+    assert L.repair_image_names(conn) == 1
+    assert (files / "FIT1043" / "assets" / "abc.png").is_file() and not (files / "FIT1043" / "assets" / "abc.img").exists()
+    assert "../../assets/abc.png)" in md.read_text(encoding="utf-8")
+    assert conn.execute("SELECT local_path FROM ed_assets").fetchone()[0] == "FIT1043/assets/abc.png"
+    assert L.repair_image_names(conn) == 0

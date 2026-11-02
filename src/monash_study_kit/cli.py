@@ -336,6 +336,8 @@ def cmd_open(args):
 
 def parse_setting(key: str, raw: str, current):
     """按默认值的类型解析。数字一律先当小数读：阿德莱德是 UTC+9.5，auto_sync_hours 也可以写 0.5。"""
+    if key == "export_format" and raw not in {"pdf", "both", "md"}:
+        raise ValueError("export_format 只能是 pdf、both 或 md")
     if key == "google_docs_format" and raw not in {"pdf", "docx"}:
         raise ValueError("google_docs_format 只能是 pdf 或 docx")
     if isinstance(current, bool):
@@ -665,14 +667,17 @@ def cmd_export(args):
             sync_export_course(args.course, log=(lambda text: print(text, file=sys.stderr)))
         mcon, econ = moodlelib.db_connect(), edlib.db_connect()
         try:
-            d = X.export(args.course, args.to, as_dir=args.dir, moodle_con=mcon, ed_conn=econ)
+            d = X.export(args.course, args.to, as_dir=args.dir, moodle_con=mcon, ed_conn=econ,
+                         export_format=getattr(args, "format", None))
         finally:
             mcon.close()
             econ.close()
-    except LookupError as e:
+    except (LookupError, ValueError, OSError, RuntimeError, TimeoutError) as e:
         print(e, file=sys.stderr)
         return 1
     if want_json(args):
+        if d.get("pdf", {}).get("skipped_reason"):
+            print(d["pdf"]["skipped_reason"], file=sys.stderr)
         return emit_json(d)
     print(f"已导出 {d['course']}（{d['bytes'] / 1e6:.1f} MB）：{d['path']}")
     if d["moodle"]:
@@ -682,7 +687,7 @@ def cmd_export(args):
     for n in d["notes"]:
         print(f"  ! {n}")
     if d["missing"]:
-        print(f"  有 {d['missing']} 项没导出，原因写在 README.md 的“没导出的内容”里")
+        print(f"  有 {d['missing']} 项没导出，原因写在 README 索引的“没导出的内容”里")
     if args.open:
         reveal(d["path"])
     return 0
@@ -951,6 +956,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", action="store_true", help="写成文件夹，不打 zip")
     p.add_argument("--open", action="store_true", help="导出后在文件管理器里显示")
     p.add_argument("--sync", action="store_true", help="导出前同步这门 Moodle 和 Ed 课程")
+    p.add_argument("--format", choices=["pdf", "both", "md"], help="正文格式（默认读取 export_format，初始为 pdf）")
     p = cmd(sub, "media", cmd_media, help="录播：YouTube 字幕、Zoom 录像下载和转写（要装 [media]）")
     p.add_argument("--limit", type=int, default=0, help="这次最多转写几个视频")
     p.add_argument("--match", help="只转写路径里含这段文字的视频")

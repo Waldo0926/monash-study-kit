@@ -13,6 +13,7 @@ from monash_study_kit import lessons as L
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
+    monkeypatch.setattr(X, "load_settings", lambda: {"export_format": "md"})
     files, ed_files = tmp_path / "files", tmp_path / "ed-files"
     monkeypatch.setattr(X, "FILES_DIR", files)
     monkeypatch.setattr(edexport, "ED_FILES_DIR", ed_files)

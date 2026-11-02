@@ -295,6 +295,7 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
 
     文件存在 课号/模块/lesson/ 下面，名字前面带 Ed 上的顺序号，和 Ed 页面一样排。"""
     ensure_lessons_schema(conn)
+    repair_image_names(conn)
     modules, lessons = fetch_lessons(client, course_id)
     ts = now_iso()
     prune_lessons(conn, course_id, {l["id"] for l in lessons})
@@ -383,6 +384,50 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
     return len(modules), len(lessons)
 
 
+IMAGE_EXT = r"\.(png|jpe?g|gif|webp|svg|bmp)"
+_SIGNATURES = ((b"\x89PNG", ".png"), (b"\xff\xd8\xff", ".jpg"), (b"GIF8", ".gif"), (b"BM", ".bmp"))
+
+
+def image_ext(head: bytes) -> str | None:
+    """按文件开头几个字节认出图片格式；认不出返回 None。"""
+    for sig, ext in _SIGNATURES:
+        if head.startswith(sig):
+            return ext
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    text = head.lstrip().lower()
+    if text.startswith(b"<svg") or text.startswith(b"<?xml") and b"<svg" in text:
+        return ".svg"
+    return None
+
+
+def repair_image_names(conn) -> int:
+    """1.10.0 及以前，没有扩展名的 Ed 图片存成了 .img（查看器不显示）：按内容改成 .png / .jpg …，
+    各门课 assets/ 里的副本和 .md 里的引用一起改。返回改了几个。"""
+    renames = {}
+    for url, local in conn.execute("SELECT url, local_path FROM ed_assets WHERE local_path LIKE '%.img'").fetchall():
+        src = FILES_DIR / local
+        ext = image_ext(src.read_bytes()[:4096]) if src.is_file() else None
+        if not ext:
+            continue
+        renames[src.name] = src.stem + ext
+        conn.execute("UPDATE ed_assets SET local_path=? WHERE url=?", (Path(local).with_suffix(ext).as_posix(), url))
+    if not renames:
+        return 0
+    for old, new in renames.items():
+        for p in FILES_DIR.glob(f"*/assets/{old}"):
+            p.replace(p.with_name(new))
+    for md in FILES_DIR.rglob("*.md"):
+        text = md.read_text(encoding="utf-8")
+        fixed = text
+        for old, new in renames.items():
+            fixed = fixed.replace(f"assets/{old})", f"assets/{new})")
+        if fixed != text:
+            md.write_text(fixed, encoding="utf-8")
+    conn.commit()
+    return len(renames)
+
+
 def localize_images(conn, text: str, cdir: str, md_dir: Path, log=print) -> str:
     """只存 Ed 自己的正文图片，缓存按 URL 查、文件按内容去重。"""
     def image(match):
@@ -401,7 +446,9 @@ def localize_images(conn, text: str, cdir: str, md_dir: Path, log=print) -> str:
                 return match[0]
             sha = hashlib.sha256(tmp.read_bytes()).hexdigest()
             ext = Path(urllib.parse.urlsplit(url).path).suffix.lower()
-            ext = ext if re.fullmatch(r"\.[a-z0-9]{1,8}", ext) else ".img"
+            if not re.fullmatch(IMAGE_EXT, ext):
+                # Ed 的图片地址没有扩展名：按文件头判断，不然查看器不会把它当图片显示
+                ext = image_ext(tmp.read_bytes()[:4096]) or ".img"
             path = next(iter(sorted(tmp.parent.glob(sha[:16] + ".*"))), tmp.parent / (sha[:16] + ext))
             os.replace(tmp, path)
             conn.execute("INSERT OR REPLACE INTO ed_assets VALUES (?,?,?,NULL,?)",

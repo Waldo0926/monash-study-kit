@@ -107,10 +107,13 @@ class CDP:
         self.ws = WebSocket(ws_url)
         self._id = 0
 
-    def call(self, method: str, params: dict | None = None, timeout: float = 15) -> dict:
+    def call(self, method: str, params: dict | None = None, timeout: float = 15, *, session_id: str | None = None) -> dict:
         self._id += 1
         mid = self._id
-        self.ws.send(json.dumps({"id": mid, "method": method, "params": params or {}}))
+        message = {"id": mid, "method": method, "params": params or {}}
+        if session_id:
+            message["sessionId"] = session_id
+        self.ws.send(json.dumps(message))
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             msg = json.loads(self.ws.recv())
@@ -140,19 +143,27 @@ class PipeCDP:
             os.set_inheritable(3, True)
             os.set_inheritable(4, True)
 
-        self.proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                     stderr=subprocess.DEVNULL, preexec_fn=wire, close_fds=False)
+        try:
+            self.proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL, preexec_fn=wire, close_fds=False)
+        except BaseException:
+            for fd in (to_child_r, self._to_child, self._from_child, from_child_w):
+                os.close(fd)
+            raise
         os.close(to_child_r)
         os.close(from_child_w)
         os.set_blocking(self._from_child, False)
         self._buf = b""
         self._id = 0
 
-    def call(self, method: str, params: dict | None = None, timeout: float = 15) -> dict:
+    def call(self, method: str, params: dict | None = None, timeout: float = 15, *, session_id: str | None = None) -> dict:
         self._id += 1
         mid = self._id
+        message = {"id": mid, "method": method, "params": params or {}}
+        if session_id:
+            message["sessionId"] = session_id
         try:
-            os.write(self._to_child, json.dumps({"id": mid, "method": method, "params": params or {}}).encode() + b"\0")
+            os.write(self._to_child, json.dumps(message).encode() + b"\0")
         except OSError as e:
             raise WebSocketClosed("浏览器已经关掉了") from e
         deadline = time.monotonic() + timeout

@@ -79,6 +79,7 @@ MCP 只注册 `list_files`、`read_file`、`search_content`、`get_ed_lessons`�
 - Ed Lessons 的 document / code 正文图片只下载 Ed 自己的 `edusercontent.com` 地址，按内容去重并缓存 URL，每张最多 200 MB。下载失败保留原链接并记录原因；独立 Ed 导出和整课导出都包含 `assets/`，图片使用相对路径。
 - Google Slides / Docs 默认导出 PDF，Sheets 导出 XLSX，Drive 普通文件按原格式下载。只处理 Moodle 和 Ed Lessons 里出现过的文件链接；Google 表单不能导出。文件还在时跳过，`monash sync --refresh-google` 强制重新导出。
 - 每次同步检查新出现的 Ed 课程：课号与已跟踪 Moodle 课程相同就自动跟踪，包括归档课程和 `FIT1045/FIT1053` 这样的联合课号；处理过的课程保留用户选择。
+- `monash export <课号>` 导出包里的正文页、链接清单、测验和索引默认是 **PDF（给人看）**，课件原件照常保留。本机同步的 md 不变，继续供 AI、全文搜索和 MCP 使用。用 `--format both` 同时放 PDF 和 md，`--format md` 只放 md；例如 `monash config export_format both` 可将默认值设为同时导出两种格式。需要安装 Chrome / Edge / Brave 才能生成 PDF；没有浏览器时自动回退 md，并在索引和终端说明。PDF 在全新的临时浏览器配置中离线生成，只内嵌本次导出的本地图片，远程图片仅保留替代文字。缓存放在数据目录的 `pdf-cache/`，最多 500 MB；`--json` 新增 `pdf.generated`、`pdf.cached`、`pdf.skipped_reason`。`monash ed export` 的行为不变。
 - `monash export FIT1045 --sync` 先同步这门 Moodle 课及对应 Ed 课再导出。普通导出继续只读本机缓存。README 索引列出未导出内容和原因，并统计链接清单数量、Markdown 远程图片数、Google 总数 / 成功 / 按原因分组的失败数；`--json` 的 `statistics` 提供相同数字。
 
 ```bash
@@ -432,7 +433,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash ed lessons FIT2109` / `quiz FIT2109` | Ed Lessons 进度 / 测验题（复习用） |
 | `monash ed read FIT2109 "W3 Pre-Class"` | 整节 lesson 的正文：文字页、阅读网页、PDF 按页序拼成 Markdown，附测验题 |
 | `monash ed export FIT2109 [--module "Week 3"] [--open]` | 整门课的 Ed 课件按周打包成 zip，存到“下载” |
-| `monash export FIT1043 [--dir] [--open]` | 导出一门课的课程资料（Moodle + Ed Lessons），附索引，写明没导出的内容和原因 |
+| `monash export FIT1043 [--format pdf\|both\|md] [--dir] [--open]` | 导出一门课的课程资料（Moodle + Ed Lessons），附索引，写明没导出的内容和原因 |
 | `monash config` | 看/改设置（改完重启 AI 软件） |
 | `monash connect [客户端]` | 接进 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI（见[接入其他 AI 客户端](#接入其他-ai-客户端)） |
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
