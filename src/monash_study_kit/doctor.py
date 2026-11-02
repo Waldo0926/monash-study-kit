@@ -257,8 +257,10 @@ CHECKS = [check_install, check_data_dir, check_browser, check_moodle, check_ed, 
 
 def run(skip: tuple = (), deep: bool = False) -> dict:
     results = []
+    materials = load_settings().get("materials_only")
+    private = {"check_gmail", "check_attendance", "check_claude_desktop", "check_claude_code"}
     for fn in CHECKS:
-        if fn.__name__ in skip:
+        if fn.__name__ in skip or materials and fn.__name__ in private:
             continue
         try:
             result = fn()

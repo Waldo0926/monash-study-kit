@@ -2,6 +2,14 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.10.0
+
+- Add an early account-selection entry point: `--profile NAME`, `--profile=NAME`, or `MONASH_KIT_PROFILE` isolates credentials, databases, materials and browser sessions under the default data home's `profiles/NAME`. Names are validated, directories are private, per-directory overrides cannot escape named profiles, and the default account keeps its existing behavior.
+- Add `profile list` and confirmed `profile remove NAME [--all] [--yes]`. Removal revokes the target's Drive and Gmail OAuth authorizations before deleting any local session files; any revocation failure preserves all local files. Materials remain unless `--all` is used. No Moodle logout is requested, and the completion message points to Ed's manual API-token deletion page.
+- Named profiles stay local: refuse remote serving, AI configuration and independent moves; setup only logs in and selects courses. Add `materials_only`, false by default and forced true for named profiles, with centralized CLI and MCP allowlists.
+- Materials mode syncs Ed course lists and Lessons without discussions, preserves Moodle and linked Google material exports, and skips Gmail sync, attendance reads/keepalive, personal-calendar setup and private diagnostic checks. Its MCP surface is limited to file listing/reading/search, Lessons/quizzes and local Ed export; forbidden tools and aliases fail before their handlers run.
+- Document complete command/tool policies, account isolation and cleanup. Add synthetic and subprocess tests for import order, directory isolation, settings enforcement, local-only restrictions, materials sync, background work, diagnostics, safe removal and credential-free listings.
+
 ## 1.9.0
 
 Course exports now contain what used to be left as links, with the reason for anything still missing.

@@ -113,19 +113,36 @@ def status() -> dict:
         raise GoogleError(AUTH_REASON) from None
 
 
+def revoke_token(token_file: Path) -> None:
+    """只吊销指定文件里的授权，不删文件，供多文件全部吊销后再统一清理。"""
+    if not token_file.is_file():
+        return
+    try:
+        data = json.loads(token_file.read_text(encoding="utf-8"))
+        token = data.get("refresh_token") or data.get("token")
+        if not token:
+            return
+        # 吊销接口只认 POST（GET 会 404）；令牌放在请求体里，不出现在网址中
+        req = urllib.request.Request("https://oauth2.googleapis.com/revoke", method="POST",
+                                     data=urllib.parse.urlencode({"token": token}).encode(),
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.build_opener(gmail._NoRedirect()).open(req, timeout=30) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        # 400 invalid_token：授权早就失效了（过期，或者在 Google 账号页面撤销过），等于已经吊销
+        body = e.read(4096).decode("utf-8", "replace")
+        e.close()
+        if e.code == 400 and "invalid_token" in body:
+            return
+        raise GoogleError("Google 授权吊销失败，本机令牌已保留，请重试") from None
+    except Exception:
+        raise GoogleError("Google 授权吊销失败，本机令牌已保留，请重试") from None
+
+
 def logout() -> dict:
     """先吊销再删本机文件；吊销失败保留文件，方便重试。"""
-    if TOKEN_FILE.is_file():
-        data = json.loads(TOKEN_FILE.read_text(encoding="utf-8"))
-        token = data.get("refresh_token") or data.get("token")
-        if token:
-            req = urllib.request.Request("https://oauth2.googleapis.com/revoke?" + urllib.parse.urlencode({"token": token}))
-            try:
-                with urllib.request.build_opener(gmail._NoRedirect()).open(req, timeout=30) as resp:
-                    resp.read()
-            except Exception:
-                raise GoogleError("Google 授权吊销失败，本机令牌已保留，请重试") from None
-        TOKEN_FILE.unlink()
+    revoke_token(TOKEN_FILE)
+    TOKEN_FILE.unlink(missing_ok=True)
     return {"已授权": False}
 
 

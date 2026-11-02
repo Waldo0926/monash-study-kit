@@ -220,8 +220,9 @@ def _background_tick(every_sync: float, every_touch: float, last_touch: float) -
         update_check.refresh()          # 自己控制频率：一天最多真查一次
     if jobs.hours_since_sync() * 3600 >= every_sync:
         start_sync()
-    start_mail_sync()
-    start_attendance_work()
+    if not load_settings().get("materials_only"):
+        start_mail_sync()
+        start_attendance_work()
     if time.time() - last_touch >= every_touch:
         last_touch = time.time()
         try:
@@ -240,7 +241,7 @@ def start_mail_sync() -> bool:
     """开了 Gmail 就定时同步邮件（gmail_sync_minutes，0=不同步）。另开线程，不耽误 Moodle 续期。"""
     settings = load_settings()
     minutes = float(settings.get("gmail_sync_minutes") or 0)
-    if not settings.get("gmail_enabled") or minutes <= 0 or time.time() < _mail["next"]:
+    if settings.get("materials_only") or not settings.get("gmail_enabled") or minutes <= 0 or time.time() < _mail["next"]:
         return False
     if _mail["thread"] and _mail["thread"].is_alive():
         return False
@@ -251,6 +252,8 @@ def start_mail_sync() -> bool:
 
 
 def _sync_mail():
+    if load_settings().get("materials_only"):
+        return
     from . import gmail
     store = gmail.Store()
     try:
@@ -280,7 +283,7 @@ _attendance = {"thread": None, "last_keepalive": 0.0, "auth_logged": False}
 def start_attendance_work() -> str | None:
     """开了考勤时：到了课表上的时间点就读一次（attendance_auto.due），否则按设置轻量续期。"""
     settings = load_settings()
-    if not settings.get("attendance_enabled"):
+    if settings.get("materials_only") or not settings.get("attendance_enabled"):
         return None
     if _attendance["thread"] and _attendance["thread"].is_alive():
         return None
@@ -307,6 +310,8 @@ def start_attendance_work() -> str | None:
 
 
 def _attendance_job(kind, fn, reason):
+    if load_settings().get("materials_only"):
+        return
     from .attendance import AttendanceAuthError
     try:
         result = fn()
@@ -868,6 +873,10 @@ def available_tools() -> dict:
     邮箱和考勤都接好以后，接入用的 start_school_service_setup 也不再列，省 token。"""
     from . import student_tools
     settings = load_settings()
+    if settings.get("materials_only"):
+        from .materials_policy import MCP_TOOLS
+        return {k: v for k, v in TOOLS.items() if k in MCP_TOOLS and
+                (settings.get("use_ed", True) or k not in ED_TOOLS)}
     extra = student_tools.tools(settings)
     hide = set() if settings.get("use_ed", True) else set(ED_TOOLS)
     if settings.get("gmail_enabled") and settings.get("attendance_enabled"):
@@ -898,7 +907,10 @@ def tool_list() -> list[dict]:
 
 def call_tool(name: str, arguments: dict) -> dict:
     try:
-        data = available_tools()[name][0](arguments or {})
+        tools = available_tools()
+        if name not in tools:
+            raise PermissionError(f"没有工具 {name}")
+        data = tools[name][0](arguments or {})
         text = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
         result = {"content": [{"type": "text", "text": _clip(text, MAX_OUT)}]}
         # A panel must never turn a successful text query into an error.
@@ -937,7 +949,10 @@ def handle(msg: dict) -> dict | None:
             result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
                       "capabilities": {"tools": {"listChanged": True}, "prompts": {}, "resources": {}},
                       "serverInfo": {"name": "monash", "version": __version__},
-                      "instructions": INSTRUCTIONS + _ed_hint() + _student_hint(available_tools()) + _update_hint()}
+                      "instructions": ("只导课程资料模式：仅可列文件、读文件、搜课件、读取 Ed Lessons 和测验题、导出课件。"
+                                       "登录和同步请在本机终端运行 monash login / monash sync。"
+                                       "令牌不要贴进聊天。" if load_settings().get("materials_only") else
+                                       INSTRUCTIONS + _ed_hint() + _student_hint(available_tools()) + _update_hint())}
         elif method == "ping":
             result = {}
         elif method == "tools/list":
@@ -952,8 +967,10 @@ def handle(msg: dict) -> dict | None:
             except LookupError as e:
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32002, "message": str(e)}}
         elif method == "prompts/list":
-            result = {"prompts": help_menu.prompt_list()}
+            result = {"prompts": [] if load_settings().get("materials_only") else help_menu.prompt_list()}
         elif method == "prompts/get":
+            if load_settings().get("materials_only"):
+                return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "只导课程资料模式下没有个人学习提示"}}
             p = msg.get("params") or {}
             try:
                 result = help_menu.get_prompt(p.get("name"), p.get("arguments"))
@@ -964,7 +981,7 @@ def handle(msg: dict) -> dict | None:
         elif method == "tools/call":
             p = msg.get("params") or {}
             name = p.get("name")
-            canonical = LEGACY_TOOL_ALIASES.get(name, name)
+            canonical = name if load_settings().get("materials_only") else LEGACY_TOOL_ALIASES.get(name, name)
             if canonical not in available_tools():
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"没有工具 {name}"}}
             result = call_tool(canonical, p.get("arguments") or {})

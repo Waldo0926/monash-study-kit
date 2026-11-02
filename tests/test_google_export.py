@@ -155,7 +155,7 @@ def test_logout_revokes_before_deleting(tmp_path,monkeypatch,http):
             return super().read(*args)
     answers.append(Revoked(b"ok"))
     assert G.logout() == {"已授权":False}
-    assert not token.exists() and seen[0].get_method() == "GET" and "/revoke?" in seen[0].full_url
+    assert not token.exists() and seen[0].get_method() == "POST" and seen[0].full_url == "https://oauth2.googleapis.com/revoke"
 
 
 def test_logout_keeps_token_on_failure(tmp_path,monkeypatch,http):
@@ -214,3 +214,46 @@ def test_administrator_message_is_detected():
 def test_disabled_drive_api_is_explained_and_tries_the_browser():
     e = G.error_reason(403, "accessNotConfigured", "Google Drive API has not been used in project 1 before or it is disabled.")
     assert "没启用 Drive API" in str(e) and e.fallback
+
+
+def test_revoking_an_already_invalid_token_counts_as_revoked(tmp_path, monkeypatch):
+    import io
+    token = tmp_path / "google-drive-token.json"
+    token.write_text('{"refresh_token":"synthetic"}', encoding="utf-8")
+    def opener(*a, **k):
+        class O:
+            def open(self, req, timeout=None):
+                raise G.urllib.error.HTTPError(req.full_url, 400, "Bad Request", {}, io.BytesIO(b'{"error":"invalid_token"}'))
+        return O()
+    monkeypatch.setattr(G.urllib.request, "build_opener", opener)
+    G.revoke_token(token)                      # 不报错
+    def opener500(*a, **k):
+        class O:
+            def open(self, req, timeout=None):
+                raise G.urllib.error.HTTPError(req.full_url, 500, "Error", {}, io.BytesIO(b"oops"))
+        return O()
+    monkeypatch.setattr(G.urllib.request, "build_opener", opener500)
+    import pytest as _pytest
+    with _pytest.raises(G.GoogleError):
+        G.revoke_token(token)
+
+
+def test_revoke_is_a_post_with_the_token_in_the_body(tmp_path, monkeypatch):
+    token = tmp_path / "google-drive-token.json"
+    token.write_text('{"refresh_token":"synthetic-refresh"}', encoding="utf-8")
+    sent = []
+    def opener(*a, **k):
+        class O:
+            def open(self, req, timeout=None):
+                sent.append(req)
+                class R:
+                    def __enter__(self): return self
+                    def __exit__(self, *a): return False
+                    def read(self): return b""
+                return R()
+        return O()
+    monkeypatch.setattr(G.urllib.request, "build_opener", opener)
+    G.revoke_token(token)
+    req = sent[0]
+    assert req.get_method() == "POST" and req.full_url == "https://oauth2.googleapis.com/revoke"
+    assert b"token=synthetic-refresh" in req.data and "synthetic" not in req.full_url

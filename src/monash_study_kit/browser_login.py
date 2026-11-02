@@ -181,6 +181,9 @@ def login_moodle(interactive: bool = True, timeout: float = 300, log=print) -> d
 
 def _save_calendar_url(client: MoodleClient, log) -> None:
     """顺手存下 iCal 订阅链接：以后会话过期了，截止日期还能靠它拿到。"""
+    from .paths import load_settings
+    if load_settings().get("materials_only"):
+        return
     from . import features as F
     if F.load_calendar_url():
         return

@@ -36,6 +36,41 @@ The picture is real output of `monash todo` against a database filled with made-
 For the original v1.1 security review and the [1.5 feature review checklist](docs/SECURITY-REVIEW-1.5-SCOPE.md), see [security documentation](docs/security.md). The earlier review does not automatically certify features added later.
 
 
+
+## Multiple accounts / course materials only (1.10.0)
+
+Without `--profile`, or with `--profile default`, the existing default account keeps its directory rules and features. Named accounts store separate databases, files, credentials and browser sessions under `<default data home>/profiles/<name>/`. The base still follows `MONASH_KIT_HOME` > `location.json` > the platform default. `default` is reserved; other names must match `[a-z0-9][a-z0-9_-]{0,31}`.
+
+```bash
+monash --profile alice setup             # login and course selection only
+monash --profile alice google login      # optional; drive.readonly only
+monash --profile alice sync
+monash --profile=alice export FIT1045 --sync
+monash --profile alice mcp               # local stdio, materials tools only
+monash profile list                      # manage from the default account
+monash profile remove alice              # confirm, clear logins, keep materials
+monash profile remove alice --all --yes   # also remove databases and materials
+```
+
+`MONASH_KIT_PROFILE=alice` also works; the command-line selection wins. Selection happens before importing service modules; an initialized Python process cannot switch accounts. Named profiles ignore individual directory overrides (`MONASH_KIT_DATA`, `MONASH_KIT_SECRETS`, `MONASH_KIT_FILES`, `MONASH_KIT_ED_DATA`, `MONASH_KIT_ED_TOKEN`, `ED_TOKEN`, and `files_dir`) to avoid sharing the default account's paths or credentials. Directories use mode 700 where supported.
+
+Named profiles **stay local**: `remote`, `connect`, `setup claude`, and `move` are refused, and `setup` skips AI configuration. Sessions cannot be handed to remote services or AI configuration. Local stdio `mcp` can still be run manually. Profiles move together with the default data home rather than independently.
+
+Named profiles force `materials_only=true`, even if settings or environment variables request false. The default account starts with false and can enable it with `monash config materials_only true`. While the mode is active, config can inspect this setting but cannot change it. To exit on the default account, temporarily override `MONASH_KIT_MATERIALS_ONLY=false`, then save false; named profiles cannot use this override.
+
+Materials sync keeps Moodle files, Pages, Books, assignment descriptions and visible grading criteria, folders, linked Google files and Ed Lessons. It still reads Ed course lists to match unit codes, but never syncs discussions or replies. Gmail background sync, attendance reads and keepalive are skipped; Moodle login does not obtain a personal calendar link. `doctor --deep` checks materials and the search index only, skipping deadlines, submission status, grades and posts. Existing cached data is not deleted when enabling the mode.
+
+Complete command policy in materials mode (refused commands return exit code 1):
+
+- Allowed: `setup` (login and course selection), `login moodle/ed`, `google login/status/logout`, `sync`, `export`, `courses`, `status`, `doctor`, `open`, `library`, `config`, `grep`, `help`, `mcp`; `ed export/lessons/read/quiz`; `moodle ls/get`; `profile list/remove` from the default account.
+- Config cannot change active `materials_only`; named profiles cannot change `files_dir`. `moodle get` only accepts course-resource/file entry points, rejecting grade pages and submission files.
+- Refused: all `gmail` and `attendance` commands; `todo`, `due`, `semester`, `media`, `uninstall`, `update`, `connect`, `move`, all `remote`, `setup claude`; `ed courses/threads/search/show/new/following`; `moodle overview/due/calendar/assignments/grades/news/search/find/open/alerts/messages`. New commands require an explicit allowlist entry.
+
+The MCP tool list is exactly `list_files`, `read_file`, `search_content`, `get_ed_lessons`, `export_ed_lessons`; `use_ed=false` removes the last two. Other tools and their legacy aliases fail when called. Export writes a local zip without changing upstream course data and retains its local-write MCP annotation. Personal study prompts are unavailable. There is no arbitrary Drive browsing or search command/tool: Google exports only follow course links during sync.
+
+`profile list` checks only credential-file presence and disk usage, never reading or printing credential contents. Removal first revokes the target profile's Drive and Gmail Google OAuth authorizations in order. Any revocation failure stops removal and preserves **every local file** for a retry; an earlier successful remote revocation cannot be undone. Once all revocations succeed, `secrets/`, `browser-profile/` and `attendance-browser/` are removed. Only `--all` removes the complete profile, including materials and databases. The default account and other profiles are untouched; Moodle receives no logout or other request. Ed API tokens have no revocation interface here: manually delete them at [Ed API tokens](https://edstem.org/au/settings/api-tokens).
+
+
 ## 1.9.0: more complete course exports
 
 Moodle Pages, Book chapters, assignment descriptions and visible rubrics / marking guides are saved as Markdown. Moodle images are stored in course `assets/` by content hash, and internal links to Page, Resource, Folder and Book activities are followed. Folder downloads preserve original names, subdirectories and case, reuse files for seven days, and fall back to individual downloads. Missing notebook images, case mismatches, empty pages and hidden grading criteria are explained in the index.

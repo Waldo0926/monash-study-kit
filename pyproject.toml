@@ -41,7 +41,7 @@ Issues = "https://github.com/Waldo0926/monash-study-kit/issues"
 Changelog = "https://github.com/Waldo0926/monash-study-kit/blob/main/CHANGELOG.md"
 
 [project.scripts]
-monash = "monash_study_kit.cli:main"
+monash = "monash_study_kit.entry:main"
 
 [dependency-groups]
 # tzdata：Windows 上跑考勤相关的测试要它

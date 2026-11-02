@@ -40,6 +40,8 @@ NAMES = frozenset(gmail_tools.TOOLS) | frozenset(GMAIL_READ + ATTENDANCE_READ + 
 
 def scopes(settings: dict) -> set[str]:
     out = set()
+    if settings.get("materials_only"):
+        return out
     if settings.get("gmail_enabled"):
         out.add("gmail.read")
         if settings.get("gmail_manage_enabled"):

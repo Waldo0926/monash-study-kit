@@ -21,39 +21,25 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
 
+from .home import DEFAULT_HOME as DEFAULT_HOME, LOCATION_FILE as LOCATION_FILE, resolve_home
 
-def _default_home() -> Path:
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "monash-study-kit"
-    if os.name == "nt":
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return Path(base) / "monash-study-kit"
-    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / "monash-study-kit"
+PROFILE = os.environ.get("MONASH_KIT_PROFILE") or None
+if PROFILE == "default":
+    PROFILE = None
 
 
-DEFAULT_HOME = _default_home()
-LOCATION_FILE = DEFAULT_HOME / "location.json"   # 数据放在别处时，这里记着实际位置
-
-
-def resolve_home(environ=os.environ, location_file: Path = LOCATION_FILE, default: Path = DEFAULT_HOME) -> Path:
-    """MONASH_KIT_HOME > location.json 里记的位置 > 系统默认位置。location.json 坏了或写的不是绝对路径就当没有。"""
-    if environ.get("MONASH_KIT_HOME"):
-        return Path(environ["MONASH_KIT_HOME"])
-    try:
-        home = Path(json.loads(location_file.read_text(encoding="utf-8"))["home"]).expanduser()
-    except (OSError, ValueError, KeyError, TypeError):
-        return default
-    return home if home.is_absolute() else default
+def is_default_profile() -> bool:
+    """没有选命名 profile 时，保留原来的默认账号行为。"""
+    return PROFILE is None
 
 
 HOME = resolve_home()
 SETTINGS_FILE = HOME / "settings.json"
 
 DEFAULTS = {
+    "materials_only": False,     # 只同步和导出课程资料；命名 profile 强制开启
     "use_ed": True,               # 不用 Ed 就设 false：同步、待办、体检不再提醒 Ed，AI 里也不列 Ed 的工具
     "gmail_enabled": False,      # monash gmail login 成功后自动打开：本地 MCP 的邮件工具
     "gmail_sync_minutes": 30,     # 开了 Gmail 时，MCP 在跑的时候多久在后台同步一次邮件；0 = 不自动同步
@@ -101,19 +87,21 @@ def load_settings() -> dict:
         v = _env_value(key, default)
         if v is not None:
             out[key] = v
+    if PROFILE is not None:
+        out["materials_only"] = True
     return out
 
 
 # 设置在导入时读一次：Claude Desktop 启动的 MCP 读不到终端里设的环境变量，所以常用的都进 settings.json；
 # 环境变量仍然优先（测试和高级用法）。
 _s = load_settings()
-SECRETS_DIR = Path(os.environ.get("MONASH_KIT_SECRETS") or HOME / "secrets")   # Moodle cookie、Ed 令牌、日历链接（600 权限）
-DATA_DIR = Path(os.environ.get("MONASH_KIT_DATA") or HOME / "data")            # moodle.db、ed.db
-FILES_DIR = Path(os.environ.get("MONASH_KIT_FILES") or _s["files_dir"] or HOME / "files").expanduser()
-_ED_DATA = os.environ.get("MONASH_KIT_ED_DATA")
+SECRETS_DIR = Path((os.environ.get("MONASH_KIT_SECRETS") if is_default_profile() else None) or HOME / "secrets")   # Moodle cookie、Ed 令牌、日历链接（600 权限）
+DATA_DIR = Path((os.environ.get("MONASH_KIT_DATA") if is_default_profile() else None) or HOME / "data")            # moodle.db、ed.db
+FILES_DIR = Path((os.environ.get("MONASH_KIT_FILES") or _s["files_dir"] if is_default_profile() else None) or HOME / "files").expanduser()
+_ED_DATA = os.environ.get("MONASH_KIT_ED_DATA") if is_default_profile() else None
 ED_DB = Path(_ED_DATA) / "ed.db" if _ED_DATA else DATA_DIR / "ed.db"
 ED_FILES_DIR = Path(_ED_DATA) / "files" if _ED_DATA else DATA_DIR / "ed-files"   # Ed Lessons 的课件 PDF
-ED_TOKEN_FILE = Path(os.environ.get("MONASH_KIT_ED_TOKEN") or SECRETS_DIR / "ed-token")
+ED_TOKEN_FILE = Path((os.environ.get("MONASH_KIT_ED_TOKEN") if is_default_profile() else None) or SECRETS_DIR / "ed-token")
 BROWSER_PROFILE = HOME / "browser-profile"   # 专用登录窗口的配置目录，和日常浏览器分开
 LOG_FILE = HOME / "mcp.log"
 TZ_OFFSET = float(os.environ.get("MONASH_KIT_TZ_OFFSET") or _s["tz_offset"])
