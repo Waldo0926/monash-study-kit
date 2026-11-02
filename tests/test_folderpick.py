@@ -17,7 +17,7 @@ def test_mac_uses_osascript_with_arguments_not_script_text(monkeypatch):
     monkeypatch.setattr(FP.subprocess, "run", lambda argv, **kw: calls.append(argv) or done(out="/Users/x/我的 资料/\n"))
     assert FP.choose_folder("选文件夹", Path("/Users/x/Downloads")) == Path("/Users/x/我的 资料/")
     argv = calls[0]
-    assert argv[0] == "osascript" and argv[-2:] == ["选文件夹", "/Users/x/Downloads"]
+    assert argv[0] == "osascript" and argv[-2:] == ["选文件夹", str(Path("/Users/x/Downloads"))]
     assert not any("Downloads" in a for a in argv[:-1])
 
 
