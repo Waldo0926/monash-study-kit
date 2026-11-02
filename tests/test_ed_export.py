@@ -230,7 +230,7 @@ def test_document_images_cached_and_export_paths_resolve(ed, tmp_path):
     plans = [edexport.plan(conn, "FIT2109")]
     for combined in (False, True):
         if combined:
-            p = X.plan("FIT2109", moodle_con=None, ed_conn=conn)
+            p = X.plan("FIT2109", moodle_con=None, ed_conn=conn, export_format="md")
             out = io.BytesIO()
             X.write_zip(p, out)
         else:
@@ -252,7 +252,7 @@ def test_document_image_failure_is_kept_and_indexed(ed, monkeypatch):
     L.sync_lessons(conn, client, 4242, log=lambda _: None)
     assert image in (files / _paths(conn)["Instructions"]).read_text(encoding="utf-8")
     assert conn.execute("SELECT error FROM ed_assets WHERE url=?", (image,)).fetchone()[0]
-    p = X.plan("FIT2109", moodle_con=None, ed_conn=conn)
+    p = X.plan("FIT2109", moodle_con=None, ed_conn=conn, export_format="md")
     assert any(m["url"] == image and "失败" in m["reason"] for m in p.missing)
     assert p.statistics["remote_images"] == 1
 

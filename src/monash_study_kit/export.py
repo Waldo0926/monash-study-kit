@@ -16,7 +16,11 @@ CLI（monash export）和服务器上的整门课 zip 共用这里。
 """
 from __future__ import annotations
 
+import base64
+import contextlib
+import mimetypes
 import os
+import posixpath
 import re
 import sqlite3
 import urllib.parse
@@ -25,7 +29,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from . import edexport, edquery
+from . import edexport, edquery, mdhtml, pdfrender
+from .paths import load_settings
 from .moodlelib import FILES_DIR
 
 # 课件大多已经压过，再压一遍只费 CPU
@@ -37,13 +42,15 @@ SECRET_PARAMS = {"pwd", "passcode", "password", "token", "tk"}
 @dataclass
 class Plan:
     code: str
-    entries: list = field(default_factory=list)   # [(包内路径, Path 或 str 内容)]
+    export_format: str = "md"
+    entries: list = field(default_factory=list)   # [(包内路径, Path、str 正文或 bytes PDF)]
     missing: list = field(default_factory=list)   # [{"where", "title", "url", "reason"}]
     notes: list = field(default_factory=list)     # 写进索引的说明
     moodle: dict | None = None
     ed: dict | None = None
     statistics: dict = field(default_factory=dict)
     google: dict = field(default_factory=dict)
+    pdf: dict = field(default_factory=lambda: {"generated": 0, "cached": 0, "skipped_reason": None})
 
     def add(self, arc: str, item) -> None:
         if not any(old == arc for old, _ in self.entries):
@@ -202,18 +209,19 @@ def plan_ed(p: Plan, conn: sqlite3.Connection) -> None:
 
 def _index(p: Plan) -> str:
     now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+    ext = "pdf" if p.export_format == "pdf" else "md"
     md = [f"# {p.code} 课程资料", "", f"导出于 {now}，来自本机已同步的 Moodle 和 Ed Lessons。"
           "这是个人学习副本，课件版权归课程团队，请不要再公开分发。", "",
           "不含：Ed 讨论帖、提交记录、成绩和反馈、邮件、私信、考勤。Zoom 等链接里的会议密码已去掉。", ""]
     if p.moodle:
         m = p.moodle
-        md.append(f"- Moodle/：{m['files']} 个文件（{m['bytes'] / 1e6:.1f} MB），{m['links']} 条链接写在各目录的 links.md")
+        md.append(f"- Moodle/：{m['files']} 个文件（{m['bytes'] / 1e6:.1f} MB），{m['links']} 条链接写在各目录的 links.{ext}")
     if p.ed:
         e = p.ed
-        md.append(f"- Ed Lessons/：{e['lessons']} 节 lesson，{e['files']} 个文件，{e['quizzes']} 节有 Quiz.md（只有题目，没有答案）")
+        md.append(f"- Ed Lessons/：{e['lessons']} 节 lesson，{e['files']} 个文件，{e['quizzes']} 节有 Quiz.{ext}（只有题目，没有答案）")
     if p.statistics:
         s = p.statistics
-        md += ["", "## 统计", "", f"- links.md / Links.md：{s['link_files']} 个",
+        md += ["", "## 统计", "", f"- links.{ext} / Links.{ext}：{s['link_files']} 个",
                f"- Markdown 远程图片引用：{s['remote_images']} 个",
                f"- Google 链接：{s['google_total']} 个，成功导出 {s['google_success']} 个，失败 {s['google_failed']} 个"]
         md += [f"  - {reason}：{count} 个" for reason,count in sorted(s["google_failure_reasons"].items())]
@@ -227,8 +235,12 @@ def _index(p: Plan) -> str:
     return "\n".join(md) + "\n"
 
 
-def plan(course: str, *, moodle_con: sqlite3.Connection | None, ed_conn: sqlite3.Connection | None) -> Plan:
-    p = Plan(code=_code(course))
+def plan(course: str, *, moodle_con: sqlite3.Connection | None, ed_conn: sqlite3.Connection | None,
+         export_format: str | None = None) -> Plan:
+    export_format = export_format if export_format is not None else load_settings()["export_format"]
+    if export_format not in {"pdf", "both", "md"}:
+        raise ValueError("export_format 只能是 pdf、both 或 md")
+    p = Plan(code=_code(course), export_format=export_format)
     if moodle_con is not None:
         plan_moodle(p, moodle_con)
     if ed_conn is not None:
@@ -249,7 +261,63 @@ def plan(course: str, *, moodle_con: sqlite3.Connection | None, ed_conn: sqlite3
                     "google_success": sum(reason == "成功" for reason in p.google.values()),
                     "google_failed": sum(reasons.values()), "google_failure_reasons": reasons}
     p.entries.insert(0, (f"{p.code}/README.md", _index(p)))
+    _pdf_entries(p, export_format)
     return p
+
+
+def _pdf_entries(p: Plan, export_format: str) -> None:
+    if export_format == "md":
+        return
+    executable = pdfrender.find_browser()
+    if not executable:
+        p.export_format = "md"
+        p.pdf["skipped_reason"] = pdfrender.NO_BROWSER
+        p.notes.append(pdfrender.NO_BROWSER)
+        p.entries[0] = (f"{p.code}/README.md", _index(p))
+        return
+    originals = dict(p.entries)
+    converted = []
+    with contextlib.ExitStack() as stack:
+        renderer = None
+        for arc, item in p.entries:
+            if not arc.lower().endswith(".md"):
+                converted.append((arc, item))
+                continue
+            target = arc[:-3] + ".pdf"
+            if target in originals:
+                raise ValueError(f"PDF 导出路径重名：{target}（可用 --format md 导出）")
+            body = item.read_text(encoding="utf-8", errors="replace") if isinstance(item, Path) else item
+
+            def image(url):
+                try:
+                    parts = urllib.parse.urlsplit(url)
+                except ValueError:
+                    return None
+                if parts.scheme or parts.netloc or "\\" in parts.path or parts.path.startswith("/"):
+                    return None
+                name = posixpath.normpath(posixpath.join(posixpath.dirname(arc), urllib.parse.unquote(parts.path)))
+                source = originals.get(name)
+                mime = mimetypes.guess_type(name)[0]
+                if not isinstance(source, Path) or mime not in {"image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml", "image/bmp", "image/avif"}:
+                    return None
+                # 只内嵌本次导出清单中的图片，不跟随 md 的任意本机文件路径；图片字节也随 HTML 进入缓存哈希。
+                return f"data:{mime};base64," + base64.b64encode(source.read_bytes()).decode("ascii")
+
+            html = mdhtml.document(body, arc, image=image, pdf_links=True)
+            data = pdfrender.cached(html)
+            if data is None:
+                if renderer is None:
+                    renderer = stack.enter_context(pdfrender.Renderer(executable))
+                data = renderer.render(html)
+                pdfrender.store(html, data)
+                p.pdf["generated"] += 1
+            else:
+                p.pdf["cached"] += 1
+            if export_format == "both":
+                converted.append((arc, item))
+            # 缓存可在本次导出过程中被清理，条目保留字节，避免写包时引用失效。
+            converted.append((target, data))
+    p.entries = converted
 
 
 def write_zip(p: Plan, out) -> dict:
@@ -261,6 +329,7 @@ def write_zip(p: Plan, out) -> dict:
                 total += item.stat().st_size
             else:
                 z.writestr(arc, item)
+                total += len(item if isinstance(item, bytes) else item.encode("utf-8"))
     return _stats(p, total)
 
 
@@ -275,19 +344,24 @@ def write_dir(p: Plan, dest: Path) -> dict:
             shutil.copy2(item, target)
             total += item.stat().st_size
         else:
-            target.write_text(item, encoding="utf-8")
+            if isinstance(item, bytes):
+                target.write_bytes(item)
+            else:
+                target.write_text(item, encoding="utf-8")
+            total += target.stat().st_size
     return _stats(p, total)
 
 
 def _stats(p: Plan, total: int) -> dict:
     return {"course": p.code, "entries": len(p.entries), "bytes": total, "moodle": p.moodle, "ed": p.ed,
-            "missing": len(p.missing), "notes": p.notes, "statistics": p.statistics}
+            "missing": len(p.missing), "notes": p.notes, "statistics": p.statistics, "pdf": p.pdf}
 
 
 def export(course: str, to: str | Path | None = None, *, as_dir: bool = False,
-           moodle_con: sqlite3.Connection | None = None, ed_conn: sqlite3.Connection | None = None) -> dict:
+           moodle_con: sqlite3.Connection | None = None, ed_conn: sqlite3.Connection | None = None,
+           export_format: str | None = None) -> dict:
     """导出到文件夹（默认“下载”）。as_dir=True 写成文件夹，否则一个 zip。"""
-    p = plan(course, moodle_con=moodle_con, ed_conn=ed_conn)
+    p = plan(course, moodle_con=moodle_con, ed_conn=ed_conn, export_format=export_format)
     dest_dir = Path(to).expanduser() if to else edexport.default_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
     if as_dir:
