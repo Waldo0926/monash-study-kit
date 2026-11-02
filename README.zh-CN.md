@@ -37,6 +37,41 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选
 之前的[1.1安全审计](docs/security.md)只覆盖当时的功能；新增的远程连接、邮箱与考勤另列有[1.5审查清单](docs/SECURITY-REVIEW-1.5-SCOPE.md)，不能直接沿用旧版结论。
 
 
+
+## 多账号 / 只导课程资料（1.10.0）
+
+不加 `--profile` 或使用 `--profile default`，仍是原来的默认账号，目录规则和功能不变。命名账号在默认数据目录的 `profiles/<名称>/` 中独立保存数据库、课件、凭据和浏览器会话；默认目录仍按 `MONASH_KIT_HOME` > `location.json` > 系统默认位置决定。`default` 是保留名，其他名称只能匹配 `[a-z0-9][a-z0-9_-]{0,31}`。
+
+```bash
+monash --profile alice setup             # 只做登录和选课
+monash --profile alice google login      # 可选：只申请 drive.readonly
+monash --profile alice sync
+monash --profile=alice export FIT1045 --sync
+monash --profile alice mcp               # 本机 stdio，仅课程资料工具
+monash profile list                      # 必须在默认账号下管理
+monash profile remove alice              # 确认后清除登录，保留资料
+monash profile remove alice --all --yes   # 同时删除资料和数据库
+```
+
+也支持环境变量 `MONASH_KIT_PROFILE=alice`；命令行选择优先。入口在导入服务模块前选定账号，不能在同一个 Python 进程中切换已经初始化的账号。命名账号忽略单项目录覆盖（`MONASH_KIT_DATA`、`MONASH_KIT_SECRETS`、`MONASH_KIT_FILES`、`MONASH_KIT_ED_DATA`、`MONASH_KIT_ED_TOKEN`、`ED_TOKEN` 和 `files_dir`），避免误用默认账号的目录或令牌。目录在支持的系统上设为 700 权限。
+
+命名 profile **只留在本机**：拒绝 `remote`、`connect`、`setup claude` 和 `move`，`setup` 跳过 AI 软件配置；不能把会话交给远程服务或 AI 软件配置。`mcp` 仍可在本机手动运行。profile 随默认数据目录整体移动，不单独搬家。
+
+命名 profile 强制开启 `materials_only`，设置文件或环境变量也关不掉。默认账号的该设置默认是 false，可以用 `monash config materials_only true` 开启；资料模式运行中只能查看 `materials_only`，不能用 config 修改。默认账号如需退出，可先用 `MONASH_KIT_MATERIALS_ONLY=false` 临时覆盖，再保存 false；命名账号不接受该覆盖。
+
+资料模式同步照常获取 Moodle 课件、Page、Book、作业说明和可见评分细则、文件夹、课程链接中的 Google 文件和 Ed Lessons。Ed 仍拉课程列表以匹配课号，但不抓 threads / replies；跳过 Gmail 后台同步、考勤读取和续期，Moodle 登录时也不获取个人日历。`doctor --deep` 只检查课件和全文索引，不读个人截止、提交状态、成绩或帖子。已有缓存不会因此被删除。
+
+资料模式的完整命令清单（被拒绝时退出码 1）：
+
+- 允许：`setup`（仅登录选课）、`login moodle/ed`、`google login/status/logout`、`sync`、`export`、`courses`、`status`、`doctor`、`open`、`library`、`config`、`grep`、`help`、`mcp`；`ed export/lessons/read/quiz`；`moodle ls/get`；默认账号下的 `profile list/remove`。
+- `config` 不能修改当前启用的 `materials_only`；命名账号也不能修改 `files_dir`。`moodle get` 只接受课件资源和文件入口，拒绝成绩页和提交文件。
+- 拒绝：全部 `gmail`、全部 `attendance`；`todo`、`due`、`semester`、`media`、`uninstall`、`update`、`connect`、`move`、全部 `remote`、`setup claude`；`ed courses/threads/search/show/new/following`；`moodle overview/due/calendar/assignments/grades/news/search/find/open/alerts/messages`。未来新增命令也需显式加入白名单。
+
+MCP 只注册 `list_files`、`read_file`、`search_content`、`get_ed_lessons`、`export_ed_lessons`；`use_ed=false` 时再去掉后两项。其余工具（包括旧别名）调用均报错。导出只在本机写 zip，不修改上游课程；仍保留其本地写文件的 MCP 标注。个人学习预设提示不在此模式提供。没有任意浏览或搜索 Drive 的命令或工具，Google 文件只在同步时按课程链接导出。
+
+`profile list` 只检查 Moodle / Ed / Google 凭据文件是否存在及占用空间，不读取或打印内容。`profile remove` 会先依次吊销目标 profile 的 Drive 和 Gmail Google OAuth 授权；任何一个失败时停止，**本机文件一律保留**，可重试（此前已成功的远端吊销无法撤回）。全部成功后删除目标的 `secrets/`、`browser-profile/`、`attendance-browser/`；只有 `--all` 才删整个 profile，默认账号和其他 profile 不受影响。不向 Moodle 发送注销或任何其他请求。Ed 的 API 令牌没有吊销接口，请到 [Ed API tokens](https://edstem.org/au/settings/api-tokens) 手动删除。
+
+
 ## 1.9.0：补全课程资料导出
 
 - Moodle 的 Page、Book 章节、作业说明和学生能看到的 rubric / marking guide 存成 Markdown；正文里的 Moodle 图片存到课程的 `assets/`，同内容去重。指向本课程 Page、Resource、Folder、Book 的内部链接也会跟进。
