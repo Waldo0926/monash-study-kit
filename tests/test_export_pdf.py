@@ -132,7 +132,7 @@ def test_formats_zip_and_folder(course, fmt, md_count, pdf_count):
             if name.endswith('.md') and fmt == 'both':
                 assert name[:-3] + '.pdf' in names
     X.write_dir(plan, tmp / 'out')
-    assert sorted(str(p.relative_to(tmp / 'out')) for p in (tmp / 'out').rglob('*') if p.is_file()) == sorted(names)
+    assert sorted(p.relative_to(tmp / 'out').as_posix() for p in (tmp / 'out').rglob('*') if p.is_file()) == sorted(names)
     assert source.read_bytes() == original
     assert sum(method == 'init' for method, _ in calls) == (fmt != 'md')
     assert stats['statistics']['remote_images'] == 1
