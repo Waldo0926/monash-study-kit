@@ -244,6 +244,7 @@ def test_document_images_cached_and_export_paths_resolve(ed, tmp_path):
 
 
 def test_document_image_failure_is_kept_and_indexed(ed, monkeypatch):
+    from monash_study_kit import export as X
     conn, files, fetched, client = ed
     image = "https://static.edusercontent.com/images/missing.png"
     client.slides[12][1]["content"] = '<document><paragraph>Invented instructions for a missing image in this lesson.</paragraph><image src="' + image + '"/></document>'
@@ -251,6 +252,9 @@ def test_document_image_failure_is_kept_and_indexed(ed, monkeypatch):
     L.sync_lessons(conn, client, 4242, log=lambda _: None)
     assert image in (files / _paths(conn)["Instructions"]).read_text()
     assert conn.execute("SELECT error FROM ed_assets WHERE url=?", (image,)).fetchone()[0]
+    p = X.plan("FIT2109", moodle_con=None, ed_conn=conn)
+    assert any(m["url"] == image and "失败" in m["reason"] for m in p.missing)
+    assert p.statistics["remote_images"] == 1
 
 
 def test_webpage_google_file_survives_lessons_resync(ed):

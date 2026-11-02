@@ -655,10 +655,16 @@ def write_links_md(con, course_id: int, root: str) -> None:
     """每个目录一份 links.md，从数据库重写（外部链接没法下载，就汇总成清单）。"""
     rows = con.execute("SELECT folder, section, title, url FROM links WHERE course_id=?"
                        " ORDER BY folder, section, rowid", (course_id,)).fetchall()
+    from .google_export import exported
     by_folder: dict[str, list] = {}
     for r in rows:
-        by_folder.setdefault(r["folder"], []).append(r)
+        by_folder.setdefault(r["folder"], [])
+        if not exported(con, course_id, r["url"]):
+            by_folder[r["folder"]].append(r)
     for folder, items in by_folder.items():
+        if not items:
+            (FILES_DIR / root / folder / "links.md").unlink(missing_ok=True)
+            continue
         lines = [f"# {folder} 的链接", ""]
         last = None
         seen = set()

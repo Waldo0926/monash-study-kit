@@ -81,7 +81,7 @@ def tracked_courses(con, courses: list[dict]) -> list[dict]:
 
 # ---------------------------------------------------------------- 同步
 
-def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False) -> dict:
+def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False, refresh_google: bool = False) -> dict:
     client, con = MoodleClient(), db_connect()
     courses = load_courses(client, con)
     targets = only or tracked_courses(con, courses)
@@ -90,6 +90,12 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
         log(f"Moodle {course_code(course) or course_folder(course)}")
         stats = CourseSync(client, con, course, dry_run=dry_run, log=log).run()
         if not dry_run:
+            from . import google_export
+            econ = edlib.db_connect()
+            try:
+                google_export.sync_course(con, course, ed_conn=econ, refresh=refresh_google, log=log)
+            finally:
+                econ.close()
             write_links_md(con, course["id"], course_folder(course))
         total["courses"].append(course_code(course))
         total["downloaded"] += stats.downloaded
@@ -102,13 +108,22 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
     return total
 
 
-def sync_ed(log=print) -> dict:
+def sync_ed(log=print, course_code: str | None = None) -> dict:
     client = edlib.EdClient()
-    out = edsync.sync(log=log, client=client)
+    ids = None
+    if course_code:
+        listing = client.courses()
+        ids = [c["id"] for c in listing if course_code.upper() in re.split(r"[/\s]+", (c.get("code") or "").upper())]
+        if not ids:
+            return {"new_threads": 0, "new_replies": 0}
+    out = edsync.sync(course_ids=ids, log=log, client=client)
     conn = edlib.db_connect()
-    for (cid,) in conn.execute("SELECT id FROM courses WHERE tracked=1").fetchall():
-        lessons.sync_lessons(conn, client, cid, log=log)
-    conn.close()
+    try:
+        targets = ids if ids is not None else [r[0] for r in conn.execute("SELECT id FROM courses WHERE tracked=1")]
+        for cid in targets:
+            lessons.sync_lessons(conn, client, cid, log=log)
+    finally:
+        conn.close()
     return out
 
 
@@ -116,7 +131,7 @@ def have_ed_token() -> bool:
     return bool(os.environ.get("ED_TOKEN")) or edlib.TOKEN_FILE.exists()
 
 
-def sync_all(log=print) -> dict:
+def sync_all(log=print, refresh_google: bool = False) -> dict:
     """能同步的都同步一遍。另一个进程正在同步就直接返回。"""
     if not _lock():
         log("另一个同步正在进行，这次跳过")
@@ -134,7 +149,7 @@ def sync_all(log=print) -> dict:
         elif load_settings().get("use_ed", True):
             status["errors"]["ed"] = "还没设置 Ed 令牌（monash login ed；不用 Ed 就 monash config use_ed false）"
         try:
-            status["moodle"] = {**sync_moodle(log), "at": now_iso()}
+            status["moodle"] = {**sync_moodle(log, refresh_google=refresh_google), "at": now_iso()}
         except MoodleAuthError as e:
             status["errors"]["moodle"] = str(e)
         except Exception as e:  # noqa: BLE001

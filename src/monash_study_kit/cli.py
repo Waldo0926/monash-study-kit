@@ -49,7 +49,7 @@ from .edlib import EdAuthError
 from .moodlelib import FILES_DIR, MoodleAuthError, MoodleClient, MoodleError, db_connect
 from .output import emit_json, local_time, relative, table, want_json
 from .paths import HOME, ensure_private_dir, load_settings, save_settings
-from .syncer import course_code, course_folder
+from .syncer import course_code, course_folder, write_links_md
 
 
 def _fmt_secs(s: int | None) -> str:
@@ -128,7 +128,7 @@ def _pick(items: list[str], chosen: set[int], title: str) -> set[int] | None:
 
 
 def choose_courses(interactive: bool = True) -> None:
-    """Moodle 默认跟踪本学期的课，Ed 默认跟踪 active 的课；interactive 时让人改。"""
+    """Moodle 默认跟踪本学期的课，Ed 按已跟踪的 Moodle 课号匹配；interactive 时让人改。"""
     try:
         client, con = MoodleClient(), db_connect()
         courses = sorted(jobs.load_courses(client, con), key=lambda c: -(c.get("startdate") or 0))
@@ -152,8 +152,7 @@ def choose_courses(interactive: bool = True) -> None:
         conn = edlib.db_connect()
         ecs = ed.courses()
         edsync.upsert_courses(conn, ecs)
-        if not conn.execute("SELECT 1 FROM courses WHERE tracked=1").fetchone():
-            edsync.auto_track(conn, ecs)
+        edsync.auto_track(conn, ecs)
         rows = [dict(r) for r in conn.execute("SELECT id, code, name, status, tracked FROM courses "
                                               "ORDER BY status != 'active', id DESC")]
         if interactive:
@@ -291,10 +290,11 @@ def cmd_sync(args):
         client, con = MoodleClient(), db_connect()
         courses = jobs.load_courses(client, con)
         only = [F.find_course(courses, r) for r in args.courses] if args.courses else None
-        st = jobs.sync_moodle(only=only, dry_run=args.dry_run)
+        con.close()
+        st = jobs.sync_moodle(only=only, dry_run=args.dry_run, refresh_google=getattr(args, "refresh_google", False))
         print(f"新下载 {st['downloaded']} 个文件，{st['bytes'] / 1e6:.1f} MB")
         return
-    st = jobs.sync_all()
+    st = jobs.sync_all(refresh_google=True) if getattr(args, "refresh_google", False) else jobs.sync_all()
     m, e, idx = st.get("moodle") or {}, st.get("ed") or {}, st.get("index") or {}
     print("\n同步完成：" + "，".join(x for x in [
         f"Ed 新帖 {e.get('new_threads', 0)}、新回复 {e.get('new_replies', 0)}" if "ed" not in st["errors"] else "",
@@ -329,6 +329,8 @@ def cmd_open(args):
 
 def parse_setting(key: str, raw: str, current):
     """按默认值的类型解析。数字一律先当小数读：阿德莱德是 UTC+9.5，auto_sync_hours 也可以写 0.5。"""
+    if key == "google_docs_format" and raw not in {"pdf", "docx"}:
+        raise ValueError("google_docs_format 只能是 pdf 或 docx")
     if isinstance(current, bool):
         if raw.lower() in ("true", "yes", "1", "on"):
             return True
@@ -626,12 +628,40 @@ def cmd_due(args):
     return emit_json(items) if want_json(args) else _print_due(items)
 
 
+def sync_export_course(ref: str, log=print) -> None:
+    """先同步指定 Moodle 课，再同步对应 Ed 课，最后补导 Ed 的 Google 链接。"""
+    from . import google_export
+    client, con = MoodleClient(), db_connect()
+    try:
+        courses = jobs.load_courses(client, con)
+        course = F.find_course(courses, ref)
+        jobs.sync_moodle(only=[course], log=log)
+        if jobs.have_ed_token():
+            jobs.sync_ed(log=log, course_code=course_code(course))
+            econ = edlib.db_connect()
+            try:
+                google_export.sync_course(con, course, ed_conn=econ, log=log)
+                write_links_md(con, course["id"], course_folder(course))
+            finally:
+                econ.close()
+        elif load_settings().get("use_ed", True):
+            log("还没设置 Ed 令牌（monash login ed；不用 Ed 就 monash config use_ed false）")
+    finally:
+        con.close()
+
+
 def cmd_export(args):
     """一门课的 Moodle 课件 + Ed Lessons 合成一份课程资料（zip 或文件夹），附索引。只用本机已同步的数据。"""
     from . import export as X, moodlelib
     try:
-        d = X.export(args.course, args.to, as_dir=args.dir,
-                     moodle_con=moodlelib.db_connect(), ed_conn=edlib.db_connect())
+        if getattr(args, "sync", False):
+            sync_export_course(args.course, log=(lambda text: print(text, file=sys.stderr)))
+        mcon, econ = moodlelib.db_connect(), edlib.db_connect()
+        try:
+            d = X.export(args.course, args.to, as_dir=args.dir, moodle_con=mcon, ed_conn=econ)
+        finally:
+            mcon.close()
+            econ.close()
     except LookupError as e:
         print(e, file=sys.stderr)
         return 1
@@ -870,7 +900,7 @@ class _Parser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from . import cli_attendance, cli_ed, cli_gmail
+    from . import cli_attendance, cli_ed, cli_gmail, cli_google
     ap = _Parser(prog="monash", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"monash-study-kit {__version__}")
     sub = ap.add_subparsers(dest="cmd")
@@ -897,6 +927,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = cmd(sub, "sync", cmd_sync, help="同步 Ed + Moodle + 全文索引")
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
     p.add_argument("--dry-run", action="store_true", help="只列出 Moodle 会下载什么")
+    p.add_argument("--refresh-google", action="store_true", help="强制重新导出 Google 文件")
     cmd(sub, "courses", cmd_courses, help="选要跟踪的课")
     p = cmd(sub, "todo", cmd_todo, json_flag=True, help="本周待办")
     p.add_argument("--days", type=int, default=7)
@@ -912,6 +943,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--to", help="保存到哪个文件夹（默认“下载”）")
     p.add_argument("--dir", action="store_true", help="写成文件夹，不打 zip")
     p.add_argument("--open", action="store_true", help="导出后在文件管理器里显示")
+    p.add_argument("--sync", action="store_true", help="导出前同步这门 Moodle 和 Ed 课程")
     p = cmd(sub, "media", cmd_media, help="录播：YouTube 字幕、Zoom 录像下载和转写（要装 [media]）")
     p.add_argument("--limit", type=int, default=0, help="这次最多转写几个视频")
     p.add_argument("--match", help="只转写路径里含这段文字的视频")
@@ -974,6 +1006,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = cmd(m, "ls", cmd_m_ls, help="本地已同步的课件"); p.add_argument("course"); p.add_argument("week", nargs="?")
 
     cli_ed.add_commands(sub.add_parser("ed", help="Ed 查询").add_subparsers(dest="ecmd", required=True))
+    cli_google.add_commands(sub.add_parser("google", help="Google 课程文件只读授权").add_subparsers(dest="google_cmd", required=True))
     cli_gmail.add_commands(sub.add_parser("gmail", help="Gmail 同步、离线搜索与可选邮箱操作").add_subparsers(dest="gcmd", required=True))
     cli_attendance.add_commands(sub.add_parser("attendance", help="考勤门户：登录、状态、读取签到记录（要装 [attendance]）")
                                 .add_subparsers(dest="acmd", required=True))

@@ -42,9 +42,12 @@ class Plan:
     notes: list = field(default_factory=list)     # 写进索引的说明
     moodle: dict | None = None
     ed: dict | None = None
+    statistics: dict = field(default_factory=dict)
+    google: dict = field(default_factory=dict)
 
     def add(self, arc: str, item) -> None:
-        self.entries.append((arc, item))
+        if not any(old == arc for old, _ in self.entries):
+            self.entries.append((arc, item))
 
 
 def scrub_url(url: str) -> str:
@@ -96,12 +99,18 @@ def plan_moodle(p: Plan, con: sqlite3.Connection) -> None:
     stats = {"id": c["id"], "name": c["fullname"], "files": 0, "bytes": 0, "links": 0, "synced_at": c["synced_at"]}
     if not c["synced_at"]:
         p.notes.append(f"Moodle：{p.code} 还没同步过（monash sync {p.code}）。")
+    from .google_export import exported, parse_link
     for r in con.execute("SELECT path, title, section FROM files WHERE course_id=? AND removed_at IS NULL "
                          "ORDER BY path", (c["id"],)):
+        if r["path"].startswith("ed:"):
+            continue
         path = FILES_DIR / r["path"]
         rel = r["path"][len(root) + 1:] if root and r["path"].startswith(root + "/") else r["path"]
         if path.is_file() and FILES_DIR.resolve() in path.resolve().parents:
-            p.add(f"{p.code}/Moodle/{rel}", path)
+            arc = f"{p.code}/Moodle/{rel}"
+            if any(old == arc for old, _ in p.entries):
+                continue
+            p.add(arc, path)
             stats["files"] += 1
             stats["bytes"] += path.stat().st_size
         else:
@@ -110,10 +119,20 @@ def plan_moodle(p: Plan, con: sqlite3.Connection) -> None:
     by_folder: dict[str, list] = {}
     for r in con.execute("SELECT folder, section, title, url FROM links WHERE course_id=? ORDER BY folder, section, rowid",
                          (c["id"],)):
-        by_folder.setdefault(r["folder"], []).append(r)
+        if parse_link(r["url"]):
+            p.google[r["url"]] = "成功" if exported(con, c["id"], r["url"]) else "未导出"
+        if not exported(con, c["id"], r["url"]):
+            by_folder.setdefault(r["folder"], []).append(r)
     for folder, items in by_folder.items():
         p.add(f"{p.code}/Moodle/{folder}/links.md", _links_md(folder, items))
         stats["links"] += len(items)
+    for r in con.execute("SELECT * FROM notes WHERE course_id=? ORDER BY kind,url", (c["id"],)):
+        p.missing.append({"where": (r["folder"] if (r["folder"] or "").startswith("Ed Lessons") else "Moodle/" + (r["folder"] or "")), "title": r["title"], "url": r["url"], "reason": r["reason"]})
+        if r["kind"] == "google_failed" and p.google.get(r["url"]) != "成功":
+            p.google[r["url"]] = r["reason"]
+    for r in con.execute("SELECT source FROM files WHERE course_id=? AND removed_at IS NULL", (c["id"],)):
+        if parse_link(r["source"]) and exported(con, c["id"], r["source"]):
+            p.google[r["source"]] = "成功"
     p.moodle = stats
 
 
@@ -156,6 +175,17 @@ def plan_ed(p: Plan, conn: sqlite3.Connection) -> None:
     for m in ep["missing"]:
         p.missing.append({"where": f"Ed Lessons/{m['lesson']}", "title": m["title"], "url": m["url"],
                           "reason": "上次同步没下载到（下载失败或超过大小上限）"})
+    from .google_export import parse_link
+    for r in conn.execute("SELECT url,local_path FROM lesson_files WHERE course_id=? AND type='webpage'", (ep["course_id"],)):
+        if parse_link(r["url"]):
+            ok = r["local_path"] and (edexport.ED_FILES_DIR / r["local_path"]).is_file()
+            if ok or r["url"] not in p.google:
+                p.google[r["url"]] = "成功" if ok else "未导出"
+    bodies = "\n".join(item.read_text(encoding="utf-8", errors="replace") for arc,item in p.entries
+                       if isinstance(item, Path) and arc.endswith(".md") and "/Ed Lessons/" in arc)
+    for r in conn.execute("SELECT url,error FROM ed_assets WHERE error IS NOT NULL"):
+        if r["url"] in bodies:
+            p.missing.append({"where": "Ed Lessons/assets", "title": "正文图片", "url": r["url"], "reason": r["error"]})
     p.ed = {"id": ep["course_id"], "lessons": len(ep["lessons"]), "files": len(ep["files"]),
             "quizzes": len(quiz_by_lesson)}
 
@@ -173,6 +203,12 @@ def _index(p: Plan) -> str:
     if p.ed:
         e = p.ed
         md.append(f"- Ed Lessons/：{e['lessons']} 节 lesson，{e['files']} 个文件，{e['quizzes']} 节有 Quiz.md（只有题目，没有答案）")
+    if p.statistics:
+        s = p.statistics
+        md += ["", "## 统计", "", f"- links.md / Links.md：{s['link_files']} 个",
+               f"- Markdown 远程图片引用：{s['remote_images']} 个",
+               f"- Google 链接：{s['google_total']} 个，成功导出 {s['google_success']} 个，失败 {s['google_failed']} 个"]
+        md += [f"  - {reason}：{count} 个" for reason,count in sorted(s["google_failure_reasons"].items())]
     if p.notes:
         md += ["", "## 说明", ""] + [f"- {n}" for n in p.notes]
     if p.missing:
@@ -191,6 +227,19 @@ def plan(course: str, *, moodle_con: sqlite3.Connection | None, ed_conn: sqlite3
         plan_ed(p, ed_conn)
     if not p.entries:
         raise LookupError(f"{p.code} 没有可导出的资料。\n" + "\n".join(p.notes))
+    reasons = {}
+    for reason in p.google.values():
+        if reason != "成功":
+            reasons[reason] = reasons.get(reason, 0) + 1
+    remote = 0
+    for arc,item in p.entries:
+        if arc.lower().endswith(".md"):
+            body = item.read_text(encoding="utf-8", errors="replace") if isinstance(item, Path) else item
+            remote += len(re.findall(r"!\[[^\]]*\]\(https?://", body))
+    p.statistics = {"link_files": sum(Path(arc).name in {"links.md", "Links.md"} for arc,_ in p.entries),
+                    "remote_images": remote, "google_total": len(p.google),
+                    "google_success": sum(reason == "成功" for reason in p.google.values()),
+                    "google_failed": sum(reasons.values()), "google_failure_reasons": reasons}
     p.entries.insert(0, (f"{p.code}/README.md", _index(p)))
     return p
 
@@ -224,7 +273,7 @@ def write_dir(p: Plan, dest: Path) -> dict:
 
 def _stats(p: Plan, total: int) -> dict:
     return {"course": p.code, "entries": len(p.entries), "bytes": total, "moodle": p.moodle, "ed": p.ed,
-            "missing": len(p.missing), "notes": p.notes}
+            "missing": len(p.missing), "notes": p.notes, "statistics": p.statistics}
 
 
 def export(course: str, to: str | Path | None = None, *, as_dir: bool = False,
