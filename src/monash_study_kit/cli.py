@@ -900,7 +900,7 @@ class _Parser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from . import cli_attendance, cli_ed, cli_gmail, cli_google
+    from . import cli_attendance, cli_ed, cli_gmail, cli_google, cli_profile
     ap = _Parser(prog="monash", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"monash-study-kit {__version__}")
     sub = ap.add_subparsers(dest="cmd")
@@ -1005,6 +1005,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("conversation", nargs="?", type=int); p.add_argument("--limit", type=int, default=20)
     p = cmd(m, "ls", cmd_m_ls, help="本地已同步的课件"); p.add_argument("course"); p.add_argument("week", nargs="?")
 
+    cli_profile.add_commands(sub.add_parser("profile", help="管理本机命名账号").add_subparsers(dest="profile_cmd", required=True))
     cli_ed.add_commands(sub.add_parser("ed", help="Ed 查询").add_subparsers(dest="ecmd", required=True))
     cli_google.add_commands(sub.add_parser("google", help="Google 课程文件只读授权").add_subparsers(dest="google_cmd", required=True))
     cli_gmail.add_commands(sub.add_parser("gmail", help="Gmail 同步、离线搜索与可选邮箱操作").add_subparsers(dest="gcmd", required=True))
