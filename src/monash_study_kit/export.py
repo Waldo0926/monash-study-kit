@@ -168,10 +168,18 @@ def plan_ed(p: Plan, conn: sqlite3.Connection) -> None:
         p.add(f"{folder}/Links.md", "\n".join(md) + "\n")
     # 按 Ed 原页面链接对应（lesson 标题可能重名）
     quiz_by_lesson = {q["url"]: q for q in edquery.quizzes(conn, ep["course_id"])}
+    from .lessons import asset_paths, ensure_lessons_schema
+    ensure_lessons_schema(conn)
+    assets = asset_paths(conn)
     for l in ep["lessons"]:
         q = quiz_by_lesson.get(l["url"])
         if q:
-            p.add(f"{base}/{l['folder'][cut:]}/Quiz.md", edquery.quiz_markdown([q]))
+            # Quiz.md 和正文页一样在 Ed Lessons/<模块>/<lesson>/ 下，图片在 Ed Lessons/assets/
+            md = edquery.quiz_markdown([q])
+            for url, name in assets.items():
+                if url in md:
+                    md = md.replace(f"]({url})", f"](../../assets/{name})")
+            p.add(f"{base}/{l['folder'][cut:]}/Quiz.md", md)
     for m in ep["missing"]:
         p.missing.append({"where": f"Ed Lessons/{m['lesson']}", "title": m["title"], "url": m["url"],
                           "reason": m.get("reason") or "上次同步没下载到（下载失败或超过大小上限）"})

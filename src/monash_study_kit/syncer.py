@@ -350,8 +350,10 @@ class CourseSync:
 
     def asset(self, url: str, md_dir: str, cm: dict) -> str:
         """页面里的本站图片下载到 课程/assets/<内容哈希>.<扩展名>，返回相对 md_dir 的路径。
-        站外图片和下载失败的原样返回（导出的索引里会列出远程图片）。"""
+        站外图片和下载失败的原样返回（导出的索引里会列出远程图片）；装饰图片返回 ""，不导出。"""
         parts = urllib.parse.urlsplit(url)
+        if is_decorative(url):
+            return ""
         if parts.hostname != HOST or "/pluginfile.php/" not in parts.path or self.dry:
             return url
         source = url.split("?", 1)[0]
@@ -611,6 +613,18 @@ class CourseSync:
             " VALUES (?,?,?,?,?,?)", (self.cid, folder, section, title, url, now_iso()))
         self.stats.links += cur.rowcount
         self.con.commit()
+
+
+# 不是课程内容的图片：Moodle 主题的文件类型小图标、录播平台的视频缩略图（要另外登录，也没有信息量）
+DECORATIVE_HOSTS = ("panopto.com", "panopto.eu", "ytimg.com", "vimeocdn.com")
+
+
+def is_decorative(url: str) -> bool:
+    parts = urllib.parse.urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if host == HOST and parts.path.startswith(("/theme/", "/pix/")):
+        return True
+    return any(host == h or host.endswith("." + h) for h in DECORATIVE_HOSTS)
 
 
 def _ts(iso: str | None) -> float:

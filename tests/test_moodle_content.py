@@ -143,3 +143,17 @@ def test_html_markdown_structure():
     for expected in ("# Title", "- Outer", "  - Inner", "| A |", "| B |", "    run()", "[Read](https://example.com)"):
         assert expected in md
     assert "secret" not in md
+
+
+def test_decorative_images_are_dropped_but_link_text_stays():
+    from monash_study_kit import htmlmd, syncer
+    html = ('<p><img src="https://learning.monash.edu/theme/image.php/monash/core/1/f/pdf" alt="spec.pdf">'
+            '<a href="https://learning.monash.edu/pluginfile.php/1/mod_assign/intro/spec.pdf">spec.pdf</a></p>'
+            '<p><a href="https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=1">'
+            '<img src="https://monash.au.panopto.com/Panopto/Services/FrameGrabber.svc/x.jpg" alt="Week 1 lecture"></a></p>')
+    on_image = lambda u: "" if syncer.is_decorative(u) else u  # noqa: E731
+    md = htmlmd.to_markdown(html, "https://learning.monash.edu/", on_image=on_image)
+    assert "![" not in md
+    assert "[Week 1 lecture](https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=1)" in md
+    assert syncer.is_decorative("https://learning.monash.edu/theme/image.php/x") and \
+        not syncer.is_decorative("https://learning.monash.edu/pluginfile.php/1/mod_page/content/2/a.png")

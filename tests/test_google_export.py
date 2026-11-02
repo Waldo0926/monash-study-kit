@@ -209,3 +209,8 @@ def test_google_cli_dispatch(monkeypatch,capsys):
 def test_administrator_message_is_detected():
     error=G.error_reason(403,"unknown","Your administrator has disabled exports")
     assert str(error) == "管理员限制" and error.fallback
+
+
+def test_disabled_drive_api_is_explained_and_tries_the_browser():
+    e = G.error_reason(403, "accessNotConfigured", "Google Drive API has not been used in project 1 before or it is disabled.")
+    assert "没启用 Drive API" in str(e) and e.fallback

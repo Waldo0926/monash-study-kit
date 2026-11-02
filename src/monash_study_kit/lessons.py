@@ -330,6 +330,7 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
             "SELECT id, local_path, COALESCE(file_url, url) FROM lesson_files WHERE lesson_id = ?", (l["id"],))}
         conn.execute("DELETE FROM lesson_files WHERE lesson_id = ?", (l["id"],))
         sync_quizzes(conn, client, course_id, l["id"], slides, log)
+        prefetch_quiz_images(conn, course_id, l["id"], cdir, log)
         ldir = f"{cdir}/{mdirs.get(l.get('module_id'), mdirs[None])}/{lesson_folder(l, pos)}"
         kept = set()
         for f in fetch_lesson_files(client, l["id"], slides):
@@ -414,3 +415,20 @@ def localize_images(conn, text: str, cdir: str, md_dir: Path, log=print) -> str:
         rel = os.path.relpath(path, md_dir).replace(os.sep, "/")
         return f"![{match[1]}]({rel})"
     return re.sub(r"!\[([^\]]*)\]\((https://[^\s)]+)\)", image, text)
+
+
+def prefetch_quiz_images(conn, course_id: int, lesson_id: int, cdir: str, log=print) -> None:
+    """测验题目和选项里的 Ed 图片先下载到 assets/（Quiz.md 是导出时现生成的，导出时再换成相对路径）。"""
+    for q, opts in conn.execute("SELECT question, options FROM quiz_questions WHERE lesson_id=?", (lesson_id,)).fetchall():
+        for text in [q or "", *json.loads(opts or "[]")]:
+            if "edusercontent.com" in text:
+                localize_images(conn, text, cdir, FILES_DIR / cdir, log)
+
+
+def asset_paths(conn) -> dict[str, str]:
+    """已经下载好的 Ed 图片：远程地址 -> assets/ 里的文件名。导出时把 Quiz.md 里的地址换掉用。"""
+    out = {}
+    for url, local in conn.execute("SELECT url, local_path FROM ed_assets WHERE local_path IS NOT NULL"):
+        if (FILES_DIR / local).is_file():
+            out[url] = Path(local).name
+    return out

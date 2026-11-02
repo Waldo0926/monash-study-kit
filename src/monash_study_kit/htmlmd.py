@@ -43,7 +43,10 @@ class _Converter:
             if not src or src.startswith("data:"):
                 return ""
             alt = (node.get("alt") or "").replace("]", "")
-            return f"![{alt}]({self.on_image(src) if self.on_image else src})"
+            new = self.on_image(src) if self.on_image else src
+            if new == "":                    # 调用方说这是装饰图片（图标、视频缩略图），不要
+                return alt
+            return f"![{alt}]({new})"
         inner = "".join(self.inline(c) for c in node.children)
         if tag in ("strong", "b"):
             return f"**{inner.strip()}**" if inner.strip() else inner
@@ -53,7 +56,7 @@ class _Converter:
             return f"`{inner.strip()}`" if inner.strip() else ""
         if tag == "a":
             href = self.url(node.get("href"))
-            text = inner.strip() or href
+            text = " ".join(inner.split()) or href
             if not href or href.startswith(("javascript:", "#")):
                 return inner
             return f"[{text}]({self.on_link(href, text) if self.on_link else href})"

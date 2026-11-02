@@ -63,6 +63,9 @@ def error_reason(status: int, reason: str = "", message: str = "") -> GoogleErro
         return GoogleError(AUTH_REASON)
     if status == 404:
         return GoogleError("找不到或没共享给你")
+    if reason in {"accessNotConfigured", "SERVICE_DISABLED"}:
+        # OAuth 客户端所在的 Google Cloud 项目没打开 Drive API：先试浏览器，同时把原因写清楚
+        return GoogleError("Google Cloud 项目还没启用 Drive API（项目管理员在控制台启用后重试）", True)
     if status == 403:
         if reason == "exportSizeLimitExceeded":
             return GoogleError("超出大小限制", True)

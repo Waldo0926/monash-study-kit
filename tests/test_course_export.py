@@ -233,3 +233,27 @@ def test_export_sync_orders_moodle_before_ed(env,monkeypatch):
     monkeypatch.setattr(cli,"write_links_md",lambda *a:None)
     cli.sync_export_course("FIT1043",log=lambda _:None)
     assert calls == [("moodle",[course]),("ed","FIT1043"),("google",7)]
+
+
+def test_quiz_images_point_at_local_assets(env):
+    """测验题里的 Ed 图片：同步时下到 assets/，导出的 Quiz.md 里换成相对路径。"""
+    _moodle_course(env)
+    _ed_course(env)
+    url = "https://static.au.edusercontent.com/files/QUIZIMG"
+    env["e"].execute("UPDATE quiz_questions SET question=? WHERE id=1", (f"Which gate is this?\n\n![图片]({url})",))
+    asset = env["ed_files"] / "FIT1043" / "assets" / "abcd1234abcd1234.png"
+    asset.parent.mkdir(parents=True)
+    asset.write_bytes(b"png")
+    env["e"].execute("INSERT INTO ed_assets VALUES (?,?,?,NULL,'x')", (url, "FIT1043/assets/abcd1234abcd1234.png", "s"))
+    env["e"].commit()
+    from monash_study_kit import lessons as L2
+    import pytest as _pytest
+    mp = _pytest.MonkeyPatch()
+    mp.setattr(L2, "FILES_DIR", env["ed_files"])
+    try:
+        _, z = _zip(env)
+    finally:
+        mp.undo()
+    quiz = z.read("FIT1043/Ed Lessons/01 Week 1 - Intro/01 W1 Pre-Class/Quiz.md").decode()
+    assert url not in quiz and "](../../assets/abcd1234abcd1234.png)" in quiz
+    assert "FIT1043/Ed Lessons/assets/abcd1234abcd1234.png" in z.namelist()
