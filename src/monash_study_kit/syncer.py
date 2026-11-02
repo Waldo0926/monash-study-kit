@@ -148,6 +148,7 @@ class CourseSync:
         self.stats = SyncStats()
         self.seen_sources: set[str] = set()
         self.done_cms: set[str] = set()
+        self.seen_links: set[tuple[str, str]] = set()
         self.cms: dict = {}
         self.videos = load_settings().get("download_videos", False)
 
@@ -182,6 +183,7 @@ class CourseSync:
         self.scan_section_pages(state, layout, cms)
         if not self.dry:
             self.mark_removed()
+            self.prune_links()
             self.con.execute("UPDATE courses SET synced_at=? WHERE id=?", (now_iso(), self.cid))
             self.con.commit()
         return self.stats
@@ -196,6 +198,16 @@ class CourseSync:
             for p in root.rglob(".dl-*"):
                 if p.is_file():
                     p.unlink(missing_ok=True)
+
+    def prune_links(self) -> None:
+        """这一轮没再见到的链接删掉（Moodle 上删了，或者以前从整个网页收进来的导航链接）。
+        和 mark_removed 一样，只在整门课没有错误时做。"""
+        if self.stats.errors:
+            return
+        for r in self.con.execute("SELECT folder, url FROM links WHERE course_id=?", (self.cid,)).fetchall():
+            if (r["folder"], r["url"]) not in self.seen_links:
+                self.con.execute("DELETE FROM links WHERE course_id=? AND folder=? AND url=?", (self.cid, r["folder"], r["url"]))
+        self.con.commit()
 
     def mark_removed(self) -> None:
         """这一轮没再见到的文件标成已移除（老师下架了，或者换了个文件名重新上传）。
@@ -270,8 +282,15 @@ class CourseSync:
         for h, _ in collect_links(page).all:
             if is_attachment(h) and f"/{self._context_hint(mod)}" in h:
                 self.fetch_file(h, folder, cm, section_title)
-            elif is_external(h):
-                self.add_link(folder, section_title, clean(cm.get("name")), h)
+
+    def content_links(self, node, folder: str, section_title: str) -> None:
+        """正文（不是整个网页：导航、页脚的链接不要）里的外链记进 links.md，比如录播、阅读材料。"""
+        if node is None:
+            return
+        for a in node.find_all("a"):
+            href = urllib.parse.urljoin(BASE_URL, a.get("href") or "")
+            if is_external(href):
+                self.add_link(folder, section_title, " ".join(a.text().split()) or href, href)
 
     def internal_cm(self, href: str, text: str = "") -> dict | None:
         """本站 /mod/<page|resource|folder|book>/view.php?id=N 链接对应的活动。
@@ -323,6 +342,7 @@ class CourseSync:
             return
         md = f"# {name}\n\n来源：{cm['url']}\n\n" + self._md(body, folder, cm)
         self.save_markdown(folder, name, md, cm, section_title, "page")
+        self.content_links(body, folder, section_title)
 
     def save_book(self, cm: dict, folder: str, section_title: str, page: str) -> None:
         name = clean(cm.get("name"))
@@ -333,6 +353,7 @@ class CourseSync:
         md = f"# {name}\n\n来源：{cm['url']}\n"
         for title, node in chapters:
             md += f"\n## {title}\n\n" + self._md(node, folder, cm)
+            self.content_links(node, folder, section_title)
         self.save_markdown(folder, name, md, cm, section_title, "book")
 
     def save_assign(self, cm: dict, folder: str, section_title: str, page: str, url: str) -> None:
@@ -341,6 +362,7 @@ class CourseSync:
         grading, kind = moodle_content.grading_markdown(page)
         md = f"# {name}\n\n来源：{url}\n\n"
         md += self._md(intro, folder, cm) if intro is not None else "（Moodle 上没有作业说明正文）\n"
+        self.content_links(intro, folder, section_title)
         if grading:
             md += "\n## " + ("评分细则（Rubric）" if kind == "rubric" else "评分指南（Marking guide）") + "\n\n" + grading
         else:
@@ -608,6 +630,7 @@ class CourseSync:
     def add_link(self, folder: str, section: str, title: str, url: str) -> None:
         if self.dry:
             return
+        self.seen_links.add((folder, url))
         cur = self.con.execute(
             "INSERT OR IGNORE INTO links (course_id, folder, section, title, url, synced_at)"
             " VALUES (?,?,?,?,?,?)", (self.cid, folder, section, title, url, now_iso()))

@@ -157,3 +157,16 @@ def test_decorative_images_are_dropped_but_link_text_stays():
     assert "[Week 1 lecture](https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=1)" in md
     assert syncer.is_decorative("https://learning.monash.edu/theme/image.php/x") and \
         not syncer.is_decorative("https://learning.monash.edu/pluginfile.php/1/mod_page/content/2/a.png")
+
+
+def test_only_content_links_are_listed_and_stale_links_pruned(tmp_path, monkeypatch):
+    from monash_study_kit import htmldom, moodlelib, syncer
+    con = moodlelib.db_connect(tmp_path / "m.db")
+    s = syncer.CourseSync(None, con, {"id": 1, "fullname": "FIT1043 Data - S2 2025"})
+    con.execute("INSERT INTO links (course_id, folder, section, title, url, synced_at) VALUES (1,'W1','s','old','https://moodle.com/app','x')")
+    body = htmldom.parse('<div><a href="https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=1">Week 1 recording</a>'
+                         '<a href="/mod/page/view.php?id=5">internal</a></div>')
+    s.content_links(body, "W1", "Week 1")
+    s.prune_links()
+    rows = [(r["title"], r["url"]) for r in con.execute("SELECT title, url FROM links")]
+    assert rows == [("Week 1 recording", "https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=1")]
