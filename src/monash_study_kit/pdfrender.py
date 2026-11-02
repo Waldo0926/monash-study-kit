@@ -49,21 +49,7 @@ class Renderer:
                 self.proc = self.cdp.proc
                 self.cdp.call("Browser.getVersion", timeout=30)
             else:
-                self.proc = subprocess.Popen([*flags, "--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1"],
-                                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                port_file = self.root / "profile" / "DevToolsActivePort"
-                deadline = time.monotonic() + 30
-                while time.monotonic() < deadline:
-                    if port_file.is_file():
-                        lines = port_file.read_text(encoding="utf-8").splitlines()
-                        if len(lines) >= 2:
-                            self.cdp = CDP(f"ws://127.0.0.1:{int(lines[0])}{lines[1]}")
-                            break
-                    if self.proc.poll() is not None:
-                        break
-                    time.sleep(.1)
-                if self.cdp is None:
-                    raise RuntimeError("PDF 浏览器没能启动")
+                self._start_windows(flags)
             target = self.cdp.call("Target.createTarget", {"url": "about:blank"})["targetId"]
             self.session = self.cdp.call("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
             self.call("Page.enable")
@@ -75,6 +61,40 @@ class Renderer:
         except BaseException:
             self.close()
             raise
+
+    def _start_windows(self, flags: list[str]) -> None:
+        # Chrome may exit or never expose its debugging port on the first
+        # cold start. Retry once with a fresh profile; never reuse a stale port.
+        for attempt in range(2):
+            profile = self.root / f"profile-{attempt}"
+            argv = [f"--user-data-dir={profile}" if flag.startswith("--user-data-dir=") else flag for flag in flags]
+            self.proc = subprocess.Popen([*argv, "--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1"],
+                                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            deadline = time.monotonic() + 30
+            port_file = profile / "DevToolsActivePort"
+            while time.monotonic() < deadline:
+                try:
+                    lines = port_file.read_text(encoding="utf-8").splitlines()
+                    if len(lines) >= 2:
+                        port = int(lines[0])
+                        if not 1 <= port <= 65535 or not lines[1].startswith("/devtools/browser/"):
+                            raise ValueError("invalid browser endpoint")
+                        self.cdp = CDP(f"ws://127.0.0.1:{port}{lines[1]}")
+                        return
+                except (OSError, ValueError):
+                    # The file can exist before both lines are fully written,
+                    # or before the WebSocket listener accepts connections.
+                    pass
+                if self.proc.poll() is not None:
+                    break
+                time.sleep(.1)
+            # Reap before trying again, so the failed process cannot keep a
+            # profile locked or race the next browser for its debugging port.
+            if self.proc.poll() is None:
+                self.proc.kill()
+            self.proc.wait(timeout=5)
+            self.proc = None
+        raise RuntimeError("PDF 浏览器两次都没能启动（请检查 Chrome / Edge 是否可运行，或用 --format md）")
 
     def call(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
         return self.cdp.call(method, params, timeout=timeout, session_id=self.session)
