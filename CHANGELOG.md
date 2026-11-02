@@ -2,6 +2,10 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.10.1
+
+- Ed images whose address has no file extension are saved as `.png`, `.jpg`, `.gif`, `.webp` or `.svg` according to their content, instead of `.img`, which viewers did not show. Images saved as `.img` by earlier versions are renamed on the next sync, and the references in the Markdown pages are updated.
+
 ## 1.10.0
 
 - Add an early account-selection entry point: `--profile NAME`, `--profile=NAME`, or `MONASH_KIT_PROFILE` isolates credentials, databases, materials and browser sessions under the default data home's `profiles/NAME`. Names are validated, directories are private, per-directory overrides cannot escape named profiles, and the default account keeps its existing behavior.
