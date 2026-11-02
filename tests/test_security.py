@@ -472,3 +472,23 @@ def test_set_cookie_over_plain_http_is_ignored(monkeypatch):
     client.get("http://learning.monash.edu/course/view.php?id=1")
     assert client.jar == {"MoodleSession": "real"}
 
+
+
+
+# 只查通用的服务器路径。作者自己部署的主机名、域名这类具体名单放在私有仓库里，由那边扫描这个包，
+# 免得名单本身出现在公开仓库里。
+SERVER_PATHS = ("/opt/", "/root/", "/srv/")
+
+
+def test_no_server_paths_in_the_public_package():
+    """作者自己的服务器部署（目录、主机）只在私有仓库里，公开包和文档里一处都不能有。"""
+    root = Path(__file__).resolve().parents[1]
+    hits = []
+    for base in ("src", "skills", "docs", "scripts", ".github", "README.md", "README.zh-CN.md", "PRIVACY.md",
+                 "SECURITY.md", "pyproject.toml"):
+        p = root / base
+        for f in ([p] if p.is_file() else p.rglob("*")):
+            if f.is_file() and "__pycache__" not in f.parts and f.suffix not in (".png", ".jpg"):
+                text = f.read_text(encoding="utf-8", errors="ignore")
+                hits += [f"{f.relative_to(root)}: {m}" for m in SERVER_PATHS if m in text]
+    assert hits == []

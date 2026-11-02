@@ -4,7 +4,9 @@
     Windows  %LOCALAPPDATA%\\monash-study-kit
     Linux    ~/.local/share/monash-study-kit
 
-设 MONASH_KIT_HOME 可以换位置（测试也靠它）。卸载时删掉这个目录就干净了。
+数据可以放到别的盘（C 盘满了的话）：monash setup 第一次运行时会问，以后用 monash move <新位置> 整体搬过去。
+选了别的位置时，上面这个默认目录里只留一个很小的 location.json，写着数据实际在哪。
+设 MONASH_KIT_HOME 可以临时换位置（测试也靠它），优先于 location.json。卸载时删掉这两处就干净了。
 用户可改的设置在 settings.json（`monash config`）。
 
 服务器上的部署把数据、凭据、Ed 库放在各自的目录，用这几个环境变量指过去：
@@ -33,7 +35,22 @@ def _default_home() -> Path:
     return Path(base) / "monash-study-kit"
 
 
-HOME = Path(os.environ.get("MONASH_KIT_HOME") or _default_home())
+DEFAULT_HOME = _default_home()
+LOCATION_FILE = DEFAULT_HOME / "location.json"   # 数据放在别处时，这里记着实际位置
+
+
+def resolve_home(environ=os.environ, location_file: Path = LOCATION_FILE, default: Path = DEFAULT_HOME) -> Path:
+    """MONASH_KIT_HOME > location.json 里记的位置 > 系统默认位置。location.json 坏了或写的不是绝对路径就当没有。"""
+    if environ.get("MONASH_KIT_HOME"):
+        return Path(environ["MONASH_KIT_HOME"])
+    try:
+        home = Path(json.loads(location_file.read_text(encoding="utf-8"))["home"]).expanduser()
+    except (OSError, ValueError, KeyError, TypeError):
+        return default
+    return home if home.is_absolute() else default
+
+
+HOME = resolve_home()
 SETTINGS_FILE = HOME / "settings.json"
 
 DEFAULTS = {
