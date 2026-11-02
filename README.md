@@ -35,6 +35,35 @@ The picture is real output of `monash todo` against a database filled with made-
 
 For the original v1.1 security review and the [1.5 feature review checklist](docs/SECURITY-REVIEW-1.5-SCOPE.md), see [security documentation](docs/security.md). The earlier review does not automatically certify features added later.
 
+
+## 1.9.0: more complete course exports
+
+Moodle Pages, Book chapters, assignment descriptions and visible rubrics / marking guides are saved as Markdown. Moodle images are stored in course `assets/` by content hash, and internal links to Page, Resource, Folder and Book activities are followed. Folder downloads preserve original names, subdirectories and case, reuse files for seven days, and fall back to individual downloads. Missing notebook images, case mismatches, empty pages and hidden grading criteria are explained in the index.
+
+Ed Lessons document / code images hosted on `edusercontent.com` are cached locally, deduplicated by content and limited to 200 MB each. Failed images keep their original URL and an error record. Both Ed-only and whole-unit exports include `assets/` with working relative references.
+
+Google Slides and Docs export as PDF, Sheets as XLSX, and ordinary Drive files retain their format. Only file links found in Moodle and Ed Lessons are processed; Google Forms cannot be exported. Existing exports are reused while the file remains on disk. Successful file links disappear from generated link lists; failures retain their URL and a Chinese reason in the index.
+
+```bash
+uv tool install --reinstall 'monash-study-kit[gmail]'
+monash google login                  # bundled desktop OAuth client
+monash google login --client client.json
+monash google status
+monash config google_docs_format docx # default: pdf; Google Docs only
+monash sync FIT1045 --refresh-google  # force Google exports to refresh
+monash export FIT1045 --sync --json  # sync this Moodle unit, then matching Ed units
+monash google logout                 # revoke first, then remove the local token
+```
+
+The bundled OAuth client is currently in Google's **Testing** state: its maintainer must add your Google account to the test-user list before you can authorize it. Google classifies `drive.readonly` as a **restricted scope**. It permits reading Drive files; this tool only downloads files linked from courses and does not enumerate your Drive. Google authorization shares the optional `[gmail]` dependency, but uses an independent flow and `secrets/google-drive-token.json` under the data home (`MONASH_KIT_SECRETS` can override the directory). Gmail authorization and `gmail-token.json` are unchanged. Credentials stay in the terminal / browser authorization flow; never paste them into chat.
+
+Downloads use read-only GET requests. For Drive export-size or administrator restrictions, a fallback tries the existing Google session in the dedicated login browser. Cookies are used only in memory, never logged or separately saved, and redirects outside Google's domains stop. The fallback may still be blocked by policy; failures keep the original link and explain why. Missing authorization points to `monash google login`. Moodle Page, Resource and assignment `view.php` requests still record a view. Normal folder downloads and Book print requests avoid their `view.php`; the individual-file fallback must open the folder page and records a view.
+
+Every sync checks newly discovered Ed units against tracked Moodle unit codes, including archived units and combined codes such as `FIT1045/FIT1053`; later user tracking choices are preserved. `monash export <unit> --sync` refreshes Moodle first, then matching Ed discussions and Lessons, before exporting. Ordinary exports use only local data. The README index includes all omission notes and failed Ed images, plus counts of link lists, remote Markdown images, Google links, successful exports and failures grouped by reason; `--json` exposes the same counts in `statistics`.
+
+New tests use synthetic HTML / JSON, fake clients and mocked HTTP, with no real account requests. Ed code-challenge workspace downloads still require a real read-only response to establish the interface and are excluded, as are multi-account profiles.
+
+
 ## Two parts, one codebase
 
 The same core (login, sync, queries) serves two kinds of "users":

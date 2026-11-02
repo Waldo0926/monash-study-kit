@@ -36,6 +36,35 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选
 
 之前的[1.1安全审计](docs/security.md)只覆盖当时的功能；新增的远程连接、邮箱与考勤另列有[1.5审查清单](docs/SECURITY-REVIEW-1.5-SCOPE.md)，不能直接沿用旧版结论。
 
+
+## 1.9.0：补全课程资料导出
+
+- Moodle 的 Page、Book 章节、作业说明和学生能看到的 rubric / marking guide 存成 Markdown；正文里的 Moodle 图片存到课程的 `assets/`，同内容去重。指向本课程 Page、Resource、Folder、Book 的内部链接也会跟进。
+- 文件夹优先整包下载，保留 notebook、图片的原名、子目录和大小写，7 天内跳过重复下载；失败时逐文件下载。索引会说明 notebook 图片缺失、大小写不一致、正文为空或评分细则未显示等情况。
+- Ed Lessons 的 document / code 正文图片只下载 Ed 自己的 `edusercontent.com` 地址，按内容去重并缓存 URL，每张最多 200 MB。下载失败保留原链接并记录原因；独立 Ed 导出和整课导出都包含 `assets/`，图片使用相对路径。
+- Google Slides / Docs 默认导出 PDF，Sheets 导出 XLSX，Drive 普通文件按原格式下载。只处理 Moodle 和 Ed Lessons 里出现过的文件链接；Google 表单不能导出。文件还在时跳过，`monash sync --refresh-google` 强制重新导出。
+- 每次同步检查新出现的 Ed 课程：课号与已跟踪 Moodle 课程相同就自动跟踪，包括归档课程和 `FIT1045/FIT1053` 这样的联合课号；处理过的课程保留用户选择。
+- `monash export FIT1045 --sync` 先同步这门 Moodle 课及对应 Ed 课再导出。普通导出继续只读本机缓存。README 索引列出未导出内容和原因，并统计链接清单数量、Markdown 远程图片数、Google 总数 / 成功 / 按原因分组的失败数；`--json` 的 `statistics` 提供相同数字。
+
+```bash
+# Google 授权依赖与 Gmail 共用，但授权流程和 token 分开
+uv tool install --reinstall 'monash-study-kit[gmail]'
+monash google login                  # 默认使用安装包里的桌面 OAuth 客户端
+monash google login --client client.json  # 也可以用自己的桌面客户端
+monash google status
+monash config google_docs_format docx # 默认 pdf；只影响 Google Docs
+monash sync FIT1045 --refresh-google
+monash export FIT1045 --sync --json
+monash google logout                 # 先向 Google 吊销，再删除本机令牌
+```
+
+自带 OAuth 客户端目前处于 Google 的“测试”状态，授权账号需要先由客户端维护者加入测试用户名单。`drive.readonly` 在 Google 属于受限 scope，允许读取 Drive 文件；本工具仅下载课程链接里出现的文件，不遍历整个 Drive。令牌单独存在数据目录的 `secrets/google-drive-token.json`（可通过 `MONASH_KIT_SECRETS` 改位置），不修改 Gmail 的授权流程或 `gmail-token.json`。令牌只在终端 / 浏览器授权流程中流转，不要贴进聊天。
+
+课程下载走只读 GET。Drive API 报大小限制或管理员限制时，会尝试专用登录浏览器中已有的 Google 会话；cookie 只在内存使用，不写日志或另存文件，跳转离开 Google 域名会停止。后备路径不能保证绕过管理员限制，仍失败时保留原链接并在索引说明原因。未授权时提示 `monash google login`。Moodle Page、Resource、作业仍会打开 `view.php`，Moodle 会记录查看；文件夹正常下载和 Book 打印视图不打开各自的 `view.php`。文件夹整包下载失败后的逐文件回退需要打开文件夹页，也会记录一次查看。
+
+本版新增测试均使用合成 HTML / JSON、假客户端或假 HTTP，不访问真实课程、Google 账号或 Ed 工作区。Ed code challenge 工作区下载暂未实现，仍需真实只读响应确认接口；多账号 profile 等不在本版范围内。
+
+
 ## 它由两部分组成
 
 同一套底层代码（登录、同步、查询），给两种“用户”用：
