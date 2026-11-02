@@ -63,7 +63,20 @@ def configure(argv: list[str]) -> list[str]:
     return remaining
 
 
+def _setup_streams() -> None:
+    """和 cli.setup_streams 一样；--profile 的报错在导入 cli 之前就要打印中文，Windows 上得先设好。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream.isatty():
+                stream.reconfigure(errors="replace")
+            else:
+                stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _setup_streams()
     try:
         arguments = configure(list(sys.argv[1:] if argv is None else argv))
     except ValueError as e:

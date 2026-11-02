@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def child(tmp_path, args, script=None, extra=None):
     env = {k:v for k,v in os.environ.items() if not k.startswith(("MONASH_KIT_", "_MONASH_KIT_")) and k != "ED_TOKEN"}
-    env.update(MONASH_KIT_HOME=str(tmp_path/"home"), MONASH_KIT_UPDATE_CHECK="false")
+    # 子进程的报错里有中文：Windows 的管道默认不是 UTF-8
+    env.update(MONASH_KIT_HOME=str(tmp_path/"home"), MONASH_KIT_UPDATE_CHECK="false", PYTHONIOENCODING="utf-8")
     env.update(extra or {})
     script = script or """
 import json, sys
@@ -26,7 +27,7 @@ rest = configure(sys.argv[1:])
 from monash_study_kit import paths as p
 print(json.dumps({k:str(getattr(p,k)) for k in ('HOME','SECRETS_DIR','DATA_DIR','FILES_DIR','ED_DB','ED_FILES_DIR','BROWSER_PROFILE','ED_TOKEN_FILE')} | {'profile':p.PROFILE,'materials':p.load_settings()['materials_only'],'rest':rest,'default':p.is_default_profile()}))
 """
-    return subprocess.run([sys.executable,"-c",script,*args],cwd=ROOT,env=env,capture_output=True,text=True,timeout=20)
+    return subprocess.run([sys.executable,"-c",script,*args],cwd=ROOT,env=env,capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=20)
 
 
 @pytest.mark.parametrize("flag", [["--profile","alice"], ["--profile=alice"], []])
@@ -75,7 +76,7 @@ def test_profile_inherited_by_child_does_not_nest_again(tmp_path):
 import os, subprocess, sys
 from monash_study_kit.entry import configure
 configure(['--profile','alice'])
-r=subprocess.run([sys.executable,'-m','monash_study_kit','config','materials_only'],capture_output=True,text=True)
+r=subprocess.run([sys.executable,'-m','monash_study_kit','config','materials_only'],capture_output=True,text=True,encoding="utf-8",errors="replace")
 print(os.environ['MONASH_KIT_HOME'])
 print(r.stdout)
 assert r.returncode == 0
@@ -181,9 +182,9 @@ def profiles(tmp_path,monkeypatch):
         for directory in ("secrets","data","files","browser-profile","attendance-browser"):
             (root/directory).mkdir(parents=True,exist_ok=True)
         for name in ("moodle-cookie","ed-token","google-drive-token.json","gmail-token.json"):
-            (root/"secrets"/name).write_text("编造的文件内容，不是凭据")
-        (root/"data/course.db").write_text("编造的数据库")
-        (root/"files/sample.txt").write_text("编造的课件")
+            (root/"secrets"/name).write_text("编造的文件内容，不是凭据", encoding="utf-8")
+        (root/"data/course.db").write_text("编造的数据库", encoding="utf-8")
+        (root/"files/sample.txt").write_text("编造的课件", encoding="utf-8")
     return tmp_path
 
 
@@ -363,7 +364,7 @@ base=Path(sys.argv[1])
 root=base/'system-default'
 root.mkdir()
 pointer=root/'location.json'
-pointer.write_text(json.dumps({'home':str(base/'moved')}))
+pointer.write_text(json.dumps({'home':str(base/'moved')}), encoding="utf-8")
 os.environ.pop('MONASH_KIT_HOME',None)
 entry.resolve_home=lambda environ:home.resolve_home(environ,pointer,root)
 entry.configure(['--profile','alice'])
@@ -399,7 +400,7 @@ assert entry.main(['help','--profile=alice'])==0
 def test_profile_settings_file_cannot_disable_mode_or_escape_files(tmp_path):
     directory=tmp_path/"home/profiles/alice"
     directory.mkdir(parents=True)
-    (directory/"settings.json").write_text(json.dumps({"materials_only":False,"files_dir":str(tmp_path/"outside")}))
+    (directory/"settings.json").write_text(json.dumps({"materials_only":False,"files_dir":str(tmp_path/"outside")}), encoding="utf-8")
     result=child(tmp_path,["--profile","alice"])
     d=json.loads(result.stdout)
     assert d["materials"] is True and d["FILES_DIR"] == str(directory/"files")

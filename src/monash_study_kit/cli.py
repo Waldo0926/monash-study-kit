@@ -1029,7 +1029,7 @@ def _print_update_notice() -> None:
         print(f"\n↑ {msg}", file=sys.stderr)
 
 
-def main(argv: list[str] | None = None) -> int:
+def setup_streams() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
             if stream.isatty():
@@ -1038,6 +1038,10 @@ def main(argv: list[str] | None = None) -> int:
                 stream.reconfigure(encoding="utf-8")    # 管道/重定向：Windows 默认是本地代码页，中文会丢
         except (AttributeError, ValueError):
             pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    setup_streams()
     ap = build_parser()
     args = ap.parse_args(argv)
     from .materials_policy import command_error

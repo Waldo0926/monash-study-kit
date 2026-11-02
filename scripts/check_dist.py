@@ -65,7 +65,7 @@ def main() -> None:
             fail(f"包里不该有 {n}")
     if f"\nVersion: {version}\n" not in meta:
         fail("METADATA 里的版本号不对")
-    if "monash = monash_study_kit.cli:main" not in entry:
+    if "monash = monash_study_kit.entry:main" not in entry:
         fail("没有 monash 命令的入口")
     if "Description-Content-Type: text/markdown" not in meta or "## Installation" not in meta:
         fail("PyPI 页面会没有 README")
