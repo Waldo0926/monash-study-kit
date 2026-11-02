@@ -174,7 +174,7 @@ def plan_ed(p: Plan, conn: sqlite3.Connection) -> None:
             p.add(f"{base}/{l['folder'][cut:]}/Quiz.md", edquery.quiz_markdown([q]))
     for m in ep["missing"]:
         p.missing.append({"where": f"Ed Lessons/{m['lesson']}", "title": m["title"], "url": m["url"],
-                          "reason": "上次同步没下载到（下载失败或超过大小上限）"})
+                          "reason": m.get("reason") or "上次同步没下载到（下载失败或超过大小上限）"})
     from .google_export import parse_link
     for r in conn.execute("SELECT url,local_path FROM lesson_files WHERE course_id=? AND type='webpage'", (ep["course_id"],)):
         if parse_link(r["url"]):

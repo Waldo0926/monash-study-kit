@@ -288,3 +288,13 @@ def test_same_image_content_deduplicates_and_failed_image_retries(ed, monkeypatc
     assert len(calls) == 2
     conn.execute("INSERT INTO ed_assets VALUES ('https://static.edusercontent.com/f.png',NULL,NULL,'上次失败','x')")
     assert "https://" not in L.localize_images(conn,"![C](https://static.edusercontent.com/f.png)","FIT2109",files/"FIT2109/module/lesson")
+
+
+def test_code_challenge_workspace_is_listed_not_fetched(tmp_path, monkeypatch):
+    """code 页的工作区要“连接”才读得到：不请求，只在索引里说明。"""
+    slides = [{"id": 301, "index": 0, "type": "code", "title": "Exercise 1", "challenge_id": 77,
+               "content": "<document><paragraph>Write a function that returns the sum of a list of numbers.</paragraph></document>"}]
+    files = L.fetch_lesson_files(None, 9, slides)
+    ch = [f for f in files if f["type"] == "challenge"]
+    assert len(ch) == 1 and ch[0]["title"] == "Exercise 1" and ch[0]["file_url"] is None
+    assert edexport.CHALLENGE_REASON.startswith("Code challenge")

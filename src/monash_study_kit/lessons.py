@@ -216,6 +216,11 @@ def fetch_lesson_files(client: EdClient, lesson_id: int, slides: list[dict] | No
                 # 正文直接写在 Ed 里的页：存成 .md，全文索引就能搜到
                 out.append({"id": s["id"], "type": s["type"], "title": s.get("title") or "",
                             "file_url": None, "url": None, "text": text, "idx": idx})
+            if s.get("type") == "code" and s.get("challenge_id"):
+                # 右侧工作区（scaffold、task.txt）只能“连接”Ed 工作区才读得到（会创建工作区），
+                # 为了只读不去连，只记下来，导出的索引里说明
+                out.append({"id": attachment_id(f"challenge:{s['challenge_id']}"), "type": "challenge",
+                            "title": s.get("title") or "", "file_url": None, "url": None, "idx": idx})
             # 正文里附的文件（starter code 的 zip、讲义、数据表）：跟 Ed Web 一样一起下载
             seen = set()
             for a in doc_attachments(_slide_raw(s)):
