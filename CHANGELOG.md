@@ -2,6 +2,12 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.11.0
+
+- Course exports now turn Markdown body pages, link lists, quizzes and the index into PDFs by default, keeping original course files. `monash export --format pdf|both|md` overrides the `export_format` setting; synced Markdown and MCP indexing are unchanged.
+- PDFs are printed offline with one isolated temporary Chrome / Edge / Brave process per export. Local exported images are embedded, raw HTML is escaped, and remote requests are blocked. Without a browser, exports fall back to Markdown with an explanation in the index and terminal.
+- Cache PDFs by the complete printable HTML and embedded image contents under `data/pdf-cache/`, evicting the oldest entries above 500 MB. JSON exports report generated and cached PDF counts and the fallback reason.
+
 ## 1.10.1
 
 - Ed images whose address has no file extension are saved as `.png`, `.jpg`, `.gif`, `.webp` or `.svg` according to their content, instead of `.img`, which viewers did not show. Images saved as `.img` by earlier versions are renamed on the next sync, and the references in the Markdown pages are updated.
