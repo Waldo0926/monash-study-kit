@@ -122,7 +122,10 @@ def revoke_token(token_file: Path) -> None:
         token = data.get("refresh_token") or data.get("token")
         if not token:
             return
-        req = urllib.request.Request("https://oauth2.googleapis.com/revoke?" + urllib.parse.urlencode({"token": token}))
+        # 吊销接口只认 POST（GET 会 404）；令牌放在请求体里，不出现在网址中
+        req = urllib.request.Request("https://oauth2.googleapis.com/revoke", method="POST",
+                                     data=urllib.parse.urlencode({"token": token}).encode(),
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
         with urllib.request.build_opener(gmail._NoRedirect()).open(req, timeout=30) as resp:
             resp.read()
     except urllib.error.HTTPError as e:

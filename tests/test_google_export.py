@@ -155,7 +155,7 @@ def test_logout_revokes_before_deleting(tmp_path,monkeypatch,http):
             return super().read(*args)
     answers.append(Revoked(b"ok"))
     assert G.logout() == {"已授权":False}
-    assert not token.exists() and seen[0].get_method() == "GET" and "/revoke?" in seen[0].full_url
+    assert not token.exists() and seen[0].get_method() == "POST" and seen[0].full_url == "https://oauth2.googleapis.com/revoke"
 
 
 def test_logout_keeps_token_on_failure(tmp_path,monkeypatch,http):
@@ -236,3 +236,24 @@ def test_revoking_an_already_invalid_token_counts_as_revoked(tmp_path, monkeypat
     import pytest as _pytest
     with _pytest.raises(G.GoogleError):
         G.revoke_token(token)
+
+
+def test_revoke_is_a_post_with_the_token_in_the_body(tmp_path, monkeypatch):
+    token = tmp_path / "google-drive-token.json"
+    token.write_text('{"refresh_token":"synthetic-refresh"}', encoding="utf-8")
+    sent = []
+    def opener(*a, **k):
+        class O:
+            def open(self, req, timeout=None):
+                sent.append(req)
+                class R:
+                    def __enter__(self): return self
+                    def __exit__(self, *a): return False
+                    def read(self): return b""
+                return R()
+        return O()
+    monkeypatch.setattr(G.urllib.request, "build_opener", opener)
+    G.revoke_token(token)
+    req = sent[0]
+    assert req.get_method() == "POST" and req.full_url == "https://oauth2.googleapis.com/revoke"
+    assert b"token=synthetic-refresh" in req.data and "synthetic" not in req.full_url
