@@ -125,6 +125,13 @@ def revoke_token(token_file: Path) -> None:
         req = urllib.request.Request("https://oauth2.googleapis.com/revoke?" + urllib.parse.urlencode({"token": token}))
         with urllib.request.build_opener(gmail._NoRedirect()).open(req, timeout=30) as resp:
             resp.read()
+    except urllib.error.HTTPError as e:
+        # 400 invalid_token：授权早就失效了（过期，或者在 Google 账号页面撤销过），等于已经吊销
+        body = e.read(4096).decode("utf-8", "replace")
+        e.close()
+        if e.code == 400 and "invalid_token" in body:
+            return
+        raise GoogleError("Google 授权吊销失败，本机令牌已保留，请重试") from None
     except Exception:
         raise GoogleError("Google 授权吊销失败，本机令牌已保留，请重试") from None
 
