@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -121,9 +122,37 @@ def write_zip(p: dict, out: BinaryIO) -> dict:
             "lessons": len(p["lessons"]), "missing": len(p["missing"])}
 
 
+def _windows_downloads() -> Path | None:
+    """Windows 的“下载”可能被挪到 D 盘或 OneDrive，按系统登记的位置找。"""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        from uuid import UUID
+
+        class GUID(ctypes.Structure):
+            _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD),
+                        ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8)]
+
+        u = UUID("374DE290-123F-4565-9164-39C4925E467B")  # FOLDERID_Downloads
+        guid = GUID(u.fields[0], u.fields[1], u.fields[2], (ctypes.c_ubyte * 8)(*u.bytes[8:]))
+        out = ctypes.c_wchar_p()
+        if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(out)) != 0:
+            return None
+        try:
+            return Path(out.value)
+        finally:
+            ctypes.windll.ole32.CoTaskMemFree(out)
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
 def default_dir() -> Path:
-    d = Path.home() / "Downloads"
-    return d if d.is_dir() else Path.cwd()
+    candidates = [_windows_downloads()] if sys.platform == "win32" else []
+    candidates.append(Path.home() / "Downloads")
+    for d in candidates:
+        if d and d.is_dir():
+            return d
+    return Path.cwd()
 
 
 def zip_name(p: dict, module: str | None = None) -> str:

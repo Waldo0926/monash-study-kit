@@ -646,7 +646,8 @@ def sync_export_course(ref: str, log=print, refresh_google: bool = False) -> Non
         course = F.find_course(courses, ref)
         jobs.sync_moodle(only=[course], log=log, refresh_google=refresh_google)
         if jobs.have_ed_token():
-            jobs.sync_ed(log=log, course_code=course_code(course))
+            # 导出只要课程资料：只同步 Lessons，不抓论坛帖子
+            jobs.sync_ed(log=log, course_code=course_code(course), lessons_only=True)
             econ = edlib.db_connect()
             try:
                 # 重新导出已在上面 Moodle 那一轮做过，这里只补 Ed 新出现的链接
@@ -660,9 +661,41 @@ def sync_export_course(ref: str, log=print, refresh_google: bool = False) -> Non
         con.close()
 
 
+def is_terminal() -> bool:
+    """有人在终端前面（不是被 Claude、脚本或管道调用）。"""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def export_destination(args) -> Path | None:
+    """导出前先定保存位置：终端里直接运行时弹窗选（默认上次选的，没有就“下载”），选了就记住。
+    返回 None 表示用户点了取消。"""
+    from . import edexport, folderpick
+    if args.to:
+        return Path(args.to).expanduser()
+    saved = Path(load_settings().get("export_dir") or "").expanduser()
+    initial = saved if str(saved) not in {"", "."} and saved.is_dir() else edexport.default_dir()
+    interactive = is_terminal() and not getattr(args, "json", False)
+    if args.no_ask or not interactive:
+        return initial
+    print("请在弹出的窗口里选择导出到哪个文件夹…", file=sys.stderr, flush=True)
+    try:
+        chosen = folderpick.choose_folder("选择课程资料导出到哪个文件夹", initial)
+    except folderpick.Unavailable:
+        print(f"弹不出选择窗口，导出到：{initial}（换位置用 --to）", file=sys.stderr)
+        return initial
+    if chosen is None:
+        return None
+    save_settings({"export_dir": str(chosen)})
+    return chosen
+
+
 def cmd_export(args):
     """一门课的 Moodle 课件 + Ed Lessons 合成一份课程资料（zip 或文件夹），附索引。只用本机已同步的数据。"""
     from . import export as X, moodlelib
+    dest = export_destination(args)
+    if dest is None:
+        print("已取消导出", file=sys.stderr)
+        return 1
     try:
         log = lambda text: print(text, file=sys.stderr, flush=True)  # noqa: E731
         refresh_google = getattr(args, "refresh_google", False)
@@ -670,7 +703,7 @@ def cmd_export(args):
             sync_export_course(args.course, log=log, refresh_google=refresh_google)
         mcon, econ = moodlelib.db_connect(), edlib.db_connect()
         try:
-            d = X.export(args.course, args.to, as_dir=args.dir, moodle_con=mcon, ed_conn=econ,
+            d = X.export(args.course, dest, as_dir=args.dir, moodle_con=mcon, ed_conn=econ,
                          export_format=getattr(args, "format", None), log=log)
         finally:
             mcon.close()
@@ -955,7 +988,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("query"); p.add_argument("course", nargs="?"); p.add_argument("--limit", type=int, default=15)
     p = cmd(sub, "export", cmd_export, json_flag=True, help="导出一门课的课程资料（Moodle + Ed Lessons，附索引）")
     p.add_argument("course", help="课号，如 FIT1043")
-    p.add_argument("--to", help="保存到哪个文件夹（默认“下载”）")
+    p.add_argument("--to", help="保存到哪个文件夹（不写就弹窗选，默认上次选的或“下载”）")
+    p.add_argument("--no-ask", action="store_true", help="不弹窗，直接存到上次选的文件夹或“下载”")
     p.add_argument("--dir", action="store_true", help="写成文件夹，不打 zip")
     p.add_argument("--open", action="store_true", help="导出后在文件管理器里显示")
     p.add_argument("--sync", action="store_true", help="导出前同步这门 Moodle 和 Ed 课程")
