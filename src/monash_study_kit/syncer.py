@@ -270,6 +270,8 @@ class CourseSync:
         for h, _ in collect_links(page).all:
             if is_attachment(h) and f"/{self._context_hint(mod)}" in h:
                 self.fetch_file(h, folder, cm, section_title)
+            elif is_external(h):
+                self.add_link(folder, section_title, clean(cm.get("name")), h)
 
     def internal_cm(self, href: str, text: str = "") -> dict | None:
         """本站 /mod/<page|resource|folder|book>/view.php?id=N 链接对应的活动。
@@ -367,7 +369,9 @@ class CourseSync:
                 return url
             ext = os.path.splitext(urllib.parse.unquote(parts.path))[1][:10]
             digest = hashlib.sha256(tmp.read_bytes()).hexdigest()[:16]
-            rel = f"{self.root}/{ASSETS}/{digest}{ext}"
+            asset_dir = FILES_DIR / self.root / ASSETS
+            existing = next(iter(sorted(asset_dir.glob(digest + ".*"))), None)
+            rel = existing.relative_to(FILES_DIR).as_posix() if existing else f"{self.root}/{ASSETS}/{digest}{ext}"
             if (FILES_DIR / rel).exists():
                 tmp.unlink()
             else:
@@ -407,6 +411,7 @@ class CourseSync:
         if fresh:
             self.seen_sources.update(r["source"] for r in rows)
             self.stats.skipped += len(rows)
+            self.check_notebooks([r["path"] for r in rows], sub)
             return
         if self.dry:
             self.log(f"  + {self.root}/{sub}/（整个文件夹）")
@@ -427,7 +432,7 @@ class CourseSync:
             members = [i for i in z.infolist() if not i.is_dir()]
             names = [_zip_parts(i.filename) for i in members]
             # 有的 zip 外面包了一层和文件夹同名的目录，去掉
-            if names and all(len(n) > 1 and n[0] == names[0][0] for n in names):
+            if names and all(len(n) > 1 and n[0] == safe_name(cm["name"]) for n in names):
                 names = [n[1:] for n in names]
             written = []
             for info, parts in zip(members, names):
@@ -465,6 +470,9 @@ class CourseSync:
             inner = posixpath.dirname(urllib.parse.unquote(m.group(1)))
             target = sub + ("/" + "/".join(_zip_parts(inner)) if inner else "")
             self.fetch_file(h, target, cm, section_title)
+        rows = self.con.execute("SELECT path FROM files WHERE course_id=? AND cmid=?",
+                                (self.cid, cm["id"])).fetchall()
+        self.check_notebooks([r["path"] for r in rows], sub)
 
     def check_notebooks(self, rels: list[str], folder: str) -> None:
         """Notebook 里引用的本地图片（images/x.PNG）要在对应位置；找不到、或者只是大小写对不上，记下来。"""
@@ -483,7 +491,7 @@ class CourseSync:
                 if re.match(r"^[a-z]+:", ref) or ref.startswith("/"):
                     continue
                 target = nb.parent / urllib.parse.unquote(ref)
-                if target.exists():
+                if target.is_file() and any(p.name == target.name for p in target.parent.iterdir()):
                     continue
                 twin = next((p for p in target.parent.glob("*") if p.name.lower() == target.name.lower()), None) \
                     if target.parent.is_dir() else None
