@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from . import edlib
@@ -42,13 +43,29 @@ def upsert_courses(conn, courses: list[dict]) -> None:
     conn.commit()
 
 
-def auto_track(conn, courses: list[dict]) -> list[dict]:
-    """第一次用的时候，默认跟踪所有 active 的课（以后可以用 monash courses 改）。"""
-    active = [c for c in courses if c.get("status") == "active"]
-    for c in active:
-        conn.execute("UPDATE courses SET tracked=1 WHERE id=?", (c["id"],))
+def auto_track(conn, courses: list[dict], moodle_con=None) -> list[dict]:
+    """新出现的 Ed 课与已跟踪的 Moodle 课匹配；处理过的课保留用户选择。"""
+    from . import moodlelib
+    own = moodle_con is None
+    if own:
+        moodle_con = moodlelib.db_connect()
+    try:
+        codes = {r[0].upper() for r in moodle_con.execute("SELECT code FROM courses WHERE tracked=1") if r[0]}
+    finally:
+        if own:
+            moodle_con.close()
+    conn.execute("CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT)")
+    picked = []
+    for c in courses:
+        key = f"auto_track:{c['id']}"
+        if conn.execute("SELECT 1 FROM state WHERE key=?", (key,)).fetchone():
+            continue
+        if codes.intersection(re.split(r"[/\s]+", (c.get("code") or "").upper())):
+            conn.execute("UPDATE courses SET tracked=1 WHERE id=?", (c["id"],))
+            picked.append(c)
+        conn.execute("INSERT INTO state VALUES (?, '1')", (key,))
     conn.commit()
-    return active
+    return picked
 
 
 def store_thread(conn, cid: int, t: dict, full: dict, stamp: str, prev=None) -> tuple[int, int]:
@@ -125,9 +142,8 @@ def sync(course_ids: list[int] | None = None, full: bool = False, workers: int =
     conn = db_connect()
     courses = client.courses()
     upsert_courses(conn, courses)
+    auto_track(conn, courses)
     tracked = [r["id"] for r in conn.execute("SELECT id FROM courses WHERE tracked=1")]
-    if not tracked and not course_ids:
-        tracked = [c["id"] for c in auto_track(conn, courses)]
     course_ids = course_ids or tracked
 
     started = now_iso()
