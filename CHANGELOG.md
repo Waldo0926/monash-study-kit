@@ -6,6 +6,7 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 - `monash login` no longer crashes with “Browser context management is not supported” when the login window is closed before signing in finishes (on macOS Chrome keeps running without a window); it says the window was closed and how to retry.
 - PDF export on Windows no longer fails when Chrome's helper processes still hold the temporary profile for a moment after closing; cleanup retries and never fails the export.
+- `monash export` says where it is saving up front and shows progress while rendering PDFs and writing the zip, so a long first export no longer looks stuck.
 - `monash export` accepts `--refresh-google` (implies `--sync`) to re-export the course's Google files before packaging.
 
 ## 1.11.0

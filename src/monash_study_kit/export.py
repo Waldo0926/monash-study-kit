@@ -236,7 +236,7 @@ def _index(p: Plan) -> str:
 
 
 def plan(course: str, *, moodle_con: sqlite3.Connection | None, ed_conn: sqlite3.Connection | None,
-         export_format: str | None = None) -> Plan:
+         export_format: str | None = None, log=None) -> Plan:
     export_format = export_format if export_format is not None else load_settings()["export_format"]
     if export_format not in {"pdf", "both", "md"}:
         raise ValueError("export_format 只能是 pdf、both 或 md")
@@ -261,11 +261,11 @@ def plan(course: str, *, moodle_con: sqlite3.Connection | None, ed_conn: sqlite3
                     "google_success": sum(reason == "成功" for reason in p.google.values()),
                     "google_failed": sum(reasons.values()), "google_failure_reasons": reasons}
     p.entries.insert(0, (f"{p.code}/README.md", _index(p)))
-    _pdf_entries(p, export_format)
+    _pdf_entries(p, export_format, log)
     return p
 
 
-def _pdf_entries(p: Plan, export_format: str) -> None:
+def _pdf_entries(p: Plan, export_format: str, log=None) -> None:
     if export_format == "md":
         return
     executable = pdfrender.find_browser()
@@ -277,6 +277,10 @@ def _pdf_entries(p: Plan, export_format: str) -> None:
         return
     originals = dict(p.entries)
     converted = []
+    pages = sum(arc.lower().endswith(".md") for arc, _ in p.entries)
+    done = 0
+    if log:
+        log(f"排版 PDF：共 {pages} 页（第一次导出较慢，做过的下次直接复用）")
     with contextlib.ExitStack() as stack:
         renderer = None
         for arc, item in p.entries:
@@ -313,6 +317,9 @@ def _pdf_entries(p: Plan, export_format: str) -> None:
                 p.pdf["generated"] += 1
             else:
                 p.pdf["cached"] += 1
+            done += 1
+            if log and (done % 20 == 0 or done == pages):
+                log(f"  PDF {done}/{pages}")
             if export_format == "both":
                 converted.append((arc, item))
             # 缓存可在本次导出过程中被清理，条目保留字节，避免写包时引用失效。
@@ -359,15 +366,19 @@ def _stats(p: Plan, total: int) -> dict:
 
 def export(course: str, to: str | Path | None = None, *, as_dir: bool = False,
            moodle_con: sqlite3.Connection | None = None, ed_conn: sqlite3.Connection | None = None,
-           export_format: str | None = None) -> dict:
-    """导出到文件夹（默认“下载”）。as_dir=True 写成文件夹，否则一个 zip。"""
-    p = plan(course, moodle_con=moodle_con, ed_conn=ed_conn, export_format=export_format)
+           export_format: str | None = None, log=None) -> dict:
+    """导出到文件夹（默认“下载”）。as_dir=True 写成文件夹，否则一个 zip。log 给命令行显示进度。"""
     dest_dir = Path(to).expanduser() if to else edexport.default_dir()
+    if log:
+        log(f"导出到：{dest_dir}")
+    p = plan(course, moodle_con=moodle_con, ed_conn=ed_conn, export_format=export_format, log=log)
     dest_dir.mkdir(parents=True, exist_ok=True)
     if as_dir:
         return {"path": str(dest_dir / p.code), **write_dir(p, dest_dir)}
     dest = dest_dir / f"{p.code} 课程资料 {datetime.now().strftime('%Y-%m-%d')}.zip"
     tmp = dest.with_name(dest.name + ".part")
+    if log:
+        log("打包 zip…")
     try:
         with open(tmp, "wb") as f:
             stats = write_zip(p, f)

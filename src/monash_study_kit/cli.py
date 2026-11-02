@@ -664,14 +664,14 @@ def cmd_export(args):
     """一门课的 Moodle 课件 + Ed Lessons 合成一份课程资料（zip 或文件夹），附索引。只用本机已同步的数据。"""
     from . import export as X, moodlelib
     try:
+        log = lambda text: print(text, file=sys.stderr, flush=True)  # noqa: E731
         refresh_google = getattr(args, "refresh_google", False)
         if getattr(args, "sync", False) or refresh_google:
-            sync_export_course(args.course, log=(lambda text: print(text, file=sys.stderr)),
-                               refresh_google=refresh_google)
+            sync_export_course(args.course, log=log, refresh_google=refresh_google)
         mcon, econ = moodlelib.db_connect(), edlib.db_connect()
         try:
             d = X.export(args.course, args.to, as_dir=args.dir, moodle_con=mcon, ed_conn=econ,
-                         export_format=getattr(args, "format", None))
+                         export_format=getattr(args, "format", None), log=log)
         finally:
             mcon.close()
             econ.close()

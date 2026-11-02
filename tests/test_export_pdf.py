@@ -473,3 +473,12 @@ def test_temp_profile_cleanup_retries_and_never_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(R.shutil, "rmtree", locked)
     R._remove_tree(str(target), tries=2)
     assert calls == [False, False, True]
+
+
+
+def test_export_reports_pdf_progress(course):
+    """第一次导出要排版很多页：命令行要显示进度，不能看起来像卡住。"""
+    tmp = course[0]
+    lines = []
+    X.export('FIT1043', tmp / 'out', moodle_con=object(), ed_conn=None, log=lines.append)
+    assert lines == [f'导出到：{tmp / "out"}', '排版 PDF：共 3 页（第一次导出较慢，做过的下次直接复用）', '  PDF 3/3', '打包 zip…']
