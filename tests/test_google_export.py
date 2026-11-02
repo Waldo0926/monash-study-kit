@@ -116,6 +116,13 @@ def test_browser_redirect_stops_outside_google(url):
         handler.redirect_request(G.urllib.request.Request("https://docs.google.com/a"),None,302,"Found",{},url)
 
 
+def test_browser_redirect_to_googleusercontent_is_allowed():
+    handler=G._GoogleRedirect()
+    req=handler.redirect_request(G.urllib.request.Request("https://docs.google.com/a"),None,302,"Found",{},
+                                 "https://doc-0s-1c-docs.googleusercontent.com/docs/securesc/x")
+    assert req.full_url.startswith("https://doc-0s-1c-docs.googleusercontent.com/")
+
+
 def test_no_token_prompt(tmp_path,monkeypatch):
     monkeypatch.setattr(G,"TOKEN_FILE",tmp_path/"absent.json")
     with pytest.raises(G.GoogleError,match="还没授权 Google（monash google login）"):

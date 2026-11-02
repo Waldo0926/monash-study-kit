@@ -185,10 +185,18 @@ def browser_cookies() -> list[dict]:
         browser.close()
 
 
+# 导出链接会跳到 *.googleusercontent.com 去真正下载（签名地址，cookie 按域名匹配，不会带过去）
+GOOGLE_HOSTS = ("google.com", "googleusercontent.com")
+
+
+def _google_host(host: str | None) -> bool:
+    return bool(host) and any(host == h or host.endswith("." + h) for h in GOOGLE_HOSTS)
+
+
 class _GoogleRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         u = urllib.parse.urlsplit(newurl)
-        if u.scheme != "https" or not u.hostname or not (u.hostname == "google.com" or u.hostname.endswith(".google.com")) or u.username or u.port:
+        if u.scheme != "https" or not _google_host(u.hostname) or u.username or u.port:
             raise GoogleError("Google 导出跳转到了非 Google 域名，已停止")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 

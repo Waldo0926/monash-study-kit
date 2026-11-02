@@ -44,7 +44,11 @@ def upsert_courses(conn, courses: list[dict]) -> None:
 
 
 def auto_track(conn, courses: list[dict], moodle_con=None) -> list[dict]:
-    """新出现的 Ed 课与已跟踪的 Moodle 课匹配；处理过的课保留用户选择。"""
+    """新出现的 Ed 课：课号和某门已跟踪的 Moodle 课相同就跟踪（不管 Ed 上是不是已归档）。
+
+    看过的课记在 state 表里，以后不再改，保留用户在 monash courses 里的选择。还没有跟踪任何 Moodle 课时
+    （第一次 setup 还没选课，或者只用 Ed）不记，等有了再匹配；这时如果一门 Ed 课都没跟踪，
+    照原来的做法先跟踪所有 active 的课。"""
     from . import moodlelib
     own = moodle_con is None
     if own:
@@ -56,14 +60,20 @@ def auto_track(conn, courses: list[dict], moodle_con=None) -> list[dict]:
             moodle_con.close()
     conn.execute("CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT)")
     picked = []
-    for c in courses:
-        key = f"auto_track:{c['id']}"
-        if conn.execute("SELECT 1 FROM state WHERE key=?", (key,)).fetchone():
-            continue
-        if codes.intersection(re.split(r"[/\s]+", (c.get("code") or "").upper())):
-            conn.execute("UPDATE courses SET tracked=1 WHERE id=?", (c["id"],))
-            picked.append(c)
-        conn.execute("INSERT INTO state VALUES (?, '1')", (key,))
+    if codes:
+        for c in courses:
+            key = f"auto_track:{c['id']}"
+            if conn.execute("SELECT 1 FROM state WHERE key=?", (key,)).fetchone():
+                continue
+            if codes.intersection(re.split(r"[/\s]+", (c.get("code") or "").upper())):
+                conn.execute("UPDATE courses SET tracked=1 WHERE id=?", (c["id"],))
+                picked.append(c)
+            conn.execute("INSERT INTO state VALUES (?, '1')", (key,))
+    if not codes and not conn.execute("SELECT 1 FROM courses WHERE tracked=1").fetchone():
+        for c in courses:
+            if c.get("status") == "active":
+                conn.execute("UPDATE courses SET tracked=1 WHERE id=?", (c["id"],))
+                picked.append(c)
     conn.commit()
     return picked
 
