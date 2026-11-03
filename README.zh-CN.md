@@ -28,6 +28,24 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
 
+
+## 当前版本：1.11.2 · 整门课资料导出
+
+不需要 AI 软件也能导出课程资料。安装或升级后，先登录并选择课程，再运行：
+
+```bash
+uv tool install --upgrade 'monash-study-kit[gmail]'
+monash setup
+monash google login  # 仅导出课程链接中的 Google 文件时需要；独立只读授权
+monash export FIT1043 --sync --format both --to "./exports"
+```
+
+将 `FIT1043` 换成自己的课号。资料包包含 Moodle 文件、Page、Book、作业说明、Ed Lessons 及可访问的 Google 文件；不包含个人提交、成绩、邮件或考勤。检查包内 README 中的遗漏项。1.11.2 修复了 Windows PDF 浏览器冷启动重试。
+
+![1.11.2 实际离线导出与 ZIP 内容，使用合成课程数据](docs/screenshots/course-export.png)
+
+截图使用合成资料实际运行 `monash export` 生成，故意保留一个缺失附件和未授权 Google 链接来展示遗漏情况；没有真实账号或课程内容。已有本地缓存时可以省略 `--sync`，失败后可重新同步并导出。完整说明见[整课导出指南](https://docs.secureview.tech/zh-cn/study-kit/materials/)。
+
 ![monash todo 的输出：Moodle 截止、可能漏交的作业、Ed 还没开始的 lesson、新上的课件、公告和未读回复](docs/screenshots/todo.png)
 
 图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的。AI 软件通过 MCP 工具读到的是同样的数据。带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)。

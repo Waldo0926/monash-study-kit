@@ -27,6 +27,24 @@ All Moodle and Ed tools are **read-only**: they never submit assignments, attemp
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
 
+
+## Current release: 1.11.2 · Whole-course materials
+
+Export course materials without an AI app. Install or upgrade, sign in and select your units, then run:
+
+```bash
+uv tool install --upgrade 'monash-study-kit[gmail]'
+monash setup
+monash google login  # only for course-linked Google files; separate read-only consent
+monash export FIT1043 --sync --format both --to "./exports"
+```
+
+Replace `FIT1043` with your unit code. Packages include Moodle files, Pages, Books, assignment instructions, Ed Lessons and accessible Google files; personal submissions, grades, mail and attendance are excluded. Check the package README for omissions. Version 1.11.2 fixes Windows PDF browser cold-start retries.
+
+![Actual 1.11.2 offline export and ZIP contents using synthetic course data](docs/screenshots/course-export.png)
+
+This screenshot comes from a real `monash export` run against synthetic local data, deliberately including a missing attachment and an unauthorized Google link to demonstrate omissions. No real account or course content is used. Omit `--sync` to export existing local data; sync and export again to retry missing materials. See the [whole-course export guide](https://docs.secureview.tech/study-kit/materials/).
+
 ![What monash todo prints: Moodle deadlines, a possibly missed assignment, Ed lessons not started, new course files, announcements and unread replies](docs/screenshots/todo.png)
 
 The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Your AI app reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
