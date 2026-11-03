@@ -25,7 +25,7 @@ Users on an older version see the update notice within a day and run `monash upd
 
 ## If something goes wrong
 
-- **Failed before `publish`**: nothing was uploaded. Fix it on `main`, then move the tag: `git tag -f v1.1.0 <commit> && git push -f origin v1.1.0`.
+- **Failed before `publish`**: confirm from the workflow and PyPI that nothing was uploaded. Keep the existing tag immutable. Fix the problem through a reviewed PR, increment the patch version and add its changelog section, then create a new tag on the merged commit. Do not force-move or delete a published tag, and do not rerun a release against different code under the same version.
 - **Failed after `publish`**: PyPI never accepts the same version twice. Fix it, bump to the next patch version and release that. If the uploaded version is broken, yank it on PyPI (Manage → Releases → Yank) so `uv tool install` skips it.
 
 ## One-time setup
