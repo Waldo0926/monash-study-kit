@@ -877,6 +877,7 @@ name = "monash-study-kit"
 source = { editable = "." }
 dependencies = [
     { name = "pypdf" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 
 [package.optional-dependencies]
@@ -909,6 +910,7 @@ requires-dist = [
     { name = "pillow", marker = "extra == 'attendance'", specifier = ">=10,<13" },
     { name = "playwright", marker = "extra == 'attendance'", specifier = ">=1.49,<2" },
     { name = "pypdf", specifier = ">=4.0" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "truststore", marker = "extra == 'attendance'", specifier = ">=0.10,<1" },
     { name = "tzdata", marker = "sys_platform == 'win32' and extra == 'attendance'" },
     { name = "yt-dlp", extras = ["default"], marker = "extra == 'media'", specifier = ">=2025.1.1" },

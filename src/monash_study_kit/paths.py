@@ -52,6 +52,8 @@ DEFAULTS = {
     "download_videos": False,     # 录像动辄几百 MB；没装 [media] 转不了字幕，下下来 Claude 也看不了
     "auto_sync_hours": 1,         # MCP 在跑的时候，多久在后台同步一次
     "keepalive_minutes": 20,      # MCP 在跑的时候，多久给 Moodle 会话续一次期（空闲 4 小时就过期）
+    "auto_relogin": True,          # 后台只尝试无界面恢复，失败不弹窗
+    "timezone": "",               # IANA 时区，如 Australia/Melbourne；空则使用 tz_offset
     "tz_offset": 8,               # Moodle 账号的时区（页面上的时间按它显示）：马来西亚 8，澳洲 10（夏令时 11）
     "files_dir": "",              # 课件放哪；空 = 数据目录下的 files。Windows 路径太长时改成 C:\\Monash 之类
     "browser": "",                # 登录窗口用哪个浏览器程序；空 = 自动找 Chrome / Edge / Brave
@@ -121,23 +123,30 @@ def ensure_private_dir(path: Path) -> None:
 def write_secret(path: Path, text: str) -> None:
     """原子写入、只有自己能读（Windows 上 chmod 不起作用，但目录本来就在用户自己的目录下）。"""
     ensure_private_dir(path.parent)
-    # 临时文件名带进程号：Claude Desktop 和 Claude Code 各开一个 MCP，后台同步也会续 cookie，
-    # 共用一个 .tmp 会互相覆盖，后 replace 的那个直接报错
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(tmp, path)
+    from .local_state import atomic_write
+    atomic_write(path, text)
 
 
 def save_settings(values: dict) -> None:
-    HOME.mkdir(parents=True, exist_ok=True)
-    cur = {}
-    try:
-        cur = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        pass
-    cur.update(values)
-    tmp = SETTINGS_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(cur, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, SETTINGS_FILE)
+    from .local_state import atomic_write, file_lock
+    with file_lock(SETTINGS_FILE.with_suffix(".lock")):
+        cur = {}
+        try:
+            cur = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        cur.update(values)
+        atomic_write(SETTINGS_FILE, json.dumps(cur, ensure_ascii=False, indent=2) + "\n")
+
+
+def page_timezone():
+    from datetime import timedelta, timezone
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    settings = load_settings()
+    name = settings.get("timezone", "").strip()
+    if name:
+        try:
+            return ZoneInfo(name)
+        except ZoneInfoNotFoundError:
+            raise ValueError(f"无效或缺少时区数据：{name}；请安装 tzdata 或检查 timezone 设置") from None
+    return timezone(timedelta(hours=float(settings.get("tz_offset", 8))))

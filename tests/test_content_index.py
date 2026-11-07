@@ -44,7 +44,7 @@ def test_index_and_search(tmp_path, monkeypatch):
     assert CI.search(con, "monad")[0]["title"].endswith("notes.md")   # 词干：monad ↔ Monads
     assert CI.search(con, "monad", course="FIT2102") == []
 
-    assert CI.index(con) == {"indexed": 0, "unchanged": 2, "removed": 0, "chunks": 0}
+    assert CI.index(con) == {"indexed": 0, "unchanged": 2, "removed": 0, "chunks": 0, "failed": 0, "failures": []}
     (week / "notes.md").unlink()
     assert CI.index(con)["removed"] == 1
     assert CI.search(con, "burritos") == []

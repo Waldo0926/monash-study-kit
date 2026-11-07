@@ -118,7 +118,10 @@ def _course(ref: str) -> dict:
 def _tracked_or_current() -> list[dict]:
     """跟踪的课；从没选过就是本学期的课（和 monash sync 用的同一套规则）。"""
     con = db_connect()
-    return jobs.tracked_courses(con, jobs.load_courses(client(), con))
+    try:
+        return jobs.tracked_courses(con, jobs.load_courses(client(), con))
+    finally:
+        con.close()
 
 
 def _clip(text: str, limit: int, offset: int = 0) -> str:
@@ -223,14 +226,17 @@ def _background_tick(every_sync: float, every_touch: float, last_touch: float) -
     if not load_settings().get("materials_only"):
         start_mail_sync()
         start_attendance_work()
-    if time.time() - last_touch >= every_touch:
+    if not load_settings().get("materials_only") and time.time() - last_touch >= every_touch:
         last_touch = time.time()
         try:
             jobs.keepalive()
         except MoodleAuthError:
-            pass      # 没登录或已过期：等用户登录，不自己弹窗
+            from . import session_recovery
+            session_recovery.start(log)
         except Exception as e:  # noqa: BLE001
-            log(f"续期失败：{e}")
+            jobs.update_status({"session": {"alive": None, "state": "network_error", "checked_at": jobs.now_iso()}})
+            log(f"续期失败：{type(e).__name__}")
+            last_touch -= max(0, every_touch - 60)  # 临时断网一分钟后重试
     return last_touch
 
 
@@ -351,6 +357,8 @@ def t_status(args):
         pass
     from . import update_check
     return {"moodle": moodle, "ed": ed, "last_sync": st.get("last_sync"), "sync_errors": st.get("errors"),
+            "sync_state": st.get("sync_state"), "last_complete_sync": st.get("last_complete_sync"),
+            "session_recovery": st.get("session"),
             "update_available": update_check.available(),
             "syncing": bool(_sync_thread and _sync_thread.is_alive()),
             "login_window": {"running": _login["running"], "last_error": _login["error"]},
@@ -464,7 +472,11 @@ def t_search_content(args):
     if course:
         m = re.search(r"[A-Za-z]{3}\d{4}", course)
         code = m.group(0).upper() if m else course_code(_course(course))
-    return CI.search(db_connect(), args["query"], code, min(int(args.get("limit", 15)), 50))
+    con = db_connect()
+    try:
+        return CI.search(con, args["query"], code, max(1, min(int(args.get("limit", 15)), 50)))
+    finally:
+        con.close()
 
 
 def t_grades(args):
@@ -600,6 +612,8 @@ def t_read_file(args):
     path = CI.resolve_readable(rel)          # 只允许课件目录和 Ed 课件目录里的文件
     limit = min(int(args.get("max_chars", MAX_TEXT)), 100000)
     offset = int(args.get("offset", 0))
+    if limit < 1 or offset < 0:
+        raise ValueError("max_chars 必须大于 0，offset 不能为负数")
     ext = path.suffix.lower()
     if ext in TEXT_EXT:
         if path.stat().st_size > CI.MAX_FILE:
@@ -611,10 +625,18 @@ def t_read_file(args):
                                + "".join(c.get("source", [])) for c in nb.get("cells", []))
         return _clip(text, limit, offset)
     if ext == ".pdf":
-        pages = textextract.pdf_pages(path)
+        first, end = args.get("page_start"), args.get("page_end")
+        if first is not None or end is not None:
+            first = int(first if first is not None else 1)
+            end = int(end if end is not None else first)
+            if first < 1 or end < first or end - first >= 100:
+                raise ValueError("PDF 页码从 1 开始，每次最多读取 100 页，结束页不能小于起始页")
+            pages = textextract.pdf_pages(path, first, end)
+        else:
+            pages = textextract.pdf_pages(path)
         if not any(p.strip() for p in pages):
             raise ValueError("这个 PDF 抽不出文字（可能是扫描件或纯图片）")
-        return _clip("\n\n".join(f"--- 第 {i} 页 ---\n{p}" for i, p in enumerate(pages, 1)), limit, offset)
+        return _clip("\n\n".join(f"--- 第 {i} 页 ---\n{p}" for i, p in enumerate(pages, first or 1)), limit, offset)
     if ext == ".zip":
         with zipfile.ZipFile(path) as z:
             names = z.namelist()
@@ -734,7 +756,7 @@ STATUS = ("completed", "attempted", "unattempted")
 TOOLS = {
     "search_moodle_activities": (t_find_activities, "按名称找 Moodle 章节和活动，返回活动标识和链接；搜文件正文用 search_content。",
                                  {"query": (S, True), "course": (S, False), "limit": (I, False)}),
-    "get_study_todo": (t_todo, "综合查看 Moodle/Ed 待办：截止、漏交、Lesson、公告和未读回复；问“这周要做/交什么”用。只查截止用 list_moodle_due；查提交状态用 list_moodle_assignments。返回分类待办。",
+    "get_study_todo": (t_todo, "综合查看 Moodle/Ed 待办：截止、漏交、Lesson、公告和未读回复；问“这周要做/交什么”用。只查截止用 list_moodle_due；查提交状态用 list_moodle_assignments。返回分类待办和最近同步变更（资料、作业说明、截止、教师回复）。",
                        {"days": (I, False)}),
     "get_monash_status": (t_status, "诊断登录、同步、索引和错误状态；报错或“用不了”时用。只需刷新数据用 sync_monash_data；登录过期且用户同意后用 start_monash_login。返回状态摘要或完整体检。",
                           {"full": (B, False)}),
@@ -760,8 +782,8 @@ TOOLS = {
     "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。问“最近新上了什么课件”用 since_days。返回文件/外链和可供 read_file 使用的路径。",
                    {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False),
                     "since_days": (I, False)}),
-    "read_file": (t_read_file, "读取 list_files/search_content 给出的课件路径；ZIP 用 inner，长内容用 offset/max_chars 分页。若要搜索未知文件先用 search_content。返回文本或 ZIP 清单。",
-                  {"path": (S, True), "inner": (S, False), "offset": (I, False), "max_chars": (I, False)}),
+    "read_file": (t_read_file, "读取 list_files/search_content 给出的课件路径；ZIP 用 inner，PDF 用 page_start/page_end，长内容用 offset/max_chars 分页。若要搜索未知文件先用 search_content。返回文本或 ZIP 清单。",
+                  {"path": (S, True), "inner": (S, False), "offset": (I, False), "max_chars": (I, False), "page_start": (I, False), "page_end": (I, False)}),
     "list_ed_updates": (t_ed_updates, "列 Ed 新帖、新回复和本人相关未读回复；浏览/搜索历史帖子用 search_ed_threads，读完整帖子用 read_ed_thread。返回更新分组和同步时间。",
                         {"course": (S, False), "since": (S, False), "peek": (B, False), "limit": (I, False)}),
     "search_ed_threads": (t_ed_threads, "浏览或搜索 Ed 帖子；读完整正文/回复用 read_ed_thread，只看新动态用 list_ed_updates。返回帖子摘要；浏览模式支持 offset 分页。",
@@ -825,6 +847,8 @@ PARAM_HELP = {
     ("list_files", "since_days"): "只看最近几天新同步的，新的排前面",
     ("read_file", "path"): "list_files/search_content 返回的路径",
     ("read_file", "inner"): "ZIP 内路径；省略=列 ZIP 清单",
+    ("read_file", "page_start"): "PDF 起始页，从1开始",
+    ("read_file", "page_end"): "PDF 结束页，默认同起始页",
     ("read_file", "offset"): "字符起点，默认0",
     ("read_file", "max_chars"): "最大字符数，默认20000，最高100000",
     ("list_ed_updates", "course"): "课程号，如 FIT2102；省略=全部",

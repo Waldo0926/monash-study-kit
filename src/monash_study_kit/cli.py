@@ -233,6 +233,9 @@ def cmd_status(args):
         out["moodle_problem"] = str(e)
     out["ed_token"] = jobs.have_ed_token()
     out["calendar_fallback"] = bool(F.load_calendar_url())
+    st = jobs.read_status()
+    out.update(sync_state=st.get("sync_state"), last_complete_sync=st.get("last_complete_sync"),
+               session_recovery=st.get("session"))
     out.update(_optional_status())
     if want_json(args):
         return emit_json(out)
@@ -244,6 +247,11 @@ def cmd_status(args):
               + ("；截止日期暂时用日历订阅链接" if out["calendar_fallback"] else ""))
     print(f"Ed：{'已设置令牌' if out['ed_token'] else '没有令牌 → monash login ed'}")
     print(f"上次同步：{local_time(out['last_sync'], '%Y-%m-%d %H:%M') if out['last_sync'] else '还没同步过'}")
+    st = jobs.read_status()
+    if st.get("sync_state") == "partial":
+        print("! 上次为部分同步成功；上次完整成功：" + str(st.get("last_complete_sync") or "尚无"))
+    if st.get("session", {}).get("state") in {"needs_login", "recovering", "network_error"}:
+        print("会话恢复：" + st["session"]["state"])
     for k, v in out["errors"].items():
         print(f"  ! {k}：{v}")
     if "gmail" in out:
@@ -292,7 +300,28 @@ def cmd_help(args):
     print(help_menu.render(cli=True))
 
 
+def cmd_changes(args):
+    from . import changes
+    from datetime import datetime, timedelta, timezone
+    since = args.since
+    if args.days is not None:
+        since = (datetime.now(timezone.utc) - timedelta(days=args.days)).isoformat()
+    data = changes.recent(since, args.limit)
+    if want_json(args):
+        return emit_json(data)
+    if not data:
+        print("没有记录到变更；首次同步建立基线，之后才比较变化。")
+    for item in data:
+        print(f"{item['at']} [{item['course']}] {item['kind']}：{item['title']}")
+        if item["before"] or item["after"]:
+            print(f"  {item['before'] or '新增'} → {item['after']}")
+        if item["url"]:
+            print(f"  {item['url']}")
+
+
 def cmd_sync(args):
+    if getattr(args, "retry_failed", False) and (args.courses or args.dry_run or getattr(args, "refresh_google", False)):
+        raise ValueError("--retry-failed 不能与指定课程、--dry-run 或 --refresh-google 同用")
     if args.courses or args.dry_run:
         client, con = MoodleClient(), db_connect()
         courses = jobs.load_courses(client, con)
@@ -301,13 +330,24 @@ def cmd_sync(args):
         st = jobs.sync_moodle(only=only, dry_run=args.dry_run, refresh_google=getattr(args, "refresh_google", False))
         print(f"新下载 {st['downloaded']} 个文件，{st['bytes'] / 1e6:.1f} MB")
         return
-    st = jobs.sync_all(refresh_google=True) if getattr(args, "refresh_google", False) else jobs.sync_all()
+    options = {}
+    if getattr(args, "refresh_google", False):
+        options["refresh_google"] = True
+    if getattr(args, "retry_failed", False):
+        options["retry_failed"] = True
+    st = jobs.sync_all(**options)
     m, e, idx = st.get("moodle") or {}, st.get("ed") or {}, st.get("index") or {}
     print("\n同步完成：" + "，".join(x for x in [
         f"Ed 新帖 {e.get('new_threads', 0)}、新回复 {e.get('new_replies', 0)}" if "ed" not in st["errors"] else "",
         f"Moodle 新文件 {m.get('downloaded', 0)} 个（{m.get('bytes', 0) / 1e6:.1f} MB）"
         + (f"、下架 {m['removed']} 个" if m.get("removed") else "") if "moodle" not in st["errors"] else "",
         f"索引了 {idx.get('indexed', 0)} 个文件" if idx else ""] if x))
+    if st.get("sync_state") == "partial":
+        print("  ! 部分同步成功；上次完整成功：" + str(st.get("last_complete_sync") or "尚无"))
+        for name in ("ed", "moodle", "index"):
+            result = st.get(name) or {}
+            if result.get("failed") or result.get("errors"):
+                print(f"  ! {name}：失败 {result.get('failed') or result.get('errors')} 项，下次同步会重试")
     for k, v in (st.get("errors") or {}).items():
         print(f"  ! {k}：{v}")
 
@@ -336,6 +376,12 @@ def cmd_open(args):
 
 def parse_setting(key: str, raw: str, current):
     """按默认值的类型解析。数字一律先当小数读：阿德莱德是 UTC+9.5，auto_sync_hours 也可以写 0.5。"""
+    if key == "timezone" and raw:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(raw)
+        except ZoneInfoNotFoundError:
+            raise ValueError("timezone 要填 IANA 时区，如 Australia/Melbourne（Windows 需要 tzdata）") from None
     if key == "export_format" and raw not in {"pdf", "both", "md"}:
         raise ValueError("export_format 只能是 pdf、both 或 md")
     if key == "google_docs_format" and raw not in {"pdf", "docx"}:
@@ -973,6 +1019,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--deep", action="store_true",
                    help="再去 Moodle 和 Ed 拉一遍，和日历订阅、课程结构、本地文件对照（要一两分钟）")
     p = cmd(sub, "sync", cmd_sync, help="同步 Ed + Moodle + 全文索引")
+    p.add_argument("--retry-failed", action="store_true", help="只重试上次失败的活动、帖子、Lesson 和索引")
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
     p.add_argument("--dry-run", action="store_true", help="只列出 Moodle 会下载什么")
     p.add_argument("--refresh-google", action="store_true", help="强制重新导出 Google 文件")
@@ -982,6 +1029,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = cmd(sub, "semester", cmd_semester, json_flag=True, help="本周视图：Moodle、Ed及本地考勤；可导出私有日历")
     p.add_argument("--days", type=int, default=7, choices=range(1, 32))
     p.add_argument("--ics", nargs="?", const="", metavar="PATH", help="导出本机ICS文件（默认保存到Study Kit数据目录）")
+    p = cmd(sub, "changes", cmd_changes, json_flag=True, help="本机记录的课程变更，默认最近一轮同步")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--since", help="带时区的 ISO 时间")
+    group.add_argument("--days", type=int, choices=range(1, 91))
+    p.add_argument("--limit", type=int, default=30, choices=range(1, 101))
     p = cmd(sub, "due", cmd_due, json_flag=True, help="截止日期")
     p.add_argument("course", nargs="?"); p.add_argument("--days", type=int, default=14)
     p = cmd(sub, "grep", cmd_grep, json_flag=True, help="全文搜课件和字幕稿")

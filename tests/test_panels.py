@@ -10,13 +10,13 @@ def call(method, params=None):
     return M.handle({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}})
 
 
-def test_original_17_tool_contracts_are_unchanged():
-    # Complete canonical catalog from 1.3.0 (3a215112...), excluding only new UI metadata.
+def test_original_17_tools_keep_their_catalog_with_page_range_extension():
+    # 1.12.0：保留原有 17 个工具，read_file 增加可选 PDF 页范围，待办增加变更摘要。
     original = [{k: v for k, v in t.items() if k != "_meta"}
                 for t in M.tool_list() if t["name"] not in ("search_moodle_activities", "start_school_service_setup", "export_ed_lessons")]
     blob = json.dumps(original, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert len(original) == 17
-    assert hashlib.sha256(blob.encode()).hexdigest() == "2597d4badd279b2a12917025bbae3a6cffd18ad7fdd401a0ff7e56588daece84"
+    assert hashlib.sha256(blob.encode()).hexdigest() == "316fc84a992c4f9cdb9203d653e9be9e8ad39c19c7d87c1090f68966e316a334"
 
 
 def test_panel_resource_is_packaged_self_contained_and_safe():

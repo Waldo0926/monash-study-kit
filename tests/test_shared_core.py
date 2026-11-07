@@ -138,7 +138,12 @@ def test_interrupted_download_leaves_no_partial_file(tmp_path, monkeypatch):
     resp = Broken(b"x" * 100)
     resp.headers = type("H", (), {"get": lambda self, k, d=None: None, "get_all": lambda self, k: []})()
     monkeypatch.setattr(moodlelib, "REQUEST_GAP", 0)
-    monkeypatch.setattr(moodlelib._opener, "open", lambda req, timeout: resp)
+    def open_response(req, timeout):
+        fresh = Broken(b"x" * 100)
+        fresh.headers = resp.headers
+        return fresh
+    monkeypatch.setattr(moodlelib._opener, "open", open_response)
+    monkeypatch.setattr(moodlelib.time, "sleep", lambda _: None)
     client = moodlelib.MoodleClient(jar={"MoodleSession": "x"}, persist=False)
     with pytest.raises(ConnectionResetError):
         client._request("https://example.test/f.zip", stream_to=tmp_path / ".dl-7")

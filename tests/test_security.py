@@ -189,7 +189,7 @@ def test_write_secret_is_owner_only_and_atomic(tmp_path, monkeypatch):
     real_replace = os.replace
     monkeypatch.setattr(paths.os, "replace", lambda a, b: renamed.append(Path(a).name) or real_replace(a, b))
     paths.write_secret(target, "new")
-    assert renamed == [f"ed-token.{os.getpid()}.tmp"]       # 临时文件名带进程号
+    assert len(renamed) == 1 and renamed[0].startswith("ed-token.") and renamed[0].endswith(".tmp")
     assert target.read_text(encoding="utf-8") == "new"
     assert target.stat().st_mode & 0o777 == 0o600
     assert target.parent.stat().st_mode & 0o777 == 0o700
@@ -387,7 +387,7 @@ def test_one_runtime_dependency_and_heavy_media_is_optional():
     # 核心只依赖 pypdf；录播、Gmail、考勤要用才装，不能悄悄变成必装
     tomllib = pytest.importorskip("tomllib")
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    assert project["dependencies"] == ["pypdf>=4.0"]
+    assert project["dependencies"] == ["pypdf>=4.0", "tzdata; sys_platform == 'win32'"]
     assert set(project["optional-dependencies"]) == {"media", "gmail", "attendance"}
 
 

@@ -16,12 +16,12 @@ import re
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import htmldom, moodlelib
 from .moodlelib import BASE_URL, HOST, MoodleAuthError, MoodleClient, filename_from, is_attachment
-from .paths import SECRETS_DIR, TZ_OFFSET, write_secret
+from .paths import SECRETS_DIR, write_secret, page_timezone
 from .syncer import clean, course_code, safe_name
 
 MOODLE_URL_RE = re.compile(r"/mod/(\w+)/view\.php\?(?:.*&)?id=(\d+)")
@@ -119,6 +119,8 @@ def due(client: MoodleClient | None, days: int = 14, course: dict | None = None,
             continue
         seen.add(key)
         out.append(i)
+    from . import changes
+    changes.deadlines(out)
     return sorted(out, key=lambda x: x["due_ts"] or 0)
 
 
@@ -284,8 +286,8 @@ def grades(client: MoodleClient, course_id: int, graded_only: bool = False) -> l
 # ---------------------------------------------------------------- 作业汇总
 
 # 页面上的时间按 Moodle 账号的时区显示。马来西亚校区的账号是 UTC+8（和日历接口对得上：11:55 PM ↔ 15:55Z）；
-# 澳洲校区的同学 `monash config tz_offset 10`（夏令时 11）。
-PAGE_TZ = timezone(timedelta(hours=TZ_OFFSET))
+# 澳洲校区可以设置 timezone=Australia/Melbourne，自动使用当地夏令时。
+PAGE_TZ = page_timezone()
 NOT_SUBMITTED = {"no submission", "not submitted", "draft (not submitted)", "no attempt", "new"}
 
 

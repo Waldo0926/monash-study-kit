@@ -581,6 +581,22 @@ Most Ed lessons have no due date; Moodle is the source of truth for deadlines. T
 Run `monash doctor` and follow the → after each item. If you need help, send the whole output; it contains no tokens, cookies or similar.
 You can also just tell your AI "monash isn't working" and it will run the same checks. The MCP background log is `mcp.log` in the data directory.
 
+## Reliability and changes (1.12.0)
+
+`monash status` now distinguishes partial and complete syncs. Use
+`monash sync --retry-failed` to retry failures and `monash changes --days 7`
+to review observed material, assignment, deadline and teacher-reply changes.
+The first observation establishes a baseline; deadline changes are recorded
+when you read deadlines. History stays local, and materials-only profiles omit
+personal information. Search warns when an older extraction is stale.
+
+PDF reads through MCP support `page_start` / `page_end` with bounded caching.
+Directory re-exports clean obsolete generated files while preserving unrelated
+files and edited obsolete files. Silent Moodle recovery uses the dedicated
+browser profile and never opens an MFA window in the background; disable it with
+`monash config auto_relogin false`. For Australian daylight saving, use
+`monash config timezone Australia/Melbourne`. See [behavior and limits](docs/reliability.md).
+
 ## Development
 
 ```bash
@@ -635,7 +651,7 @@ flowchart LR
 | `doctor`, `doctor_deep`, `help_menu`, `update_check`, `claude_setup` | Health check and `--deep` cross-checks, help and preset prompts, new-version notice, adding the server to Claude |
 | `recordings`, `transcribe` | Optional: lecture recordings to timestamped transcripts (`[media]` extra) |
 
-The only runtime dependency is `pypdf`; everything else (HTTP, SQLite, WebSocket, HTML parsing) uses the standard library.
+Runtime dependencies are `pypdf` and, on Windows, `tzdata`; everything else (HTTP, SQLite, WebSocket, HTML parsing) uses the standard library.
 Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruff` checks for syntax errors, undefined names and unused imports.
 
 ## License

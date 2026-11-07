@@ -9,7 +9,7 @@ from . import paths
 # 空集合表示只允许这一条顶层命令；子命令使用显式白名单。
 COMMANDS = {
     "setup": {None}, "login": {"moodle", "ed"}, "google": {"login", "status", "logout"},
-    "sync": set(), "export": set(), "courses": set(), "status": set(), "doctor": set(),
+    "changes": set(), "sync": set(), "export": set(), "courses": set(), "status": set(), "doctor": set(),
     "open": set(), "library": set(), "config": set(), "grep": set(), "help": set(), "mcp": set(),
     "profile": {"list", "remove"}, "ed": {"export", "lessons", "read", "quiz"}, "moodle": {"ls", "get"},
 }
