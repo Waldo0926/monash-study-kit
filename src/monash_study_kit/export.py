@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import hashlib
+import json
 import mimetypes
 import os
 import posixpath
@@ -340,23 +342,64 @@ def write_zip(p: Plan, out) -> dict:
     return _stats(p, total)
 
 
+def _digest(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _export_target(dest: Path, code: str, arc: str) -> Path:
+    # 生成清单也当作不可信输入；不跟随指向导出目录外的符号链接。
+    target = dest / arc
+    base = (dest / code).resolve()
+    if Path(arc).parts[:1] != (code,) or not target.resolve().is_relative_to(base):
+        raise ValueError("导出路径超出课程目录")
+    return target
+
+
 def write_dir(p: Plan, dest: Path) -> dict:
-    """写成普通文件夹（已经存在的同名文件覆盖）。"""
+    """只清理清单里且未经用户修改的旧文件；没有清单的旧导出不猜测归属。"""
+    from .local_state import atomic_write, file_lock
     import shutil
-    total = 0
-    for arc, item in p.entries:
-        target = dest / arc
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(item, Path):
-            shutil.copy2(item, target)
-            total += item.stat().st_size
-        else:
-            if isinstance(item, bytes):
+    base = dest / p.code
+    base.mkdir(parents=True, exist_ok=True)
+    manifest = base / ".monash-export-manifest.json"
+    with file_lock(base / ".monash-export.lock"):
+        try:
+            old = json.loads(manifest.read_text(encoding="utf-8"))
+            if not isinstance(old, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in old.items()):
+                old = {}
+        except (OSError, ValueError):
+            old = {}
+        current, total = {}, 0
+        for arc, item in p.entries:
+            target = _export_target(dest, p.code, arc)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if isinstance(item, Path):
+                shutil.copy2(item, target)
+            elif isinstance(item, bytes):
                 target.write_bytes(item)
             else:
                 target.write_text(item, encoding="utf-8")
             total += target.stat().st_size
-    return _stats(p, total)
+            current[arc] = _digest(target)
+        preserved = []
+        for arc, digest in old.items():
+            if arc in current:
+                continue
+            try:
+                target = _export_target(dest, p.code, arc)
+            except ValueError:
+                continue
+            if target.is_file():
+                if not target.is_symlink() and _digest(target) == digest:
+                    target.unlink()
+                else:
+                    preserved.append(arc)
+        atomic_write(manifest, json.dumps(current, ensure_ascii=False, indent=2))
+    return {**_stats(p, total), "preserved_modified_files": preserved}
 
 
 def _stats(p: Plan, total: int) -> dict:

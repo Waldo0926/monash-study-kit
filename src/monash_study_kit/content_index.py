@@ -47,6 +47,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS content_fts USING fts5(
 
 def ensure_schema(con: sqlite3.Connection) -> None:
     con.executescript(SCHEMA)
+    for name, kind in (("stale", "INTEGER DEFAULT 0"), ("index_error", "TEXT")):
+        if name not in {r[1] for r in con.execute("PRAGMA table_info(content_files)")}:
+            con.execute(f"ALTER TABLE content_files ADD COLUMN {name} {kind}")
     # 1.0.3 以前的库没有 url（Ed 课件的原文链接），补上
     if "url" not in {r[1] for r in con.execute("PRAGMA table_info(content_files)")}:
         con.execute("ALTER TABLE content_files ADD COLUMN url TEXT")
@@ -109,8 +112,8 @@ def extract(path: Path) -> list[tuple[str, str]]:
     if ext == ".zip":
         try:
             return zip_chunks(path)
-        except (zipfile.BadZipFile, NotImplementedError, RuntimeError):  # 坏包、少见的压缩方式、加密
-            return []
+        except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as e:  # 坏包、少见的压缩方式、加密
+            raise ValueError("压缩包无法提取文字") from e
     if ext in (".docx", ".pptx"):
         try:
             return office_chunks(path)
@@ -206,11 +209,13 @@ def candidates() -> list[dict]:
 
 # ---------------------------------------------------------------- 建索引 / 搜
 
-def index(con: sqlite3.Connection, verbose: bool = False) -> dict:
+def index(con: sqlite3.Connection, verbose: bool = False, only_paths: set[str] | None = None) -> dict:
     ensure_schema(con)
-    known = {r[0]: (r[1], r[2]) for r in con.execute("SELECT path, mtime, size FROM content_files")}
-    seen, stats = set(), {"indexed": 0, "unchanged": 0, "removed": 0, "chunks": 0}
+    known = {r[0]: (r[1], r[2], r[3]) for r in con.execute("SELECT path, mtime, size, stale FROM content_files")}
+    seen, stats = set(), {"indexed": 0, "unchanged": 0, "removed": 0, "chunks": 0, "failed": 0, "failures": []}
     for f in candidates():
+        if only_paths is not None and f["path"] not in only_paths:
+            continue
         p = Path(f["path"])
         try:
             st = p.stat()
@@ -218,8 +223,12 @@ def index(con: sqlite3.Connection, verbose: bool = False) -> dict:
             continue
         seen.add(f["path"])
         if st.st_size > MAX_FILE:
+            stats["failed"] += 1
+            stats["failures"].append({"path": f["path"], "reason": "文件超过索引大小限制"})
+            con.execute("UPDATE content_files SET stale=1, index_error=? WHERE path=?",
+                        ("文件超过索引大小限制", f["path"]))
             continue
-        if known.get(f["path"]) == (st.st_mtime, st.st_size):
+        if known.get(f["path"]) == (st.st_mtime, st.st_size, 0):
             # 标签可能变了（比如 ed 那边补了 lesson 标题），便宜，顺手更新
             con.execute("UPDATE content_files SET course=?, title=?, url=? WHERE path=?",
                         (f["course"], f["title"], f["url"], f["path"]))
@@ -227,7 +236,13 @@ def index(con: sqlite3.Connection, verbose: bool = False) -> dict:
             continue
         try:
             chunks = extract(p)
+            if not chunks and p.suffix.lower() in {".pdf", ".docx", ".pptx"}:
+                raise ValueError("未提取到文字，可能是扫描件、加密或损坏文件")
         except Exception as e:  # noqa: BLE001  一个坏文件（加密的 zip、半截的 docx）不该让整次索引失败
+            stats["failed"] += 1
+            reason = type(e).__name__ + ": 无法提取文字"
+            stats["failures"].append({"path": f["path"], "reason": reason})
+            con.execute("UPDATE content_files SET stale=1, index_error=? WHERE path=?", (reason, f["path"]))
             if verbose:
                 print(f"! {p}: {e}")
             continue
@@ -242,7 +257,7 @@ def index(con: sqlite3.Connection, verbose: bool = False) -> dict:
         stats["chunks"] += len(chunks)
         if verbose:
             print(f"  {len(chunks):4d} 块  {f['title']}")
-    for gone in set(known) - seen:
+    for gone in (set(known) if only_paths is None else set(known) & only_paths) - seen:
         con.execute("DELETE FROM content_fts WHERE path = ?", (gone,))
         con.execute("DELETE FROM content_files WHERE path = ?", (gone,))
         stats["removed"] += 1
@@ -271,7 +286,7 @@ def search(con: sqlite3.Connection, query: str, course: str | None = None, limit
     if not q:
         return []
     sql = """SELECT f.course, f.source, f.title, t.path, t.loc,
-                    snippet(content_fts, 0, '«', '»', '…', 24) AS snip, bm25(content_fts) AS score, f.url
+                    snippet(content_fts, 0, '«', '»', '…', 24) AS snip, bm25(content_fts) AS score, f.url, f.stale, f.indexed_at, f.index_error
              FROM content_fts t JOIN content_files f ON f.path = t.path
              WHERE content_fts MATCH ?"""
     args: list = [q]
@@ -286,6 +301,8 @@ def search(con: sqlite3.Connection, query: str, course: str | None = None, limit
         hit = {"course": r[0], "source": r[1], "title": r[2], "loc": r[4],
                "snippet": " ".join(r[5].split()), "path": readable_path(path), "abs_path": r[3], "url": r[7],
                "video": _video_for(path) if path.name.endswith(".transcript.md") else None}
+        if r[8]:
+            hit.update(stale=True, indexed_at=r[9], warning="来自上次成功索引，当前文件重新索引失败", index_error=r[10])
         if path.suffix.lower() == ".zip":
             hit["inner"] = r[4]   # 命中的是 zip 里的这个文件，交给 read_file 的 inner
         out.append(hit)

@@ -131,8 +131,8 @@ def test_export_sync_only_fetches_ed_lessons(monkeypatch):
     monkeypatch.setattr(jobs.edsync, "upsert_courses", lambda *a: None)
     monkeypatch.setattr(jobs.edsync, "auto_track", lambda *a: None)
     monkeypatch.setattr(edlib, "db_connect", lambda: type("C", (), {"close": lambda self: None})())
-    monkeypatch.setattr(jobs.lessons, "sync_lessons", lambda conn, client, cid, log: calls.append(cid))
-    assert jobs.sync_ed(log=lambda _: None, course_code="FIT1043", lessons_only=True) == {"new_threads": 0, "new_replies": 0}
+    monkeypatch.setattr(jobs.lessons, "sync_lessons", lambda conn, client, cid, log, **kw: calls.append(cid))
+    assert jobs.sync_ed(log=lambda _: None, course_code="FIT1043", lessons_only=True) == {"new_threads": 0, "new_replies": 0, "failed": 0, "failures": []}
     assert calls == [7]
 
 

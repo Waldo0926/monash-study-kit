@@ -59,7 +59,9 @@ def table(rows: list[dict], cols: list[tuple[str, str, int]]) -> None:
 def local_time(iso: str | None, fmt: str = "%m-%d %a %H:%M") -> str:
     if not iso:
         return "—"
-    return datetime.fromisoformat(iso).astimezone().strftime(fmt)   # 按这台电脑的时区
+    from .paths import load_settings, page_timezone
+    tz = page_timezone() if load_settings().get("timezone") else None
+    return datetime.fromisoformat(iso).astimezone(tz).strftime(fmt)
 
 
 def relative(iso: str | None) -> str:

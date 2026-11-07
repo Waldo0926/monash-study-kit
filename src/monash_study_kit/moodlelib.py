@@ -100,6 +100,16 @@ def save_cookies(jar: dict[str, str]) -> None:
     write_secret(COOKIE_FILE, json.dumps(jar))
 
 
+READ_AJAX = frozenset({
+    "core_session_time_remaining", "core_session_touch", "core_courseformat_get_state",
+    "core_course_get_enrolled_courses_by_timeline_classification",
+    "core_calendar_get_calendar_upcoming_view", "core_calendar_get_action_events_by_timesort",
+    "core_message_get_conversations", "core_message_get_unread_conversation_counts",
+    "core_message_get_conversation_messages", "message_popup_get_popup_notifications",
+    "mod_forum_get_discussion_posts",
+})
+
+
 # ---------------------------------------------------------------- HTTP
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -133,6 +143,22 @@ class MoodleClient:
     # 只有发往 Moodle 本站的请求才带 cookie。下载会被 302 到 CloudFront，
     # 自己一步步跟跳转，保证 MoodleSession 不会被带到别的域名去。
     def _request(self, url: str, *, data: bytes | None = None, headers: dict | None = None,
+                 stream_to: Path | None = None, retryable: bool = False) -> Response:
+        # GET 和明确只读的 AJAX 才重试；表单 POST 不自动重放。
+        for attempt in range(3):
+            try:
+                response = self._request_once(url, data=data, headers=headers, stream_to=stream_to)
+            except (OSError, TimeoutError):
+                if not (data is None or retryable) or attempt == 2:
+                    raise
+                time.sleep(2 ** attempt)
+                continue
+            if response.status not in {429, 500, 502, 503, 504} or not (data is None or retryable) or attempt == 2:
+                return response
+            from .edlib import retry_delay
+            time.sleep(min(30, retry_delay(response.headers.get("Retry-After"), attempt)))
+
+    def _request_once(self, url: str, *, data: bytes | None = None, headers: dict | None = None,
                  stream_to: Path | None = None) -> Response:
         gap = REQUEST_GAP - (time.monotonic() - self._last)
         if gap > 0:
@@ -182,6 +208,8 @@ class MoodleClient:
             if not name or value in ("deleted", ""):
                 continue
             if self.jar.get(name) != value:
+                if name.startswith("MoodleSession"):
+                    self._sesskey = None
                 self.jar[name] = value
                 changed = True
         if changed and self.persist:
@@ -242,13 +270,18 @@ class MoodleClient:
     def call(self, method: str, args: dict | None = None):
         url = f"{BASE_URL}/lib/ajax/service.php?sesskey={self.sesskey()}&info={method}"
         body = json.dumps([{"index": 0, "methodname": method, "args": args or {}}]).encode()
-        r = self._request(url, data=body, headers={"Content-Type": "application/json"})
+        r = self._request(url, data=body, headers={"Content-Type": "application/json"},
+                          retryable=method in READ_AJAX)
         if _is_redirect(r):
             _check_login_url(r.location)
+        if r.status == 401:
+            raise MoodleAuthError(f"{method}: HTTP {r.status}")
+        if r.status != 200:
+            raise MoodleError(f"Moodle 暂时不可用（HTTP {r.status}），请稍后重试")
         try:
             payload = json.loads(r.body)
         except json.JSONDecodeError:
-            raise MoodleAuthError(f"{method} 返回的不是 JSON（{r.status}），会话可能已失效")
+            raise MoodleError(f"{method} 返回了无法识别的内容，请稍后重试或运行 monash doctor")
         first = payload[0] if isinstance(payload, list) and payload else payload
         if isinstance(first, dict) and first.get("error"):
             exc = first.get("exception") or {}

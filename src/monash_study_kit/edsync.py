@@ -128,6 +128,9 @@ def store_thread(conn, cid: int, t: dict, full: dict, stamp: str, prev=None) -> 
               r["author"], int(r["is_endorsed"]), r["vote_count"],
               r["created_at"], r["updated_at"], r["text"], now_iso(),
               int(r.get("is_staff", False))))
+    from . import changes
+    changes.staff(conn, t["id"], cid, t.get("title") or "Ed", url,
+                  edlib._is_staff(t, edlib.users_index(full.get("users"))), body)
     return int(is_new), new_replies
 
 
@@ -146,58 +149,64 @@ def my_user_id(client: EdClient) -> int | None:
 
 
 def sync(course_ids: list[int] | None = None, full: bool = False, workers: int = 4, log=print,
-         client: EdClient | None = None) -> dict:
+         client: EdClient | None = None, only_threads: set[int] | None = None) -> dict:
     """增量同步跟踪的课（或指定的课）。返回 {new_threads, new_replies}。"""
     client = client or EdClient()
     conn = db_connect()
-    courses = client.courses()
-    upsert_courses(conn, courses)
-    auto_track(conn, courses)
-    tracked = [r["id"] for r in conn.execute("SELECT id FROM courses WHERE tracked=1")]
-    course_ids = course_ids or tracked
+    try:
+        courses = client.courses()
+        upsert_courses(conn, courses)
+        auto_track(conn, courses)
+        tracked = [r["id"] for r in conn.execute("SELECT id FROM courses WHERE tracked=1")]
+        course_ids = course_ids or tracked
 
-    started = now_iso()
-    total_threads = total_replies = 0
-    me = my_user_id(client)
-    for cid in course_ids:
-        row = conn.execute("SELECT code FROM courses WHERE id=?", (cid,)).fetchone()
-        label = short_code(row["code"]) if row else str(cid)
-        listing = client.threads(cid)
-        edlib.save_thread_state(conn, listing, me)
-        known = {r["id"]: r for r in conn.execute(
-            "SELECT id, content_hash FROM threads WHERE course_id=?", (cid,))}
-        to_fetch = [(t, content_stamp(t)) for t in listing
-                    if full or t["id"] not in known or known[t["id"]]["content_hash"] != content_stamp(t)]
-        log(f"Ed {label}：{len(listing)} 帖，{len(to_fetch)} 帖要抓")
+        started = now_iso()
+        total_threads = total_replies = 0
+        failures = []
+        me = my_user_id(client)
+        for cid in course_ids:
+            row = conn.execute("SELECT code FROM courses WHERE id=?", (cid,)).fetchone()
+            label = short_code(row["code"]) if row else str(cid)
+            listing = client.threads(cid)
+            if only_threads is not None:
+                listing = [t for t in listing if t["id"] in only_threads]
+            edlib.save_thread_state(conn, listing, me)
+            known = {r["id"]: r for r in conn.execute(
+                "SELECT id, content_hash FROM threads WHERE course_id=?", (cid,))}
+            to_fetch = [(t, content_stamp(t)) for t in listing
+                        if full or t["id"] not in known or known[t["id"]]["content_hash"] != content_stamp(t)]
+            log(f"Ed {label}：{len(listing)} 帖，{len(to_fetch)} 帖要抓")
 
-        def grab(item):
-            t, stamp = item
-            try:
-                return t, stamp, client.thread(t["id"]), None
-            except Exception as e:  # noqa: BLE001
-                return t, stamp, None, e
+            def grab(item):
+                t, stamp = item
+                try:
+                    return t, stamp, client.thread(t["id"]), None
+                except Exception as e:  # noqa: BLE001
+                    return t, stamp, None, e
 
-        # 网络等待是大头；全局限流在 EdClient 里，并发只是把等待重叠起来，不会加快请求速率
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for i, (t, stamp, data, err) in enumerate(pool.map(grab, to_fetch), 1):
-                if err is not None:
-                    if isinstance(err, EdAuthError):
-                        raise err
-                    log(f"  ! 帖子 {t['id']} 抓取失败: {err}")
-                    continue
-                is_new, n_rep = store_thread(conn, cid, t, data, stamp, known.get(t["id"]))
-                total_threads += is_new
-                total_replies += n_rep
-                if i % 20 == 0:
-                    conn.commit()
-                    log(f"  … {i}/{len(to_fetch)}")
+            # 网络等待是大头；全局限流在 EdClient 里，并发只是把等待重叠起来，不会加快请求速率
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for i, (t, stamp, data, err) in enumerate(pool.map(grab, to_fetch), 1):
+                    if err is not None:
+                        if isinstance(err, EdAuthError):
+                            raise err
+                        failures.append({"course_id": cid, "thread_id": t["id"], "reason": type(err).__name__})
+                        log(f"  ! 帖子 {t['id']} 抓取失败: {err}")
+                        continue
+                    is_new, n_rep = store_thread(conn, cid, t, data, stamp, known.get(t["id"]))
+                    total_threads += is_new
+                    total_replies += n_rep
+                    if i % 20 == 0:
+                        conn.commit()
+                        log(f"  … {i}/{len(to_fetch)}")
+            conn.commit()
+
+        conn.execute("INSERT INTO runs (started_at, finished_at, new_threads, new_replies, note) VALUES (?,?,?,?,?)",
+                     (started, now_iso(), total_threads, total_replies, ("partial" if failures else "full" if full else "incremental")))
         conn.commit()
-
-    conn.execute("INSERT INTO runs (started_at, finished_at, new_threads, new_replies, note) VALUES (?,?,?,?,?)",
-                 (started, now_iso(), total_threads, total_replies, "full" if full else "incremental"))
-    conn.commit()
-    conn.close()
-    return {"new_threads": total_threads, "new_replies": total_replies}
+        return {"new_threads": total_threads, "new_replies": total_replies, "failed": len(failures), "failures": failures}
+    finally:
+        conn.close()
 
 
 def refresh_thread(conn, thread_id: int) -> None:

@@ -176,5 +176,7 @@ def build(client: MoodleClient | None, courses: list[dict], days: int = 7) -> di
             out["ed_unread_replies"] = ed_unread_replies(con)
         con.close()
     out["announcements"] = sorted(news, key=lambda n: _ts(n["time"]), reverse=True)
+    from . import changes
+    out["changes"] = changes.recent(limit=20)
     out["notes"] = notes
     return out

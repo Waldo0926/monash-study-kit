@@ -165,7 +165,7 @@ def test_materials_sync_never_fetches_ed_threads(tmp_path,monkeypatch):
     monkeypatch.setattr(jobs,"load_settings",lambda:{"materials_only":True})
     monkeypatch.setattr(edsync,"sync",lambda **kw:pytest.fail("不能同步论坛帖子"))
     result=jobs.sync_ed(log=lambda _:None)
-    assert result == {"new_threads":0,"new_replies":0}
+    assert result == {"new_threads":0,"new_replies":0,"failed":0,"failures":[]}
     assert requests == ["/courses","/courses/7/lessons","/lessons/9"]
     con=real_ed(db)
     assert con.execute("SELECT title FROM lessons WHERE id=9").fetchone()[0] == "Sample"

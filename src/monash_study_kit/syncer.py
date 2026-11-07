@@ -133,11 +133,13 @@ class SyncStats:
     links: int = 0
     removed: int = 0
     errors: list[str] = field(default_factory=list)
+    failed_cmids: list[int] = field(default_factory=list)
     bytes: int = 0
 
 
 class CourseSync:
-    def __init__(self, client: MoodleClient, con, course: dict, *, dry_run: bool = False, log=print):
+    def __init__(self, client: MoodleClient, con, course: dict, *, dry_run: bool = False, log=print, only_cmids: set[int] | None = None):
+        self.only_cmids = only_cmids
         self.c = client
         self.con = con
         self.course = course
@@ -160,7 +162,7 @@ class CourseSync:
         cms = {str(cm["id"]): cm for cm in state["cm"]}
         self.cms = cms
         sections = {s["number"]: s for s in state["section"]}
-        if not self.dry:
+        if not self.dry and self.only_cmids is None:
             self.clean_partials()
             # 说明表每轮重写（Google 导出的记录由 google_export 自己管）
             self.con.execute("DELETE FROM notes WHERE course_id=? AND kind NOT LIKE 'google%'", (self.cid,))
@@ -168,7 +170,7 @@ class CourseSync:
         for num in sorted(sections):
             for cmid in sections[num].get("cmlist") or []:
                 cm = cms.get(str(cmid))
-                if not cm or cm.get("uservisible") is False:
+                if not cm or cm.get("uservisible") is False or (self.only_cmids is not None and int(cm["id"]) not in self.only_cmids):
                     continue
                 folder = layout.folders.get(cm.get("sectionnumber", num), "General")
                 try:
@@ -176,12 +178,14 @@ class CourseSync:
                 except Exception as e:  # noqa: BLE001  一个坏活动不该拖垮整门课
                     if e.__class__.__name__ == "MoodleAuthError":
                         raise
+                    self.stats.failed_cmids.append(int(cm["id"]))
                     self.stats.errors.append(f"{cm.get('name')} ({cm['id']}): {e}")
                     self.log(f"  ! {cm.get('name')}: {e}")
 
         # label、CMS 块和每个活动的说明文字只在课程页 HTML 里
-        self.scan_section_pages(state, layout, cms)
-        if not self.dry:
+        if self.only_cmids is None:
+            self.scan_section_pages(state, layout, cms)
+        if not self.dry and self.only_cmids is None:
             self.mark_removed()
             self.prune_links()
             self.con.execute("UPDATE courses SET synced_at=? WHERE id=?", (now_iso(), self.cid))

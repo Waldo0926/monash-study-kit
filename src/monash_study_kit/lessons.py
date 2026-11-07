@@ -289,7 +289,7 @@ def prune_lessons(conn: sqlite3.Connection, course_id: int, keep: set[int]) -> i
     return len(gone)
 
 
-def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log=print) -> tuple[int, int]:
+def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log=print, failures: list | None = None, only_lessons: set[int] | None = None) -> tuple[int, int]:
     """全量覆盖这门课的 modules/lessons。数据量小（一门课几十条），不用跟 threads
     那样做增量，Ed 的 lesson.updated_at 目前观察下来基本不维护，没法当指纹用。
 
@@ -298,7 +298,8 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
     repair_image_names(conn)
     modules, lessons = fetch_lessons(client, course_id)
     ts = now_iso()
-    prune_lessons(conn, course_id, {l["id"] for l in lessons})
+    if only_lessons is None:
+        prune_lessons(conn, course_id, {l["id"] for l in lessons})
     row = conn.execute("SELECT code FROM courses WHERE id=?", (course_id,)).fetchone()
     cdir = course_folder(row[0] if row else None, course_id)
     mdirs = module_folders(modules, lessons)
@@ -310,6 +311,8 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
             (m["id"], course_id, m.get("name"), m.get("created_at")),
         )
     for pos, l in enumerate(lessons):
+        if only_lessons is not None and l["id"] not in only_lessons:
+            continue
         conn.execute(
             "INSERT OR REPLACE INTO lessons "
             "(id, course_id, module_id, idx, kind, type, title, status, slide_count, "
@@ -325,6 +328,8 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
         )
         slides = fetch_slides(client, l["id"])
         if slides is None:
+            if failures is not None:
+                failures.append({"course_id": course_id, "lesson_id": l["id"], "reason": "内容读取失败"})
             log(f"  lesson {l['id']} 的内容没取到，先保留上次的")
             continue
         before = {r[0]: (r[1], r[2]) for r in conn.execute(
@@ -353,6 +358,8 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
                 if download_pdf(f["file_url"], FILES_DIR / rel, log, force=changed,
                                 max_bytes=ATTACHMENT_MAX if f["type"] == "attachment" else None):
                     local_path = rel
+                elif failures is not None:
+                    failures.append({"course_id": course_id, "lesson_id": l["id"], "file_id": f["id"], "reason": "文件下载失败"})
             elif f["type"] == "webpage" and old_path and old_url == f["url"]:
                 # Google 导出的网页文件保留到下一轮，避免每次 Lessons 同步都删掉重下。
                 if (FILES_DIR / old_path).is_file():
@@ -381,6 +388,8 @@ def sync_lessons(conn: sqlite3.Connection, client: EdClient, course_id: int, log
             if old_path and old_path not in kept:
                 _unlink(old_path)
     conn.commit()
+    from . import changes
+    changes.ed_files(conn, course_id, FILES_DIR)
     return len(modules), len(lessons)
 
 

@@ -2,6 +2,17 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.12.0
+
+- Distinguish Moodle outages/rate limits from expired sessions, retry safe reads with bounded backoff, and attempt silent session recovery with shared cooldowns. Materials mode skips keepalive and recovery.
+- Merge shared status under cross-process locks and use unique atomic temporary files for status, settings and credentials.
+- Report partial syncs, preserve the last complete-success timestamp and add `monash sync --retry-failed` for failed activities, posts, Lessons and index entries.
+- Mark old search results stale after failed re-extraction; report unreadable files and clear warnings after successful indexing.
+- Track generated directory-export files in a manifest; remove obsolete untouched files while preserving user additions and edits.
+- Add inclusive PDF page ranges and bounded extraction caching to the existing `read_file` MCP tool.
+- Add local course-change history (`monash changes`, also in study todo): materials, assignment instructions, deadline times and teacher replies, with source links and baseline/retention limits.
+- Support IANA timezones such as `Australia/Melbourne`, including daylight saving and Windows timezone data. Existing numeric offsets remain supported.
+
 ## 1.11.2
 
 - Windows PDF browser startup retries once with a fresh isolated profile after an early exit or a startup timeout; each failed process is killed if needed and reaped before retry. Partially written port files and transient connection failures are retried within the startup deadline. A final failure explains the Markdown fallback option.

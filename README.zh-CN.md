@@ -611,8 +611,23 @@ flowchart LR
 | `doctor`、`doctor_deep`、`help_menu`、`update_check`、`claude_setup` | 体检和 `--deep` 对照核对、帮助和预设提示、新版本提示、接进 Claude |
 | `recordings`、`transcribe` | 可选：录播转带时间戳的字幕稿（`[media]`） |
 
-运行时只依赖 `pypdf`，HTTP、SQLite、WebSocket、HTML 解析都用标准库。CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外用 `ruff` 查语法错误、未定义的名字和没用的 import。
+运行时依赖 `pypdf`，Windows 上另装轻量的 `tzdata` 时区数据；HTTP、SQLite、WebSocket、HTML 解析都用标准库。CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外用 `ruff` 查语法错误、未定义的名字和没用的 import。
 
 ## 许可
 
 MIT。这是学生自己做的工具，和 Monash University、Ed 或 Anthropic 没有关系。
+
+
+## 同步可靠性与变更摘要（1.12.0）
+
+`monash status` 会区分完整和部分同步成功；`monash sync --retry-failed`
+只重试失败项。`monash changes --days 7` 查看本机观察到的课件、作业说明、
+截止时间和教师回复变更。首次观察建立基线；截止变更在查询截止时间时记录。
+历史保存在本机，资料模式只记录资料变化；旧搜索索引失效时会明确提醒。
+
+MCP 的 `read_file` 支持 PDF 的 `page_start` / `page_end`，并缓存提取结果。
+重复导出到文件夹时，通过清单清理未被修改的旧生成文件，保留用户添加的文件
+及已编辑的旧文件。Moodle 过期后只在后台尝试无界面恢复，需要 MFA 时提示重新
+登录，不会自行弹窗；`monash config auto_relogin false` 可关闭自动恢复。
+澳洲校区可用 `monash config timezone Australia/Melbourne` 自动处理夏令时。
+具体行为和限制见 [说明](docs/reliability.md)。
