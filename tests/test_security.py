@@ -387,7 +387,7 @@ def test_one_runtime_dependency_and_heavy_media_is_optional():
     # 核心只依赖 pypdf；录播、Gmail、考勤要用才装，不能悄悄变成必装
     tomllib = pytest.importorskip("tomllib")
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    assert project["dependencies"] == ["pypdf>=4.0", "tzdata; sys_platform == 'win32'"]
+    assert project["dependencies"] == ["pypdf>=6.21.4", "tzdata; sys_platform == 'win32'"]
     assert set(project["optional-dependencies"]) == {"media", "gmail", "attendance"}
 
 

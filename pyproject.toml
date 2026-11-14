@@ -20,7 +20,7 @@ classifiers = [
     "Topic :: Education",
 ]
 dependencies = [
-    "pypdf>=4.0",
+    "pypdf>=6.21.4",
     "tzdata; sys_platform == 'win32'",
 ]
 
