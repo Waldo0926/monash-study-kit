@@ -83,3 +83,22 @@ def test_browser_read_loads_the_page_once_and_switches_days(page, monkeypatch):
     assert len(loads) == 1
     assert [r["session"] for r in out["30_Oct_26"]] == ["Workshop 01"]
     assert len(out["31_Oct_26"]) == 2 and out["1_Nov_26"] is None
+
+
+def test_image_evidence_rejects_unsupported_python_before_reading(monkeypatch, tmp_path):
+    from monash_study_kit import attendance_evidence as evidence
+    monkeypatch.setattr(evidence.sys, "version_info", (3, 10, 0))
+    with pytest.raises(RuntimeError, match="Python 3.11"):
+        evidence.extract_file(tmp_path / "unread.png", "unread.png")
+
+
+def test_image_evidence_rejects_old_decoder_before_reading(monkeypatch, tmp_path):
+    import sys
+    import types
+    from monash_study_kit import attendance_evidence as evidence
+    monkeypatch.setattr(evidence.sys, "version_info", (3, 11, 0))
+    old = types.ModuleType("PIL")
+    old.__version__ = "12.3.0"
+    monkeypatch.setitem(sys.modules, "PIL", old)
+    with pytest.raises(RuntimeError, match="Pillow 13"):
+        evidence.extract_file(tmp_path / "unread.png", "unread.png")

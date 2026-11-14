@@ -4,6 +4,8 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 
 ## 1.13.1
 
+- Update optional attendance image processing to Pillow 13. Python 3.10 retains attendance record access but skips image OCR rather than installing vulnerable Pillow 12; image OCR requires Python 3.11+.
+
 - Raise the pypdf minimum to 6.21.4 and refresh the lock to 7.1.0, removing known PDF resource-exhaustion advisories affecting the previous locked version.
 
 - Add submission read paths to assignment gradebook entries, so marking review can continue directly to the submitted work.

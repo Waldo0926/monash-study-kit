@@ -23,10 +23,11 @@ from pathlib import Path
 # 要和 pyproject.toml 里的 optional-dependencies 保持一致，tests/test_service_setup.py 会对照
 PACKAGES = {
     "gmail": ["google-auth-oauthlib>=1.2,<2"],
-    "attendance": ["playwright>=1.49,<2", "Pillow>=10,<13", "truststore>=0.10,<1"]
+    "attendance": ["playwright>=1.49,<2", "truststore>=0.10,<1"]
+    + (["Pillow>=13,<14"] if sys.version_info >= (3, 11) else [])
     + (["tzdata"] if sys.platform == "win32" else []),
 }
-MODULES = {"gmail": ["google_auth_oauthlib"], "attendance": ["playwright", "PIL", "truststore"]}
+MODULES = {"gmail": ["google_auth_oauthlib"], "attendance": ["playwright", "truststore"] + (["PIL"] if sys.version_info >= (3, 11) else [])}
 NAMES = {"gmail": "学校邮箱", "attendance": "考勤"}
 
 _state: dict = {"service": None, "step": None, "running": False, "result": None, "error": None}
