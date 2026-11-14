@@ -79,3 +79,9 @@ Changes to this policy are published in this file, with the history visible in t
 - 数据只发给你连接的服务（Moodle、Ed、Google、考勤门户）和你接入的 AI 应用（仅限它代你查询的结果）；不用于广告、不出售、不用于训练模型。
 - 使用 Google API 获取的数据遵守 Google API Services User Data Policy 及其 Limited Use 要求。
 - 可随时在 <https://myaccount.google.com/permissions> 撤销 Google 授权，删除数据目录即可清除全部本地数据。
+
+## On-demand submitted assignments / 按需读取已交作业
+
+In the default profile, assignment submission and feedback tools read only what the signed-in account can access on its current Moodle assignment page. Attachments are downloaded on demand into `data/submissions/`, separate from course files, search indexes, the local course library and course exports. Cached copies remain on the Study Kit host until manually deleted; deleting this directory removes them. AI clients receive the requested extracted document text and visible grading feedback through MCP. Binary-file responses expose a local host path, not a public download URL. Materials-only profiles block these reads, including the `read_file` submission-path route.
+
+默认账号按需读取当前 Moodle 会话有权访问的提交文件和反馈；附件缓存于 `data/submissions/`，不进入课程课件、搜索索引、课程浏览页或整课导出。缓存保留在运行 Study Kit 的机器上，需手动删除此目录清理。通过 MCP 读取时，相关文档正文和可见评分反馈会发送给调用的 AI 客户端；二进制文件返回本地路径，不提供公开下载链接。仅课程资料模式同时封锁直接详情和 `read_file` 的提交路径。

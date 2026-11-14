@@ -828,6 +828,19 @@ def cmd_m_calendar(args):
     print("订阅：苹果日历 → 文件 → 新建日历订阅；Google 日历 → 其他日历 → 通过网址添加。")
 
 
+def cmd_m_submission(args):
+    from . import submissions
+    submissions._check_access()
+    data = submissions.public(submissions.details(MoodleClient(), args.assignment_id))
+    if want_json(args):
+        return emit_json(data)
+    print(data["name"])
+    print(data["submission"])
+    print("\n" + data["feedback"])
+    for file in data["files"]:
+        print(f"{file['kind']}: {file['name']} → {file['path']}")
+
+
 def cmd_m_assignments(args):
     client, con = MoodleClient(), db_connect()
     items = []
@@ -1091,6 +1104,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--refresh", action="store_true"); p.add_argument("--show", action="store_true")
     p = cmd(m, "assignments", cmd_m_assignments, json_flag=True, help="作业汇总")
     p.add_argument("course", nargs="?"); p.add_argument("--missing", action="store_true", help="只看可能漏交的")
+    p = cmd(m, "submission", cmd_m_submission, json_flag=True, help="读取本人/小组已交文件清单和完整评分反馈")
+    p.add_argument("assignment_id", type=int, help="作业活动 cmid")
     p = cmd(m, "grades", cmd_m_grades, json_flag=True); p.add_argument("course", nargs="?")
     p.add_argument("--graded-only", action="store_true")
     p = cmd(m, "news", cmd_m_news, json_flag=True); p.add_argument("course", nargs="?")
