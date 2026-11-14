@@ -149,3 +149,46 @@ def test_zip_preserves_extensionless_text_without_decoding_binary(tmp_path):
     assert M._read_path({'inner': 'LICENSE'}, path, 'source.zip') == 'Example license text'
     with pytest.raises(ValueError, match='二进制'):
         M._read_path({'inner': 'binary.bin'}, path, 'source.zip')
+
+
+def test_short_download_keeps_previous_complete_cache(tmp_path, monkeypatch):
+    from email.message import Message
+    class Response(io.BytesIO):
+        status = 200
+        headers = Message()
+    Response.headers['Content-Length'] = '10'
+    Response.headers['Content-Type'] = 'application/pdf'
+    class Opener:
+        def open(self, req, timeout):
+            return Response(b'short')
+    monkeypatch.setattr(S.urllib.request, 'build_opener', lambda *a: Opener())
+    dest = tmp_path / 'cached.pdf'
+    dest.write_bytes(b'complete old file')
+    class Cookies:
+        jar = {}
+        def _absorb_cookies(self, headers):
+            pass
+    with pytest.raises(ValueError, match='不完整'):
+        S._download(Cookies(), URL, dest)
+    assert dest.read_bytes() == b'complete old file'
+    assert not list(tmp_path.glob('*.part'))
+
+
+def test_collapsed_online_text_is_scoped_to_submission():
+    class Inline(Client):
+        def html(self, url):
+            return PAGE.replace('<div id="intro">', '<div id="intro"><div class="assignsubmission_onlinetext">Assignment instruction</div>').replace(
+                'class="assignsubmission_onlinetext">Our', 'class="full_assignsubmission_onlinetext_99">Our')
+    assert S.details(Inline(), 12345)['online_text'] == 'Our online submission'
+
+
+@pytest.mark.parametrize('url', ['https://user@abc.cloudfront.net/f', 'https://abc.cloudfront.net:444/f', 'http://abc.cloudfront.net/f'])
+def test_download_rejects_unsafe_redirect_authorities(tmp_path, url):
+    with pytest.raises(ValueError, match='不支持'):
+        S._download(None, url, tmp_path / 'f')
+
+
+def test_grade_assignment_path_validates_origin_and_activity():
+    assert S.assignment_path('/mod/assign/view.php?id=12345') == 'submission:12345'
+    for url in ['https://evil.test/mod/assign/view.php?id=12345', '/mod/quiz/view.php?id=12345', '/mod/assign/view.php?id=-1']:
+        assert S.assignment_path(url) is None

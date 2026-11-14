@@ -395,3 +395,26 @@ def test_successful_material_retry_runs_incremental_index(monkeypatch, tmp_path)
     monkeypatch.setattr(CI, "index", lambda *a, **k: called.append(k) or {"failed": 0})
     assert jobs.sync_all(log=lambda _: None, retry_failed=True)["sync_state"] == "complete"
     assert called == [{}]
+
+
+@pytest.mark.parametrize("bad", ["[]", "null", "42", '"text"'])
+def test_non_object_settings_and_status_json_recover(tmp_path, monkeypatch, bad):
+    from monash_study_kit import paths, jobs
+    settings = tmp_path / "settings.json"
+    settings.write_text(bad)
+    monkeypatch.setattr(paths, "SETTINGS_FILE", settings)
+    assert paths.load_settings()["pdf_extractor"] == paths.DEFAULTS["pdf_extractor"]
+    monkeypatch.setattr(jobs, "STATUS_FILE", settings)
+    assert jobs.read_status() == {}
+
+
+def test_presentation_total_xml_size_is_bounded(tmp_path, monkeypatch):
+    import zipfile
+    from monash_study_kit import textextract
+    path = tmp_path / "large.pptx"
+    with zipfile.ZipFile(path, "w") as archive:
+        for n in (1, 2):
+            archive.writestr(f"ppt/slides/slide{n}.xml", '<a:p xmlns:a="urn:a"><a:t>text</a:t></a:p>')
+    monkeypatch.setattr(textextract, "OFFICE_XML_MAX", 60)
+    with pytest.raises(ValueError, match="总大小"):
+        textextract.office_parts(path)

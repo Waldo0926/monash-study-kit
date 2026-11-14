@@ -36,6 +36,22 @@ def _check_access():
         raise ValueError("只导课程资料模式下不能读取个人作业、提交文件或评分反馈")
 
 
+def assignment_path(url):
+    """Bridge gradebook rows to the existing live submission reader without fetching pages."""
+    try:
+        p = urllib.parse.urlsplit(urllib.parse.urljoin(moodlelib.BASE_URL, url or ""))
+    except ValueError:
+        return None
+    base = urllib.parse.urlsplit(moodlelib.BASE_URL)
+    if (p.scheme, p.netloc, p.path) != (base.scheme, base.netloc, "/mod/assign/view.php"):
+        return None
+    value = urllib.parse.parse_qs(p.query).get("id", [""])[0]
+    try:
+        return f"submission:{cmid(value)}"
+    except ValueError:
+        return None
+
+
 def _attachment(url):
     p = urllib.parse.urlsplit(url)
     return (p.scheme == urllib.parse.urlsplit(moodlelib.BASE_URL).scheme
@@ -72,7 +88,11 @@ def details(client, assignment_id):
             result["files"].append({"name": name, "kind": kind, "path": f"submission:{aid}/{key}",
                                     "_url": target, "_key": key})
     # Inline text submissions can be collapsed behind a view link.
-    inline = doc.find(cls="assignsubmission_onlinetext")
+    inline = None
+    if box is not None:
+        inline = box.find(class_=lambda c: any(part.startswith("full_assignsubmission_onlinetext_") for part in c.split()))
+        if inline is None:
+            inline = box.find(cls="assignsubmission_onlinetext")
     if inline is not None:
         result["online_text"] = inline.text(sep="\n")
     return result
@@ -96,7 +116,8 @@ def _download(client, url, dest):
         for _ in range(8):
             p = urllib.parse.urlsplit(current)
             same = p.netloc == urllib.parse.urlsplit(moodlelib.BASE_URL).netloc
-            if p.scheme != "https" or not (same or (p.hostname or "").endswith(".cloudfront.net")):
+            if (p.scheme != "https" or p.username or p.password or p.port not in (None, 443)
+                    or not (same or (p.hostname or "").endswith(".cloudfront.net"))):
                 raise ValueError("提交附件跳转到不支持的地址；不会转发 Moodle 登录凭据")
             req = urllib.request.Request(current, headers={"User-Agent": moodlelib.UA})
             if same:
@@ -115,9 +136,11 @@ def _download(client, url, dest):
                     raise ValueError(f"Moodle 附件下载失败（HTTP {resp.status}）")
                 if ("text/html" in resp.headers.get("Content-Type", "").lower()
                         and "attachment" not in resp.headers.get("Content-Disposition", "").lower()):
-                    raise ValueError("附件返回登录页或错误页面，请重新登录 Moodle")
-                if int(resp.headers.get("Content-Length", "0")) > MAX_BYTES:
-                    raise ValueError("附件超过 256 MB 下载上限")
+                    raise moodlelib.MoodleAuthError("附件返回登录页或错误页面，请重新登录 Moodle")
+                declared = resp.headers.get("Content-Length")
+                expected = int(declared) if declared is not None else None
+                if expected is not None and (expected < 0 or expected > MAX_BYTES):
+                    raise ValueError("附件大小无效或超过 256 MB 下载上限")
                 ensure_private_dir(dest.parent)
                 fd, tmp = tempfile.mkstemp(dir=dest.parent, suffix=".part")
                 with os.fdopen(fd, "wb") as out:
@@ -127,6 +150,8 @@ def _download(client, url, dest):
                         if size > MAX_BYTES:
                             raise ValueError("附件超过 256 MB 下载上限")
                         out.write(chunk)
+                if expected is not None and size != expected:
+                    raise ValueError("附件下载不完整；请重试，旧缓存未被覆盖")
                 os.replace(tmp, dest)
                 tmp = None
                 return

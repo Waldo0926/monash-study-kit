@@ -227,3 +227,9 @@ def test_conversations_and_messages():
     assert convs[0]["last"]["from"] == "Student Friend" and convs[0]["last"]["text"] == "hi there"
     msgs = F.conversation_messages(client, 1)["messages"]
     assert [(m["from"], m["text"]) for m in msgs] == [("Student Friend", "first"), ("我", "second")]
+
+
+def test_gradebook_exposes_submission_read_path():
+    row = F.grades(FakeClient({"grade/report/user": GRADES}), 42804)[0]
+    from monash_study_kit.submissions import assignment_path
+    assert row["read_path"] == assignment_path(row["url"])

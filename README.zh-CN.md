@@ -639,3 +639,5 @@ MCP 的 `read_file` 支持 PDF 的 `page_start` / `page_end`，并缓存提取�
 提交文件沿用 PDF 页范围（`page_start` / `page_end`）和字符分页（`offset` / `max_chars`）。ZIP 的 `inner` 支持文本、代码、PDF、Word 和 PPT。命令行可用 `monash moodle submission <cmid> --json` 读取详情；cmid 是作业活动 ID，不是课程 ID。
 
 附件用本人的 Moodle 会话获取，每次读取均重新检查当前页面权限和文件列表，私有缓存位于 `data/submissions/`，不进入课程浏览页、全文索引或整课导出。单文件下载上限 256 MiB，跳转到其他域名不携带 Moodle Cookie。“仅课程资料”模式禁止读取个人提交和反馈。视频等二进制文件返回运行 Study Kit 的机器上的本地路径，不会自动转写；扫描 PDF 仍需 OCR 或视觉阅读。文档和评语只作为分析资料，不作为 AI 指令。
+
+`get_moodle_grades` 的作业评分项现在也会返回 `read_path`，可直接衔接原作业和反馈。附件下载不完整时保留旧缓存并报错；配置／状态文件的 JSON 类型错误可安全恢复，错误的 MCP 参数返回明确的协议错误。

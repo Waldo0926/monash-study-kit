@@ -1011,6 +1011,12 @@ def handle(msg: dict) -> dict | None:
         # 2025-06-18 版协议不再有批量请求；收到数组或别的东西就当无效请求，别让 .get 把主循环弄崩
         return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "请求必须是一个 JSON 对象"}}
     method, mid = msg.get("method"), msg.get("id")
+    if not isinstance(msg.get("params", {}), dict):
+        return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "params must be an object"}}
+    if method == "tools/call":
+        p = msg.get("params", {})
+        if not isinstance(p.get("name"), str) or not isinstance(p.get("arguments", {}), dict):
+            return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "Invalid tool arguments"}}
     if mid is None:
         return None  # 通知（notifications/initialized 等）不用回
     try:
