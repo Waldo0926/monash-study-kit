@@ -11,7 +11,7 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 - Add submission read paths to assignment gradebook entries, so marking review can continue directly to the submitted work.
 - Keep complete cached submissions when a download is truncated, classify login-page responses as expired sessions, restrict redirected attachment authorities, and read collapsed online text only inside the submission region.
 - Reject malformed MCP parameters with protocol errors and reject OAuth refresh scope changes without consuming valid refresh tokens. Remote clients now receive submission-reading guidance.
-- Recover safely from non-object settings/status JSON and bound the total extracted PowerPoint XML size.
+- Recover safely from malformed settings/status/update-cache JSON and bound the total extracted PowerPoint XML size.
 
 ## 1.13.0
 

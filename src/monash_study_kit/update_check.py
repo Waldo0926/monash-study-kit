@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import threading
@@ -19,6 +20,7 @@ import urllib.request
 
 from . import __version__
 from .paths import HOME, load_settings
+from .local_state import atomic_write
 
 PYPI_URL = "https://pypi.org/pypi/monash-study-kit/json"
 VERSION_URL = "https://raw.githubusercontent.com/Waldo0926/monash-study-kit/main/src/monash_study_kit/__init__.py"
@@ -44,7 +46,16 @@ def enabled() -> bool:
 
 def read_cache() -> dict:
     try:
-        return json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {}
+        at = data.get("checked_at", 0)
+        if not isinstance(at, (int, float)) or not math.isfinite(at):
+            at = 0
+        latest = data.get("latest")
+        if not isinstance(latest, str) or VERSION_RE.fullmatch(f'__version__ = "{latest}"') is None:
+            latest = None
+        return {"checked_at": at, "latest": latest}
     except (OSError, ValueError):
         return {}
 
@@ -78,9 +89,7 @@ def refresh(force: bool = False) -> dict:
     cache = {"checked_at": time.time(), "latest": latest}
     try:
         HOME.mkdir(parents=True, exist_ok=True)
-        tmp = CACHE_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(cache), encoding="utf-8")
-        os.replace(tmp, CACHE_FILE)
+        atomic_write(CACHE_FILE, json.dumps(cache))
     except OSError:
         pass
     return cache
