@@ -277,6 +277,9 @@ def grades(client: MoodleClient, course_id: int, graded_only: bool = False) -> l
             "feedback_files": [a.get("href") for a in (fb.find_all("a") if fb else []) if is_attachment(a.get("href", ""))],
             "url": link.get("href") if link else None,
         }
+        from .submissions import assignment_path
+        if read_path := assignment_path(item["url"]):
+            item["read_path"] = read_path
         if graded_only and item["grade"] in ("", "-"):
             continue
         out.append(item)

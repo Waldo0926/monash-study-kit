@@ -502,3 +502,13 @@ def test_tokens_from_before_the_scopes_column_stay_moodle_and_ed_only(tmp_path):
     new_con = R.db(path)
     assert R.access_grant(new_con, "old-access")["scopes"] == "monash"
     new_con.close()
+
+
+def test_refresh_rejects_scope_change_without_consuming_token(server):
+    base, con = server
+    cid, token = connect(base, con)
+    form = {"grant_type": "refresh_token", "refresh_token": token["refresh_token"], "client_id": cid}
+    status, _, error = req(base + "/oauth/token", "POST", form={**form, "scope": "monash gmail.manage"})
+    assert status == 400 and error["error"] == "invalid_scope"
+    status, _, rotated = req(base + "/oauth/token", "POST", form=form)
+    assert status == 200 and rotated["scope"] == "monash"

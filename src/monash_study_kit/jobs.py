@@ -239,7 +239,8 @@ def keepalive() -> int | None:
 
 def read_status() -> dict:
     try:
-        return json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+        data = json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
 

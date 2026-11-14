@@ -1,3 +1,4 @@
+import pytest
 """MCP 协议层：握手、工具清单、只读边界、错误提示、读文件不越界。"""
 import json
 
@@ -167,3 +168,15 @@ def test_list_files_links_mode_needs_course():
 def test_non_object_messages_get_an_error_instead_of_crashing():
     assert M.handle([{"jsonrpc": "2.0", "id": 1, "method": "ping"}])["error"]["code"] == -32600
     assert M.handle("ping")["error"]["code"] == -32600
+
+
+@pytest.mark.parametrize("params", [[], "bad", 1, None])
+def test_malformed_params_return_protocol_error(params):
+    response = M.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params})
+    assert response["error"]["code"] == -32602
+
+
+@pytest.mark.parametrize("arguments", [[], "bad", 42, None])
+def test_malformed_tool_arguments_return_protocol_error(arguments):
+    response = call("tools/call", {"name": "read_file", "arguments": arguments})
+    assert response["error"]["code"] == -32602

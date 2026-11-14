@@ -85,7 +85,7 @@ def _env_value(key: str, default):
 def load_settings() -> dict:
     try:
         out = {**DEFAULTS, **json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))}
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError):
         out = dict(DEFAULTS)
     for key, default in DEFAULTS.items():
         v = _env_value(key, default)

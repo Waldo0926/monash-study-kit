@@ -2,6 +2,17 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.13.1
+
+- Update optional attendance image processing to Pillow 13. Python 3.10 retains attendance record access but skips image OCR rather than installing vulnerable Pillow 12; image OCR requires Python 3.11+.
+
+- Raise the pypdf minimum to 6.21.4 and refresh the lock to 7.1.0, removing known PDF resource-exhaustion advisories affecting the previous locked version.
+
+- Add submission read paths to assignment gradebook entries, so marking review can continue directly to the submitted work.
+- Keep complete cached submissions when a download is truncated, classify login-page responses as expired sessions, restrict redirected attachment authorities, and read collapsed online text only inside the submission region.
+- Reject malformed MCP parameters with protocol errors and reject OAuth refresh scope changes without consuming valid refresh tokens. Remote clients now receive submission-reading guidance.
+- Recover safely from malformed settings/status/update-cache JSON and bound the total extracted PowerPoint XML size.
+
 ## 1.13.0
 
 - Read the signed-in student's or group's submitted assignment attachments, online text and full marking feedback via assignment `read_path` → `read_file`, or `list_moodle_assignments(assignment_id=cmid)`. Add `monash moodle submission <cmid> [--json]` for the same detail.

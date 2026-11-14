@@ -79,3 +79,11 @@ def test_fetch_prefers_pypi_and_falls_back_to_github(monkeypatch):
     assert U.fetch_latest() == "2.3.0"
     pages[U.PYPI_URL] = b"<html>oops</html>"
     assert U.fetch_latest() == "2.3.0"
+
+
+def test_malformed_update_cache_never_breaks_cli_notices(tmp_path, monkeypatch):
+    _on(tmp_path, monkeypatch)
+    for bad in ([], None, 42, {"checked_at": "yesterday", "latest": []}, {"checked_at": float("inf"), "latest": 42}):
+        U.CACHE_FILE.write_text(json.dumps(bad), encoding="utf-8")
+        assert U.available() is None
+        assert U.read_cache().get("checked_at", 0) == 0

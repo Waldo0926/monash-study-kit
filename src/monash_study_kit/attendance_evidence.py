@@ -6,6 +6,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -18,6 +19,11 @@ def extract_file(filename, original_name):
 
     suffix = Path(original_name).suffix.lower()
     if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+        if sys.version_info < (3, 11):
+            raise RuntimeError("Image OCR requires Python 3.11+ and Pillow 13+; attendance records still work without OCR")
+        from PIL import __version__ as pillow_version
+        if int(pillow_version.split(".")[0]) < 13:
+            raise RuntimeError("Image OCR requires Pillow 13+; upgrade the attendance dependencies before decoding images")
         prefix = os.environ.get("MONASH_KIT_TESSERACT_PREFIX")
         executable = str(Path(prefix) / "usr/bin/tesseract") if prefix else shutil.which("tesseract")
         if not executable or not Path(executable).is_file():

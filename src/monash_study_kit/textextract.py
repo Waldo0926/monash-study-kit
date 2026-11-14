@@ -115,6 +115,8 @@ def office_parts(path: Path) -> list[tuple[str, str]]:
         if path.suffix.lower() == ".pptx":
             nums = sorted(int(m.group(1)) for n in z.namelist()
                           if (m := re.match(r"ppt/slides/slide(\d+)\.xml$", n)))
+            if sum(z.getinfo(f"ppt/slides/slide{i}.xml").file_size for i in nums) > OFFICE_XML_MAX:
+                raise ValueError("Office 文档正文解压总大小超过读取上限")
             return [(f"slide {i}", " ".join(_xml_text(_read_member(z, f"ppt/slides/slide{i}.xml"),
                                                       r"</a:p>", " ").split()))
                     for i in nums]
