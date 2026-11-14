@@ -680,7 +680,14 @@ def _read_path(args, path, rel):
             from pathlib import Path
             ext = Path(inner).suffix.lower()
             if ext not in TEXT_EXT | {".pdf", ".docx", ".pptx"}:
-                raise ValueError("这个 ZIP 条目不是支持的文本或文档格式")
+                # Preserve extensionless README/LICENSE and other UTF-8 source files.
+                try:
+                    text = data.decode("utf-8")
+                except UnicodeDecodeError:
+                    raise ValueError("这个 ZIP 条目不是支持的文本或文档格式") from None
+                if "\x00" in text:
+                    raise ValueError("这个 ZIP 条目是二进制文件，不能当文字读取")
+                return _clip(text, limit, offset)
             with tempfile.TemporaryDirectory() as tmp:
                 member = Path(tmp) / ("member" + ext)
                 member.write_bytes(data)

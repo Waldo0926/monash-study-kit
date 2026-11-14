@@ -139,3 +139,13 @@ def test_cli_submission_detail_and_materials_policy(monkeypatch, capsys):
     args.fn(args)
     data = json.loads(capsys.readouterr().out)
     assert data['files'] and 'Full feedback' in data['feedback']
+
+
+def test_zip_preserves_extensionless_text_without_decoding_binary(tmp_path):
+    path = tmp_path / 'source.zip'
+    with zipfile.ZipFile(path, 'w') as z:
+        z.writestr('LICENSE', 'Example license text')
+        z.writestr('binary.bin', b'\x00\x01\x02')
+    assert M._read_path({'inner': 'LICENSE'}, path, 'source.zip') == 'Example license text'
+    with pytest.raises(ValueError, match='二进制'):
+        M._read_path({'inner': 'binary.bin'}, path, 'source.zip')
