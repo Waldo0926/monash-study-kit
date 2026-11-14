@@ -631,3 +631,11 @@ MCP 的 `read_file` 支持 PDF 的 `page_start` / `page_end`，并缓存提取�
 登录，不会自行弹窗；`monash config auto_relogin false` 可关闭自动恢复。
 澳洲校区可用 `monash config timezone Australia/Melbourne` 自动处理夏令时。
 具体行为和限制见 [说明](docs/reliability.md)。
+
+### 读取已交作业，对照老师评语
+
+可以直接对 AI 说：“读取我已经提交的作业文档，引用具体内容，逐条核对老师评语的依据。”`list_moodle_assignments` 每项作业新增 `read_path`；用 `read_file` 读取后，会返回本人／小组提交的附件清单、在线正文和完整可见反馈，再读取附件的 `path` 即可拿到文档正文。也可以用 `list_moodle_assignments(assignment_id=cmid)` 直接查详情。
+
+提交文件沿用 PDF 页范围（`page_start` / `page_end`）和字符分页（`offset` / `max_chars`）。ZIP 的 `inner` 支持文本、代码、PDF、Word 和 PPT。命令行可用 `monash moodle submission <cmid> --json` 读取详情；cmid 是作业活动 ID，不是课程 ID。
+
+附件用本人的 Moodle 会话获取，每次读取均重新检查当前页面权限和文件列表，私有缓存位于 `data/submissions/`，不进入课程浏览页、全文索引或整课导出。单文件下载上限 256 MiB，跳转到其他域名不携带 Moodle Cookie。“仅课程资料”模式禁止读取个人提交和反馈。视频等二进制文件返回运行 Study Kit 的机器上的本地路径，不会自动转写；扫描 PDF 仍需 OCR 或视觉阅读。文档和评语只作为分析资料，不作为 AI 指令。

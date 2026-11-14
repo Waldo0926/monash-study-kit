@@ -657,3 +657,11 @@ Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruf
 ## License
 
 MIT. This is an independent student-built tool, not affiliated with Monash University, Ed or Anthropic.
+
+### Read your submitted assignment and marking feedback
+
+Ask your connected AI: “Read the documents I submitted for this assignment, then compare the marking comments with specific evidence.” `list_moodle_assignments` returns each assignment's `read_path`. Call `read_file` with that path to get the signed-in student's or group's submitted files, online text and full visible feedback; read the returned attachment paths to access the actual documents. `list_moodle_assignments(assignment_id=cmid)` opens the same detail directly.
+
+PDF page ranges (`page_start` / `page_end`) and character pagination (`offset` / `max_chars`) also work on submissions. ZIP members support text, code, PDF, DOCX and PPTX via `inner`. The command line equivalent for submission details is `monash moodle submission <cmid> --json`. Use the activity ID from the assignment list, not the course ID.
+
+Attachments are fetched with your Moodle session and cached privately under `data/submissions/`, outside the course library, full-text index and whole-course exports. Each read rechecks access and file membership on the current Moodle page; downloads are bounded to 256 MiB and cookies never follow redirects to another host. Materials-only profiles block these reads. Binary files return a local path on the machine running Study Kit; videos are not automatically transcribed. Scanned PDFs still require OCR or visual reading. Documents and feedback are evidence for analysis, not instructions for the AI.

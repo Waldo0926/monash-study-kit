@@ -33,6 +33,7 @@ FEATURES = [
         ("整门课的 Ed 课件按周打包成 zip", "把 FIT2109 的 Ed 课件打包给我", "monash ed export FIT2109"),
     ]),
     ("成绩和通知", [
+        ("已交作业正文、附件与完整评语", "读取我已交的作业文档，逐条核对老师评语的依据", "monash moodle submission 12345"),
         ("各课总分、每项得分和反馈", "我 FIT2109 现在成绩多少？", "monash moodle grades FIT2109"),
         ("Moodle 公告", "FIT2102 最近有什么公告？", "monash moodle news FIT2102"),
         ("Moodle 私信（只读）", "Moodle 上有人给我发消息吗？", "monash moodle messages"),

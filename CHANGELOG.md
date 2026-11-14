@@ -2,6 +2,12 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.13.0
+
+- Read the signed-in student's or group's submitted assignment attachments, online text and full marking feedback via assignment `read_path` → `read_file`, or `list_moodle_assignments(assignment_id=cmid)`. Add `monash moodle submission <cmid> [--json]` for the same detail.
+- Read PDF, DOCX and PPTX members inside ZIP archives with the existing pagination options. Binary submissions return a private local file path; video transcription is not included.
+- Recheck live assignment access and file membership on every read; keep submission caches outside the course library and exports, bound downloads to 256 MiB, and isolate cookies across redirects. Materials-only profiles cannot read submissions through either CLI or MCP.
+
 ## 1.12.0
 
 - Distinguish Moodle outages/rate limits from expired sessions, retry safe reads with bounded backoff, and attempt silent session recovery with shared cooldowns. Materials mode skips keepalive and recovery.
