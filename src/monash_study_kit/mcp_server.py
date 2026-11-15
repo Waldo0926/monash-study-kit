@@ -307,8 +307,7 @@ def start_attendance_work() -> str | None:
     minutes = float(settings.get("attendance_keepalive_minutes") or 0)
     if work is None and minutes > 0 and time.time() - _attendance["last_keepalive"] >= minutes * 60:
         _attendance["last_keepalive"] = time.time()
-        from . import attendance_http
-        work = ("keepalive", attendance_http.keepalive, "keepalive")
+        work = ("keepalive", attendance.maintain, "keepalive")
     if work is None:
         return None
     _attendance["thread"] = threading.Thread(target=_attendance_job, args=work, name="attendance", daemon=True)
@@ -322,6 +321,11 @@ def _attendance_job(kind, fn, reason):
     from .attendance import AttendanceAuthError
     try:
         result = fn()
+        if result.get("status") == "needs_login":
+            if not _attendance["auth_logged"]:
+                log("考勤需要人工登录/MFA：monash attendance login；后台将减少重试")
+                _attendance["auth_logged"] = True
+            return
         _attendance["auth_logged"] = False
         log(f"考勤{'读取' if kind == 'sync' else '续期'}（{reason}）：{result.get('method', '')} 成功")
     except AttendanceAuthError as e:

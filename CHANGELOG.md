@@ -2,6 +2,11 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.14.0
+
+- Add local-only silent attendance SSO recovery (`attendance renew`) and session maintenance with explicit authentication status and a one-hour failure cooldown (`attendance maintain`). A replaced application-state file triggers an immediate recheck. Interactive credentials/MFA remain user-controlled, and IdP state is never exported.
+- Serialize local persistent-profile use, preserve old application state on failed recovery, and stop reporting background authentication failures as successful keepalives.
+
 ## 1.13.1
 
 - Update optional attendance image processing to Pillow 13. Python 3.10 retains attendance record access but skips image OCR rather than installing vulnerable Pillow 12; image OCR requires Python 3.11+.

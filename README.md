@@ -669,3 +669,9 @@ Attachments are fetched with your Moodle session and cached privately under `dat
 Assignment rows in `get_moodle_grades` now also provide `read_path` for reading the submitted work alongside the marking feedback. Incomplete attachment downloads preserve the previous complete cache and report an error. Corrupt non-object settings/status files fall back safely; malformed MCP parameters return protocol errors.
 
 Image OCR for attendance evidence requires Python 3.11+ and Pillow 13+. Attendance records and other text/document evidence remain available on Python 3.10; the optional install does not pull an older vulnerable image decoder.
+
+### Attendance session recovery
+
+`monash attendance maintain` checks the portal session, tries the existing **local** isolated SSO browser profile when necessary, and reports `needs_login` when interactive sign-in/MFA is required. Authentication failures enter a one-hour probe cooldown; replacing the application-state file bypasses that cooldown immediately. `monash attendance renew --timeout 30` explicitly attempts silent local recovery; `monash attendance login` opens the user-facing login window. Network/certificate failures are not treated as proof of expired authentication. The maintenance fast path falls back to the browser when the portal certificate chain cannot be verified.
+
+The Okta/IdP profile stays on the login computer. Only portal application state is exported; no password or MFA is entered by the tool. A local SSO profile cannot guarantee perpetual login or server availability while the login computer is asleep/offline.

@@ -19,6 +19,10 @@ def run(args):
             result = attendance.login(timeout=args.timeout)
             # 登录后读取和签到提交都打开；提交只在用户说自己到课了、看过预览并确认后才会执行
             save_settings({"attendance_enabled": True, "attendance_submit_enabled": True})
+        elif args.acmd == "renew":
+            result = attendance.renew(timeout=args.timeout)
+        elif args.acmd == "maintain":
+            result = attendance.maintain(force=args.force)
         elif args.acmd == "status":
             result = attendance.status()
         elif args.acmd == "sync":
@@ -41,7 +45,7 @@ def run(args):
         print(f"考勤出错：{e}", file=sys.stderr)
         return EXIT_NETWORK
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
+    return EXIT_AUTH if result.get("status") == "needs_login" else 0
 
 
 def add_commands(sub):
@@ -52,6 +56,10 @@ def add_commands(sub):
 
     p = command("login", "打开浏览器登录考勤门户（Okta + MFA），只保存门户的登录状态，不保存密码")
     p.add_argument("--timeout", type=int, default=600, help="等你登录完的最长秒数")
+    p = command("renew", "仅用本机已保存的 SSO 尝试恢复；需要密码或 MFA 时停止")
+    p.add_argument("--timeout", type=int, default=30)
+    p = command("maintain", "检查考勤登录并尝试恢复；需要人工登录时进入冷却期")
+    p.add_argument("--force", action="store_true", help="忽略认证失败后的冷却期")
     command("status", "登录状态、上次读取时间和已保存的班次数")
     p = command("sync", "读取最近几天和本周还没到的班次及签到状态，保存到本地")
     p.add_argument("--days", type=int, default=7, help="往前读几天（1 到 14）")
