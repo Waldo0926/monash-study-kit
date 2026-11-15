@@ -50,7 +50,7 @@ def persistent_browser(headless=False):
     from .browser_login import find_browser
     profile = HOME / "attendance-browser"
     ensure_private_dir(profile)
-    with file_lock(HOME / "attendance-profile.lock", timeout=2):
+    with file_lock(HOME / "attendance-profile.lock", timeout=2 if headless else 60):
         with _playwright()() as p:
             executable = find_browser()
             context = p.chromium.launch_persistent_context(
