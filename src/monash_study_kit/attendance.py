@@ -44,36 +44,55 @@ def _save_state(context):
     write_secret(STATE_FILE, json.dumps(state))
 
 
-def login(timeout=600):
-    """User-facing login helper; never handles a password or automates MFA."""
+@contextmanager
+def persistent_browser(headless=False):
+    from .local_state import file_lock
+    from .browser_login import find_browser
     profile = HOME / "attendance-browser"
     ensure_private_dir(profile)
-    with _playwright()() as p:
-        from monash_study_kit.browser_login import find_browser
+    with file_lock(HOME / "attendance-profile.lock", timeout=2 if headless else 60):
+        with _playwright()() as p:
+            executable = find_browser()
+            context = p.chromium.launch_persistent_context(
+                str(profile), headless=headless, timezone_id=str(TZ),
+                **({"executable_path": executable} if executable else {}))
+            try:
+                yield context
+            finally:
+                context.close()
 
-        executable = find_browser()
-        context = p.chromium.launch_persistent_context(
-            str(profile), headless=False, timezone_id=str(TZ), **({"executable_path": executable} if executable else {})
-        )
-        try:
-            page = context.new_page()
-            page.goto(ORIGIN + "/student/Default.aspx", wait_until="domcontentloaded")
-            deadline = time.monotonic() + timeout
-            while time.monotonic() < deadline:
-                if page.is_closed():
-                    raise AttendanceAuthError("Login window closed before completion")
-                if page.url.startswith(ORIGIN + "/student/"):
-                    clue = page.locator("body").inner_text(timeout=10000)
-                    if re.search(r"attendance|semester|units|logout|log out", clue, re.I):
+
+def login(timeout=600):
+    """User-facing login helper; never handles a password or automates MFA."""
+    with persistent_browser(headless=False) as context:
+        page = context.new_page()
+        page.goto(ORIGIN + "/student/Default.aspx", wait_until="domcontentloaded")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if page.is_closed():
+                raise AttendanceAuthError("Login window closed before completion")
+            if page.url.startswith(ORIGIN + "/student/"):
+                clue = page.locator("body").inner_text(timeout=10000)
+                if re.search(r"attendance|semester|units|logout|log out", clue, re.I):
+                    from . import attendance_auto, attendance_session, attendance_http
+                    # A background probe must finish before the new login replaces its old state.
+                    with attendance_http.portal_lock(timeout=60):
                         _save_state(context)
-                        from . import attendance_auto
-
                         attendance_auto.record_login()
-                        return {"status": "connected", "saved": True}
-                page.wait_for_timeout(1000)
-            raise AttendanceAuthError("Login timed out; complete Monash sign-in and MFA in the browser")
-        finally:
-            context.close()
+                        attendance_session.record("authenticated", authenticated=True)
+                    return {"status": "connected", "saved": True}
+            page.wait_for_timeout(1000)
+        raise AttendanceAuthError("Login timed out; complete Monash sign-in and MFA in the browser")
+
+
+def renew(timeout=30):
+    from .attendance_session import renew as recover
+    return recover(timeout)
+
+
+def maintain(force=False):
+    from .attendance_session import maintain as check
+    return check(force)
 
 
 @contextmanager
@@ -150,13 +169,19 @@ def status():
     from . import attendance_auto
 
     cache = _load()
+    from . import attendance_session
+    auth = attendance_session.read_status()
     return {
+        "authentication": auth.get("status", "unknown"),
+        "last_auth_check": auth.get("checked_at"),
+        "next_auth_probe_at": auth.get("next_probe_at"),
+        "local_sso_profile": (HOME / "attendance-browser").is_dir(),
         "configured": STATE_FILE.is_file(),
         "last_success": cache.get("last_success"),
         "last_method": cache.get("last_method"),
         "cached_records": len(cache["records"]),
         "scanned_dates": cache.get("scanned_dates", []),
-        "last_error": cache.get("last_error"),
+        "last_error": auth.get("action") if auth.get("status") == "needs_login" else cache.get("last_error"),
         "session_lifetime": attendance_auto.lifetime(),
     }
 

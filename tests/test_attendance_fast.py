@@ -212,7 +212,7 @@ def test_background_reads_on_schedule_and_keepalive_is_off_by_default(monkeypatc
     calls = []
     monkeypatch.setattr(M, "load_settings", lambda: {"attendance_enabled": True, "attendance_auto_sync": True})
     monkeypatch.setattr(attendance, "sync", lambda days: calls.append(("sync", days)) or {"method": "http"})
-    monkeypatch.setattr(attendance_http, "keepalive", lambda: calls.append(("keepalive",)) or {})
+    monkeypatch.setattr(attendance, "maintain", lambda: calls.append(("keepalive",)) or {})
     monkeypatch.setitem(M._attendance, "thread", None)
     monkeypatch.setattr(attendance_auto, "due", lambda records, last, now: ("morning", 3))
     assert M.start_attendance_work() == "sync"

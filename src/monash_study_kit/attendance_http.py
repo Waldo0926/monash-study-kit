@@ -41,10 +41,10 @@ class FastPathUnavailable(RuntimeError):
 # ---------------------------------------------------------------- 请求
 
 @contextmanager
-def portal_lock():
+def portal_lock(timeout=2):
     """和 attendance.browser() 用同一把锁，免得同时改登录状态文件。"""
     ensure_private_dir(CACHE_FILE.parent)
-    lock = sqlite3.connect(CACHE_FILE.parent / "session-lock.db", timeout=2)
+    lock = sqlite3.connect(CACHE_FILE.parent / "session-lock.db", timeout=timeout)
     lock.execute("CREATE TABLE IF NOT EXISTS lock (id INTEGER)")
     try:
         lock.execute("BEGIN IMMEDIATE")
