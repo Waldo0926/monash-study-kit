@@ -27,117 +27,7 @@ All Moodle and Ed tools are **read-only**: they never submit assignments, attemp
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
 
-
-## Current release: 1.11.2 · Whole-course materials
-
-Export course materials without an AI app. Install or upgrade, sign in and select your units, then run:
-
-```bash
-uv tool install --upgrade 'monash-study-kit[gmail]'
-monash setup
-monash google login  # only for course-linked Google files; separate read-only consent
-monash export FIT1043 --sync --format both --to "./exports"
-```
-
-Replace `FIT1043` with your unit code. Packages include Moodle files, Pages, Books, assignment instructions, Ed Lessons and accessible Google files; personal submissions, grades, mail and attendance are excluded. Check the package README for omissions. Version 1.11.2 fixes Windows PDF browser cold-start retries.
-
-![Actual 1.11.2 offline export and ZIP contents using synthetic course data](docs/screenshots/course-export.png)
-
-This screenshot comes from a real `monash export` run against synthetic local data, deliberately including a missing attachment and an unauthorized Google link to demonstrate omissions. No real account or course content is used. Omit `--sync` to export existing local data; sync and export again to retry missing materials. See the [whole-course export guide](https://docs.secureview.tech/study-kit/materials/).
-
-![What monash todo prints: Moodle deadlines, a possibly missed assignment, Ed lessons not started, new course files, announcements and unread replies](docs/screenshots/todo.png)
-
-The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Your AI app reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
-
----
-
-For the original v1.1 security review and the [1.5 feature review checklist](docs/SECURITY-REVIEW-1.5-SCOPE.md), see [security documentation](docs/security.md). The earlier review does not automatically certify features added later.
-
-
-
-## Multiple accounts / course materials only (1.10.0)
-
-Without `--profile`, or with `--profile default`, the existing default account keeps its directory rules and features. Named accounts store separate databases, files, credentials and browser sessions under `<default data home>/profiles/<name>/`. The base still follows `MONASH_KIT_HOME` > `location.json` > the platform default. `default` is reserved; other names must match `[a-z0-9][a-z0-9_-]{0,31}`.
-
-```bash
-monash --profile alice setup             # login and course selection only
-monash --profile alice google login      # optional; drive.readonly only
-monash --profile alice sync
-monash --profile=alice export FIT1045 --sync
-monash --profile alice mcp               # local stdio, materials tools only
-monash profile list                      # manage from the default account
-monash profile remove alice              # confirm, clear logins, keep materials
-monash profile remove alice --all --yes   # also remove databases and materials
-```
-
-`MONASH_KIT_PROFILE=alice` also works; the command-line selection wins. Selection happens before importing service modules; an initialized Python process cannot switch accounts. Named profiles ignore individual directory overrides (`MONASH_KIT_DATA`, `MONASH_KIT_SECRETS`, `MONASH_KIT_FILES`, `MONASH_KIT_ED_DATA`, `MONASH_KIT_ED_TOKEN`, `ED_TOKEN`, and `files_dir`) to avoid sharing the default account's paths or credentials. Directories use mode 700 where supported.
-
-Named profiles **stay local**: `remote`, `connect`, `setup claude`, and `move` are refused, and `setup` skips AI configuration. Sessions cannot be handed to remote services or AI configuration. Local stdio `mcp` can still be run manually. Profiles move together with the default data home rather than independently.
-
-Named profiles force `materials_only=true`, even if settings or environment variables request false. The default account starts with false and can enable it with `monash config materials_only true`. While the mode is active, config can inspect this setting but cannot change it. To exit on the default account, temporarily override `MONASH_KIT_MATERIALS_ONLY=false`, then save false; named profiles cannot use this override.
-
-Materials sync keeps Moodle files, Pages, Books, assignment descriptions and visible grading criteria, folders, linked Google files and Ed Lessons. It still reads Ed course lists to match unit codes, but never syncs discussions or replies. Gmail background sync, attendance reads and keepalive are skipped; Moodle login does not obtain a personal calendar link. `doctor --deep` checks materials and the search index only, skipping deadlines, submission status, grades and posts. Existing cached data is not deleted when enabling the mode.
-
-Complete command policy in materials mode (refused commands return exit code 1):
-
-- Allowed: `setup` (login and course selection), `login moodle/ed`, `google login/status/logout`, `sync`, `export`, `courses`, `status`, `doctor`, `open`, `library`, `config`, `grep`, `help`, `mcp`; `ed export/lessons/read/quiz`; `moodle ls/get`; `profile list/remove` from the default account.
-- Config cannot change active `materials_only`; named profiles cannot change `files_dir`. `moodle get` only accepts course-resource/file entry points, rejecting grade pages and submission files.
-- Refused: all `gmail` and `attendance` commands; `todo`, `due`, `semester`, `media`, `uninstall`, `update`, `connect`, `move`, all `remote`, `setup claude`; `ed courses/threads/search/show/new/following`; `moodle overview/due/calendar/assignments/grades/news/search/find/open/alerts/messages`. New commands require an explicit allowlist entry.
-
-The MCP tool list is exactly `list_files`, `read_file`, `search_content`, `get_ed_lessons`, `export_ed_lessons`; `use_ed=false` removes the last two. Other tools and their legacy aliases fail when called. Export writes a local zip without changing upstream course data and retains its local-write MCP annotation. Personal study prompts are unavailable. There is no arbitrary Drive browsing or search command/tool: Google exports only follow course links during sync.
-
-`profile list` checks only credential-file presence and disk usage, never reading or printing credential contents. Removal first revokes the target profile's Drive and Gmail Google OAuth authorizations in order. Any revocation failure stops removal and preserves **every local file** for a retry; an earlier successful remote revocation cannot be undone. Once all revocations succeed, `secrets/`, `browser-profile/` and `attendance-browser/` are removed. Only `--all` removes the complete profile, including materials and databases. The default account and other profiles are untouched; Moodle receives no logout or other request. Ed API tokens have no revocation interface here: manually delete them at [Ed API tokens](https://edstem.org/au/settings/api-tokens).
-
-
-## 1.9.0: more complete course exports
-
-Moodle Pages, Book chapters, assignment descriptions and visible rubrics / marking guides are saved as Markdown. Moodle images are stored in course `assets/` by content hash, and internal links to Page, Resource, Folder and Book activities are followed. Folder downloads preserve original names, subdirectories and case, reuse files for seven days, and fall back to individual downloads. Missing notebook images, case mismatches, empty pages and hidden grading criteria are explained in the index.
-
-Ed Lessons document / code images hosted on `edusercontent.com` are cached locally, deduplicated by content and limited to 200 MB each. Failed images keep their original URL and an error record. Both Ed-only and whole-unit exports include `assets/` with working relative references.
-
-Google Slides and Docs export as PDF, Sheets as XLSX, and ordinary Drive files retain their format. Only file links found in Moodle and Ed Lessons are processed; Google Forms cannot be exported. Existing exports are reused while the file remains on disk. Successful file links disappear from generated link lists; failures retain their URL and a Chinese reason in the index.
-
-```bash
-uv tool install --reinstall 'monash-study-kit[gmail]'
-monash google login                  # bundled desktop OAuth client
-monash google login --client client.json
-monash google status
-monash config google_docs_format docx # default: pdf; Google Docs only
-monash sync FIT1045 --refresh-google  # force Google exports to refresh
-monash export FIT1045 --sync --json  # sync this Moodle unit, then matching Ed units
-monash google logout                 # revoke first, then remove the local token
-```
-
-The bundled OAuth client is published but not verified by Google: on first authorization Google shows “Google hasn't verified this app”; choose **Advanced → Go to Monash Student MCP (unsafe)** to continue. Google caps unverified apps at 100 users, and a school-managed account may be blocked by its admins (Google links then stay as links, with the reason in the index). Google classifies `drive.readonly` as a **restricted scope**. It permits reading Drive files; this tool only downloads files linked from courses and does not enumerate your Drive. Google authorization shares the optional `[gmail]` dependency, but uses an independent flow and `secrets/google-drive-token.json` under the data home (`MONASH_KIT_SECRETS` can override the directory). Gmail authorization and `gmail-token.json` are unchanged. Credentials stay in the terminal / browser authorization flow; never paste them into chat.
-
-Downloads use read-only GET requests. For Drive export-size or administrator restrictions, a fallback tries the existing Google session in the dedicated login browser. Cookies are used only in memory, never logged or separately saved, and redirects outside Google's domains stop. The fallback may still be blocked by policy; failures keep the original link and explain why. Missing authorization points to `monash google login`. Moodle Page, Resource and assignment `view.php` requests still record a view. Normal folder downloads and Book print requests avoid their `view.php`; the individual-file fallback must open the folder page and records a view.
-
-`monash export <unit>` now exports Markdown body pages, link lists, quizzes and the index as **PDF by default**, alongside the original course files. Install Chrome, Edge or Brave to generate PDFs; if no browser is found, the export falls back to Markdown and explains this in the index and terminal. Use `--format both` to include PDF and Markdown, or `--format md` for Markdown only. For example, `monash config export_format both` saves PDF and Markdown as the default. Synced Markdown stays unchanged on your computer for AI, search and MCP. PDF generation runs offline in a fresh temporary browser profile, embeds only local exported images and omits remote images (keeping their alt text). PDFs are cached under `data/pdf-cache/` (up to 500 MB); `--json` includes `pdf.generated`, `pdf.cached` and `pdf.skipped_reason`. `monash ed export` keeps its existing behavior.
-
-Every sync checks newly discovered Ed units against tracked Moodle unit codes, including archived units and combined codes such as `FIT1045/FIT1053`; later user tracking choices are preserved. `monash export <unit> --sync` refreshes Moodle first, then the matching Ed Lessons (not forum threads), before exporting; `--refresh-google` also re-exports Google files. Run in a terminal, `monash export` first opens the system folder picker to choose where to save (defaulting to your last choice, else Downloads) and then starts; `--to <folder>` or `--no-ask` skip the dialog. It prints the destination and PDF progress as it goes. Ordinary exports use only local data. The README index includes all omission notes and failed Ed images, plus counts of link lists, remote Markdown images, Google links, successful exports and failures grouped by reason; `--json` exposes the same counts in `statistics`.
-
-New tests use synthetic HTML / JSON, fake clients and mocked HTTP, with no real account requests. Ed code-challenge workspace downloads still require a real read-only response to establish the interface and are excluded, as are multi-account profiles.
-
-
-## Two parts, one codebase
-
-The same core (login, sync, queries) serves two kinds of "users":
-
-**MCP: the interface for your AI app.** Moodle and Ed both sit behind Okta + MFA, so the AI cannot get in by itself.
-The MCP server lets it look things up mid-conversation (tools such as `get_study_todo`, `search_content`, `list_ed_updates`):
-
-- **Answers come from real data**: deadlines, announcements and grades are fetched live, with sources such as "Workshop 5 Slides, page 25".
-- **Both platforms at once**: one "what do I need to do this week" checks Moodle deadlines, unfinished Ed lessons and announcements from both.
-- **No manual copying**: no downloading PDFs and re-uploading them. The AI finds the right file and reads only the pages it needs, saving time and usage.
-- **Natural follow-ups**: "What does the A2 spec require?" "Explain that week's functor material using the lecture notes."
-
-**CLI (the `monash` command): the interface for humans.**
-
-1. **Things only a person can do**: installation, passing MFA in the login window, pasting the Ed token (tokens should never go through a chat, so they are only entered in the terminal).
-2. **No AI needed**: out of usage or just want a quick look? `monash todo` answers in a second (see [Works without AI usage](#works-without-ai-usage)).
-3. **Troubleshooting and maintenance**: `status`, `sync`, `update`, `uninstall`.
-
-In short: MCP turns your AI app into a TA who knows your units; the CLI handles setup, login and fallback. Ask in your AI app day to day, open the terminal occasionally.
+**New here?** [Install](#installation) · [First-time setup](#first-time-setup-monash-setup) · [Everyday use](#everyday-use) · [FAQ](#faq)
 
 ## Requirements
 
@@ -218,36 +108,6 @@ At the end you can choose to sync right away. The first sync downloads all cours
 
 Then open your AI app. In Claude Desktop, **"+" → Connectors** in the chat box lists **monash**; leave it switched on. For other apps, `monash connect` shows which ones are connected.
 
-## What's new in 1.7
-
-- **Download a whole unit's Ed materials as one zip.** `monash ed export FIT2109` packs the Ed Lessons you have synced into a zip in your Downloads folder: one folder per week with the PDFs, text pages and attachments, a `Links.md` per lesson (reading pages and the original Ed page) and a top-level `README.md` with your progress. `--module "Week 3"` packs one week, `--open` shows the zip in Finder. You can also ask your AI app "zip up my FIT2109 Ed materials", or use the button next to each unit on the `monash library --open` page. It works offline from files already on your computer.
-- **Ed files are stored by unit code.** Folders change from numeric ids to `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf`, in the same order as on Ed. `monash open ed` opens them. The first sync after upgrading moves existing files instead of downloading them again.
-- **Files attached inside Ed pages are downloaded too.** Starter-code zips, handouts and other files that Ed hosts inside a lesson page are now downloaded and searchable; single files over 200 MB are skipped. A replaced PDF is downloaded again, and pages removed on Ed are removed locally.
-- **The AI sees Ed files when listing materials.** "What materials are there for FIT2109 week 3?" now lists Ed Lessons files through `list_files`, ready to read.
-
-## What's new in 1.6
-
-- **Semester week view.** `monash semester --days 7` puts Moodle deadlines, Ed lessons and replies and cached attendance in one view; `--ics` exports the deadlines as a private calendar file.
-
-## What's new in 1.5
-
-- **School mail (optional).** Ask "anything in my email I need to deal with?" and get recent unread school mail, offline search, whole threads and attachment text. The AI can draft a reply, send a draft or archive mail, and only after you confirm each action.
-- **Attendance (optional).** "Which classes this week haven't I checked in to?" and "what's the code for today's workshop?", with each code's source. Reads follow your timetable and take a few seconds without opening a browser. Checked against the Malaysia campus portal.
-- **No terminal needed to connect them.** Say "connect my school email" or "connect my attendance" in your AI app; it installs what is missing and opens the sign-in window. No Google Cloud setup either.
-- **Remote apps choose.** With `monash remote`, each app you pair ticks which of these it may use.
-- **Units without Ed** can turn Ed off: `monash config use_ed false`.
-
-Details: [Optional: Gmail and attendance](#optional-gmail-and-attendance) and the [changelog](CHANGELOG.md).
-
-## What's new in 1.4
-
-- **Study panels.** In apps that support MCP Apps, "what do I need to do this week", "show my FIT2109 lesson progress" and "help me practise the week 3 quiz" also come with a small panel: deadline cards, lesson progress by module, and quiz questions you can click through. When you finish a quiz, the **交给 AI 批改** button sends your choices back to the chat and the AI explains them from the lesson. Nothing is submitted to Ed. Apps without panels still get the same text answers as before.
-- **Find a Moodle activity by name.** "Where is the week 7 workshop on Moodle?" now works through the new `search_moodle_activities` tool. It needs a Moodle login.
-- **Browse your files without AI.** `monash library --open` opens a page in your browser with every Moodle and Ed lesson file you have synced. Filter by unit, week or name and download the original. It only listens on `127.0.0.1`, so other devices cannot open it.
-- **Optional remote access.** `monash remote serve` lets ChatGPT, or Claude on the web and phone, reach your own data over HTTPS. Use your own server and domain, or try it with a free Cloudflare quick tunnel on your own computer, which needs no account and no domain. Each app pairs with a one-time code from your terminal, and only the 16 read-only query tools are exposed. Nothing starts unless you run it. Steps are on [Host it yourself](https://docs.secureview.tech/study-kit/remote/).
-
-1.4.1 adds `library` and `remote` to the summary at the top of `monash --help`. Everyday use on your own computer still needs no server, domain or extra account. Technical notes: [docs/panels-library-remote.md](docs/panels-library-remote.md).
-
 ## Everyday use
 
 Just ask in your AI app. While it is open, the tool works in the background:
@@ -292,6 +152,111 @@ The CLI doesn't use AI and consumes no usage. Run `monash sync` first, then:
 
 The difference is that nobody summarises for you; you get the raw information. Background sync and Moodle session refresh run while your AI app is open, because that is when the MCP server runs:
 they keep running even if your usage is exhausted; if the app is closed, run `monash sync` before querying and `monash login` if Moodle has expired.
+
+## Two parts, one codebase
+
+The same core (login, sync, queries) serves two kinds of "users":
+
+**MCP: the interface for your AI app.** Moodle and Ed both sit behind Okta + MFA, so the AI cannot get in by itself.
+The MCP server lets it look things up mid-conversation (tools such as `get_study_todo`, `search_content`, `list_ed_updates`):
+
+- **Answers come from real data**: deadlines, announcements and grades are fetched live, with sources such as "Workshop 5 Slides, page 25".
+- **Both platforms at once**: one "what do I need to do this week" checks Moodle deadlines, unfinished Ed lessons and announcements from both.
+- **No manual copying**: no downloading PDFs and re-uploading them. The AI finds the right file and reads only the pages it needs, saving time and usage.
+- **Natural follow-ups**: "What does the A2 spec require?" "Explain that week's functor material using the lecture notes."
+
+**CLI (the `monash` command): the interface for humans.**
+
+1. **Things only a person can do**: installation, passing MFA in the login window, pasting the Ed token (tokens should never go through a chat, so they are only entered in the terminal).
+2. **No AI needed**: out of usage or just want a quick look? `monash todo` answers in a second (see [Works without AI usage](#works-without-ai-usage)).
+3. **Troubleshooting and maintenance**: `status`, `sync`, `update`, `uninstall`.
+
+In short: MCP turns your AI app into a TA who knows your units; the CLI handles setup, login and fallback. Ask in your AI app day to day, open the terminal occasionally.
+
+## Export a whole unit's materials
+
+Export course materials without an AI app. Install or upgrade, sign in and select your units, then run:
+
+```bash
+uv tool install --upgrade 'monash-study-kit[gmail]'
+monash setup
+monash google login  # only for course-linked Google files; separate read-only consent
+monash export FIT1043 --sync --format both --to "./exports"
+```
+
+Replace `FIT1043` with your unit code. Packages include Moodle files, Pages, Books, assignment instructions, Ed Lessons and accessible Google files; personal submissions, grades, mail and attendance are excluded. Check the package README for omissions. Version 1.11.2 fixes Windows PDF browser cold-start retries.
+
+![Actual 1.11.2 offline export and ZIP contents using synthetic course data](docs/screenshots/course-export.png)
+
+This screenshot comes from a real `monash export` run against synthetic local data, deliberately including a missing attachment and an unauthorized Google link to demonstrate omissions. No real account or course content is used. Omit `--sync` to export existing local data; sync and export again to retry missing materials. See the [whole-course export guide](https://docs.secureview.tech/study-kit/materials/).
+
+![What monash todo prints: Moodle deadlines, a possibly missed assignment, Ed lessons not started, new course files, announcements and unread replies](docs/screenshots/todo.png)
+
+The picture is real output of `monash todo` against a database filled with made-up units, files and posts. Your AI app reads the same data through the MCP tools. Guide with more pictures: [docs.secureview.tech/study-kit](https://docs.secureview.tech/study-kit/).
+
+---
+
+For the original v1.1 security review and the [1.5 feature review checklist](docs/SECURITY-REVIEW-1.5-SCOPE.md), see [security documentation](docs/security.md). The earlier review does not automatically certify features added later.
+
+## Optional: Gmail and attendance
+
+New in 1.5.0. Both parts are off until you connect them and only run on your own computer.
+
+- **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline, reads whole threads and the text of attachments (PDF, Office, images). Reading never marks mail as read.
+- **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?" or "what's the code for today's FIT2102 workshop?". Codes are looked up in synced Moodle, Ed and school mail and shown with where they came from, for you to check. Only checked against the Malaysia campus portal.
+
+If you only want to ask about your inbox in Claude or ChatGPT, their built-in Gmail connectors are the easiest way. The Gmail part here is for linking mail with attendance codes, searching mail and attachments offline, and using it in apps without a Gmail connector such as Codex or Cursor. No Google Cloud setup is needed: the package includes a Google app, and Google will show "this app isn't verified" (click Advanced, then continue). Using your own Google app instead is optional. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). The easiest way is to ask your AI app: "connect my school email" or "connect my attendance". It installs what is missing, opens the sign-in window on your computer, and you only sign in; nothing is typed in a terminal and no password goes into the chat. The same steps in a terminal:
+
+```bash
+uv tool install --reinstall "monash-study-kit[gmail,attendance]"
+monash gmail login
+monash gmail sync
+monash attendance login
+monash attendance sync
+```
+
+Restart your AI app after logging in. While it is open, mail syncs in the background every 30 minutes (`monash config gmail_sync_minutes`, 0 turns it off); `monash gmail sync` updates it right away. Attendance follows your timetable instead of the clock: once on weekday mornings at 8 and 15 minutes after each class you have not checked in to yet, so nothing runs at night, at weekends or between classes (`monash config attendance_auto_sync false` turns it off). You or the AI can also ask for a read any time. A read is one plain request to the portal (about 5 KB, a few seconds, no browser); if the page ever looks different from what is expected it falls back to one headless browser page. On the Malaysia portal both ways gave the same result for all 15 days the portal offers, and `monash attendance probe` repeats that check on yours. `monash status` and `monash doctor` show both parts once they are on, and `monash update` keeps the extras you installed.
+
+Logging in turns everything on in your AI app, including drafting, sending a draft, changing labels (archive, mark as read, star) and checking in to a class. The AI has to show you the full preview first and only runs it after you confirm that exact action; a check-in is only prepared when you say you attended. Mail is never permanently deleted. To keep mail read-only, log in with `monash gmail login --read-only`; to switch an action off, `monash config gmail_manage_enabled false` or `monash config attendance_submit_enabled false`.
+
+With `monash remote serve`, each app you pair chooses on the pairing page which of these features it may use. Only features turned on on the server are offered, read-only ones start ticked and the write ones start unticked. So Claude on your phone can have attendance only and ChatGPT mail only, or neither. Apps paired earlier keep Moodle and Ed only until you pair them again, and `monash remote clients` shows what each app has.
+
+Each part adds tool descriptions to every conversation: with both logged in it is about 1,900 tokens more (5,132 in total instead of 3,232); without logging in nothing changes.
+
+Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
+
+## Multiple accounts / course materials only
+
+Without `--profile`, or with `--profile default`, the existing default account keeps its directory rules and features. Named accounts store separate databases, files, credentials and browser sessions under `<default data home>/profiles/<name>/`. The base still follows `MONASH_KIT_HOME` > `location.json` > the platform default. `default` is reserved; other names must match `[a-z0-9][a-z0-9_-]{0,31}`.
+
+```bash
+monash --profile alice setup             # login and course selection only
+monash --profile alice google login      # optional; drive.readonly only
+monash --profile alice sync
+monash --profile=alice export FIT1045 --sync
+monash --profile alice mcp               # local stdio, materials tools only
+monash profile list                      # manage from the default account
+monash profile remove alice              # confirm, clear logins, keep materials
+monash profile remove alice --all --yes   # also remove databases and materials
+```
+
+`MONASH_KIT_PROFILE=alice` also works; the command-line selection wins. Selection happens before importing service modules; an initialized Python process cannot switch accounts. Named profiles ignore individual directory overrides (`MONASH_KIT_DATA`, `MONASH_KIT_SECRETS`, `MONASH_KIT_FILES`, `MONASH_KIT_ED_DATA`, `MONASH_KIT_ED_TOKEN`, `ED_TOKEN`, and `files_dir`) to avoid sharing the default account's paths or credentials. Directories use mode 700 where supported.
+
+Named profiles **stay local**: `remote`, `connect`, `setup claude`, and `move` are refused, and `setup` skips AI configuration. Sessions cannot be handed to remote services or AI configuration. Local stdio `mcp` can still be run manually. Profiles move together with the default data home rather than independently.
+
+Named profiles force `materials_only=true`, even if settings or environment variables request false. The default account starts with false and can enable it with `monash config materials_only true`. While the mode is active, config can inspect this setting but cannot change it. To exit on the default account, temporarily override `MONASH_KIT_MATERIALS_ONLY=false`, then save false; named profiles cannot use this override.
+
+Materials sync keeps Moodle files, Pages, Books, assignment descriptions and visible grading criteria, folders, linked Google files and Ed Lessons. It still reads Ed course lists to match unit codes, but never syncs discussions or replies. Gmail background sync, attendance reads and keepalive are skipped; Moodle login does not obtain a personal calendar link. `doctor --deep` checks materials and the search index only, skipping deadlines, submission status, grades and posts. Existing cached data is not deleted when enabling the mode.
+
+Complete command policy in materials mode (refused commands return exit code 1):
+
+- Allowed: `setup` (login and course selection), `login moodle/ed`, `google login/status/logout`, `sync`, `export`, `courses`, `status`, `doctor`, `open`, `library`, `config`, `grep`, `help`, `mcp`; `ed export/lessons/read/quiz`; `moodle ls/get`; `profile list/remove` from the default account.
+- Config cannot change active `materials_only`; named profiles cannot change `files_dir`. `moodle get` only accepts course-resource/file entry points, rejecting grade pages and submission files.
+- Refused: all `gmail` and `attendance` commands; `todo`, `due`, `semester`, `media`, `uninstall`, `update`, `connect`, `move`, all `remote`, `setup claude`; `ed courses/threads/search/show/new/following`; `moodle overview/due/calendar/assignments/grades/news/search/find/open/alerts/messages`. New commands require an explicit allowlist entry.
+
+The MCP tool list is exactly `list_files`, `read_file`, `search_content`, `get_ed_lessons`, `export_ed_lessons`; `use_ed=false` removes the last two. Other tools and their legacy aliases fail when called. Export writes a local zip without changing upstream course data and retains its local-write MCP annotation. Personal study prompts are unavailable. There is no arbitrary Drive browsing or search command/tool: Google exports only follow course links during sync.
+
+`profile list` checks only credential-file presence and disk usage, never reading or printing credential contents. Removal first revokes the target profile's Drive and Gmail Google OAuth authorizations in order. Any revocation failure stops removal and preserves **every local file** for a retry; an earlier successful remote revocation cannot be undone. Once all revocations succeed, `secrets/`, `browser-profile/` and `attendance-browser/` are removed. Only `--all` removes the complete profile, including materials and databases. The default account and other profiles are untouched; Moodle receives no logout or other request. Ed API tokens have no revocation interface here: manually delete them at [Ed API tokens](https://edstem.org/au/settings/api-tokens).
 
 ## Other AI clients
 
@@ -502,33 +467,6 @@ monash media
 
 Videos uploaded directly to Moodle aren't downloaded by default either (often hundreds of MB); they are recorded as links. To download them: `monash config download_videos true`.
 
-## Optional: Gmail and attendance
-
-New in 1.5.0. Both parts are off until you connect them and only run on your own computer.
-
-- **School Gmail.** Keeps a private copy of your Monash mailbox. Ask "anything in my email I need to deal with?" and the AI lists recent unread school mail (promotions and social updates left out), searches it offline, reads whole threads and the text of attachments (PDF, Office, images). Reading never marks mail as read.
-- **Attendance.** Reads your classes and check-in status from the attendance portal, so you can ask "which classes this week haven't I checked in to?" or "what's the code for today's FIT2102 workshop?". Codes are looked up in synced Moodle, Ed and school mail and shown with where they came from, for you to check. Only checked against the Malaysia campus portal.
-
-If you only want to ask about your inbox in Claude or ChatGPT, their built-in Gmail connectors are the easiest way. The Gmail part here is for linking mail with attendance codes, searching mail and attachments offline, and using it in apps without a Gmail connector such as Codex or Cursor. No Google Cloud setup is needed: the package includes a Google app, and Google will show "this app isn't verified" (click Advanced, then continue). Using your own Google app instead is optional. The step-by-step guide (in Chinese) is [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md); what is accessed and stored is in [PRIVACY.md](PRIVACY.md). The easiest way is to ask your AI app: "connect my school email" or "connect my attendance". It installs what is missing, opens the sign-in window on your computer, and you only sign in; nothing is typed in a terminal and no password goes into the chat. The same steps in a terminal:
-
-```bash
-uv tool install --reinstall "monash-study-kit[gmail,attendance]"
-monash gmail login
-monash gmail sync
-monash attendance login
-monash attendance sync
-```
-
-Restart your AI app after logging in. While it is open, mail syncs in the background every 30 minutes (`monash config gmail_sync_minutes`, 0 turns it off); `monash gmail sync` updates it right away. Attendance follows your timetable instead of the clock: once on weekday mornings at 8 and 15 minutes after each class you have not checked in to yet, so nothing runs at night, at weekends or between classes (`monash config attendance_auto_sync false` turns it off). You or the AI can also ask for a read any time. A read is one plain request to the portal (about 5 KB, a few seconds, no browser); if the page ever looks different from what is expected it falls back to one headless browser page. On the Malaysia portal both ways gave the same result for all 15 days the portal offers, and `monash attendance probe` repeats that check on yours. `monash status` and `monash doctor` show both parts once they are on, and `monash update` keeps the extras you installed.
-
-Logging in turns everything on in your AI app, including drafting, sending a draft, changing labels (archive, mark as read, star) and checking in to a class. The AI has to show you the full preview first and only runs it after you confirm that exact action; a check-in is only prepared when you say you attended. Mail is never permanently deleted. To keep mail read-only, log in with `monash gmail login --read-only`; to switch an action off, `monash config gmail_manage_enabled false` or `monash config attendance_submit_enabled false`.
-
-With `monash remote serve`, each app you pair chooses on the pairing page which of these features it may use. Only features turned on on the server are offered, read-only ones start ticked and the write ones start unticked. So Claude on your phone can have attendance only and ChatGPT mail only, or neither. Apps paired earlier keep Moodle and Ed only until you pair them again, and `monash remote clients` shows what each app has.
-
-Each part adds tool descriptions to every conversation: with both logged in it is about 1,900 tokens more (5,132 in total instead of 3,232); without logging in nothing changes.
-
-Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
-
 ## Updating
 
 ```bash
@@ -581,7 +519,31 @@ Most Ed lessons have no due date; Moodle is the source of truth for deadlines. T
 Run `monash doctor` and follow the → after each item. If you need help, send the whole output; it contains no tokens, cookies or similar.
 You can also just tell your AI "monash isn't working" and it will run the same checks. The MCP background log is `mcp.log` in the data directory.
 
-## Reliability and changes (1.12.0)
+### `monash: command not found`
+
+Close the terminal and open it again; `uv` adds its tools folder to your PATH only for new windows. Still missing: run `uv tool update-shell`, then reopen the terminal.
+
+### The first sync takes very long
+
+The first sync downloads every file of every tracked unit. To get one unit first, run `monash sync FIT1045` (your own unit code). `monash status` shows whether the last sync was complete or partial, and `monash sync --retry-failed` retries only what failed.
+
+### A new semester started and my new units are missing
+
+Run `monash courses` and pick the units again, then `monash sync`.
+
+### Ed says the token is invalid
+
+You probably deleted the token on Ed's token page. Create a new one there and run `monash login ed` to paste it.
+
+### I want to remove everything
+
+`monash uninstall` removes monash from Claude and the other AI apps, then asks whether to delete all data. If you say yes it first revokes the Google authorisations (Drive and Gmail) and deletes nothing when that fails. The Ed token has no revoke API: delete it on Ed's token page. Finish with `uv tool uninstall monash-study-kit`.
+
+## Release notes
+
+What each release added, newest first. The version badge at the top shows the latest release and [CHANGELOG.md](CHANGELOG.md) has every change.
+
+### 1.12: sync reliability and change summaries
 
 `monash status` now distinguishes partial and complete syncs. Use
 `monash sync --retry-failed` to retry failures and `monash changes --days 7`
@@ -596,6 +558,65 @@ files and edited obsolete files. Silent Moodle recovery uses the dedicated
 browser profile and never opens an MFA window in the background; disable it with
 `monash config auto_relogin false`. For Australian daylight saving, use
 `monash config timezone Australia/Melbourne`. See [behavior and limits](docs/reliability.md).
+
+### 1.9: more complete course exports
+
+Moodle Pages, Book chapters, assignment descriptions and visible rubrics / marking guides are saved as Markdown. Moodle images are stored in course `assets/` by content hash, and internal links to Page, Resource, Folder and Book activities are followed. Folder downloads preserve original names, subdirectories and case, reuse files for seven days, and fall back to individual downloads. Missing notebook images, case mismatches, empty pages and hidden grading criteria are explained in the index.
+
+Ed Lessons document / code images hosted on `edusercontent.com` are cached locally, deduplicated by content and limited to 200 MB each. Failed images keep their original URL and an error record. Both Ed-only and whole-unit exports include `assets/` with working relative references.
+
+Google Slides and Docs export as PDF, Sheets as XLSX, and ordinary Drive files retain their format. Only file links found in Moodle and Ed Lessons are processed; Google Forms cannot be exported. Existing exports are reused while the file remains on disk. Successful file links disappear from generated link lists; failures retain their URL and a Chinese reason in the index.
+
+```bash
+uv tool install --reinstall 'monash-study-kit[gmail]'
+monash google login                  # bundled desktop OAuth client
+monash google login --client client.json
+monash google status
+monash config google_docs_format docx # default: pdf; Google Docs only
+monash sync FIT1045 --refresh-google  # force Google exports to refresh
+monash export FIT1045 --sync --json  # sync this Moodle unit, then matching Ed units
+monash google logout                 # revoke first, then remove the local token
+```
+
+The bundled OAuth client is published but not verified by Google: on first authorization Google shows “Google hasn't verified this app”; choose **Advanced → Go to Monash Student MCP (unsafe)** to continue. Google caps unverified apps at 100 users, and a school-managed account may be blocked by its admins (Google links then stay as links, with the reason in the index). Google classifies `drive.readonly` as a **restricted scope**. It permits reading Drive files; this tool only downloads files linked from courses and does not enumerate your Drive. Google authorization shares the optional `[gmail]` dependency, but uses an independent flow and `secrets/google-drive-token.json` under the data home (`MONASH_KIT_SECRETS` can override the directory). Gmail authorization and `gmail-token.json` are unchanged. Credentials stay in the terminal / browser authorization flow; never paste them into chat.
+
+Downloads use read-only GET requests. For Drive export-size or administrator restrictions, a fallback tries the existing Google session in the dedicated login browser. Cookies are used only in memory, never logged or separately saved, and redirects outside Google's domains stop. The fallback may still be blocked by policy; failures keep the original link and explain why. Missing authorization points to `monash google login`. Moodle Page, Resource and assignment `view.php` requests still record a view. Normal folder downloads and Book print requests avoid their `view.php`; the individual-file fallback must open the folder page and records a view.
+
+`monash export <unit>` now exports Markdown body pages, link lists, quizzes and the index as **PDF by default**, alongside the original course files. Install Chrome, Edge or Brave to generate PDFs; if no browser is found, the export falls back to Markdown and explains this in the index and terminal. Use `--format both` to include PDF and Markdown, or `--format md` for Markdown only. For example, `monash config export_format both` saves PDF and Markdown as the default. Synced Markdown stays unchanged on your computer for AI, search and MCP. PDF generation runs offline in a fresh temporary browser profile, embeds only local exported images and omits remote images (keeping their alt text). PDFs are cached under `data/pdf-cache/` (up to 500 MB); `--json` includes `pdf.generated`, `pdf.cached` and `pdf.skipped_reason`. `monash ed export` keeps its existing behavior.
+
+Every sync checks newly discovered Ed units against tracked Moodle unit codes, including archived units and combined codes such as `FIT1045/FIT1053`; later user tracking choices are preserved. `monash export <unit> --sync` refreshes Moodle first, then the matching Ed Lessons (not forum threads), before exporting; `--refresh-google` also re-exports Google files. Run in a terminal, `monash export` first opens the system folder picker to choose where to save (defaulting to your last choice, else Downloads) and then starts; `--to <folder>` or `--no-ask` skip the dialog. It prints the destination and PDF progress as it goes. Ordinary exports use only local data. The README index includes all omission notes and failed Ed images, plus counts of link lists, remote Markdown images, Google links, successful exports and failures grouped by reason; `--json` exposes the same counts in `statistics`.
+
+New tests use synthetic HTML / JSON, fake clients and mocked HTTP, with no real account requests. Ed code-challenge workspace downloads still require a real read-only response to establish the interface and are excluded, as are multi-account profiles.
+
+### 1.7
+
+- **Download a whole unit's Ed materials as one zip.** `monash ed export FIT2109` packs the Ed Lessons you have synced into a zip in your Downloads folder: one folder per week with the PDFs, text pages and attachments, a `Links.md` per lesson (reading pages and the original Ed page) and a top-level `README.md` with your progress. `--module "Week 3"` packs one week, `--open` shows the zip in Finder. You can also ask your AI app "zip up my FIT2109 Ed materials", or use the button next to each unit on the `monash library --open` page. It works offline from files already on your computer.
+- **Ed files are stored by unit code.** Folders change from numeric ids to `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf`, in the same order as on Ed. `monash open ed` opens them. The first sync after upgrading moves existing files instead of downloading them again.
+- **Files attached inside Ed pages are downloaded too.** Starter-code zips, handouts and other files that Ed hosts inside a lesson page are now downloaded and searchable; single files over 200 MB are skipped. A replaced PDF is downloaded again, and pages removed on Ed are removed locally.
+- **The AI sees Ed files when listing materials.** "What materials are there for FIT2109 week 3?" now lists Ed Lessons files through `list_files`, ready to read.
+
+### 1.6
+
+- **Semester week view.** `monash semester --days 7` puts Moodle deadlines, Ed lessons and replies and cached attendance in one view; `--ics` exports the deadlines as a private calendar file.
+
+### 1.5
+
+- **School mail (optional).** Ask "anything in my email I need to deal with?" and get recent unread school mail, offline search, whole threads and attachment text. The AI can draft a reply, send a draft or archive mail, and only after you confirm each action.
+- **Attendance (optional).** "Which classes this week haven't I checked in to?" and "what's the code for today's workshop?", with each code's source. Reads follow your timetable and take a few seconds without opening a browser. Checked against the Malaysia campus portal.
+- **No terminal needed to connect them.** Say "connect my school email" or "connect my attendance" in your AI app; it installs what is missing and opens the sign-in window. No Google Cloud setup either.
+- **Remote apps choose.** With `monash remote`, each app you pair ticks which of these it may use.
+- **Units without Ed** can turn Ed off: `monash config use_ed false`.
+
+Details: [Optional: Gmail and attendance](#optional-gmail-and-attendance) and the [changelog](CHANGELOG.md).
+
+### 1.4
+
+- **Study panels.** In apps that support MCP Apps, "what do I need to do this week", "show my FIT2109 lesson progress" and "help me practise the week 3 quiz" also come with a small panel: deadline cards, lesson progress by module, and quiz questions you can click through. When you finish a quiz, the **交给 AI 批改** button sends your choices back to the chat and the AI explains them from the lesson. Nothing is submitted to Ed. Apps without panels still get the same text answers as before.
+- **Find a Moodle activity by name.** "Where is the week 7 workshop on Moodle?" now works through the new `search_moodle_activities` tool. It needs a Moodle login.
+- **Browse your files without AI.** `monash library --open` opens a page in your browser with every Moodle and Ed lesson file you have synced. Filter by unit, week or name and download the original. It only listens on `127.0.0.1`, so other devices cannot open it.
+- **Optional remote access.** `monash remote serve` lets ChatGPT, or Claude on the web and phone, reach your own data over HTTPS. Use your own server and domain, or try it with a free Cloudflare quick tunnel on your own computer, which needs no account and no domain. Each app pairs with a one-time code from your terminal, and only the 16 read-only query tools are exposed. Nothing starts unless you run it. Steps are on [Host it yourself](https://docs.secureview.tech/study-kit/remote/).
+
+1.4.1 adds `library` and `remote` to the summary at the top of `monash --help`. Everyday use on your own computer still needs no server, domain or extra account. Technical notes: [docs/panels-library-remote.md](docs/panels-library-remote.md).
 
 ## Development
 

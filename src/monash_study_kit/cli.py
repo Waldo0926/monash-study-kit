@@ -501,9 +501,29 @@ def cmd_uninstall(args):
         except OSError:
             pass
     if _yes(f"要删除所有数据吗（课件、登录状态、登录窗口的配置）？{HOME}", default=False):
-        shutil.rmtree(HOME, ignore_errors=True)
-        print("已删除")
+        from .paths import SECRETS_DIR
+        if not delete_all_data(HOME, SECRETS_DIR):
+            return 3
     print("最后运行 uv tool uninstall monash-study-kit 卸载程序本身")
+
+
+def delete_all_data(home: Path, secrets: Path) -> bool:
+    """删数据前先向 Google 吊销 Drive 和 Gmail 授权（默认账号和每个命名 profile）。
+    只删本机文件的话，授权在 Google 那边还留着。吊销失败就什么都不删，方便联网后重试。"""
+    import shutil
+    from . import cli_profile, google_export
+    folders = [secrets] + sorted(d / "secrets" for d in (home / "profiles").glob("*") if d.is_dir())
+    try:
+        for folder in folders:
+            for token in cli_profile.TOKENS:
+                google_export.revoke_token(folder / token)
+    except google_export.GoogleError as e:
+        print(f"{e}\n数据没有删除。联网后再运行一次，或者先到 https://myaccount.google.com/permissions 撤销授权")
+        return False
+    shutil.rmtree(home, ignore_errors=True)
+    print("已删除")
+    print(cli_profile.ED_HINT)
+    return True
 
 
 # 从 PyPI 装。PyPI 上暂时装不到（刚合进 main、还没发版那几分钟，或者 PyPI 抽风）时退回 main 的 zip
