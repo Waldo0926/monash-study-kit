@@ -2,7 +2,9 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
-## 1.14.1
+## 1.15.0
+
+The first release on PyPI since 1.11.2. It also carries everything listed under 1.12.0, 1.13.0 and 1.14.0 below, which were merged but never tagged.
 
 - `monash uninstall` now revokes the Google Drive and Gmail authorisations of the default account and of every named profile before it deletes the data folder. It used to delete only the local token files, which left the grants active on the Google side. When revoking fails nothing is deleted, and it reminds you to delete the Ed token by hand.
 - README (both languages): requirements, installation, first-time setup and everyday use now come first; per-release notes moved to one "Release notes" section near the end. The heading no longer names 1.11.2 as the current release.
