@@ -549,6 +549,8 @@ def update_commands(media: bool = False, extras=()) -> list[list[str]]:
 
 def cmd_update(args):
     import shutil
+    # 先加载好：uv 换了 Python 时会把整个环境删掉重建，装完再 import 这个进程就找不到它了
+    from . import update_check
     cmds = update_commands(extras=installed_extras())
     if os.name == "nt" or not shutil.which("uv"):
         # Windows 上正在运行的 monash.exe（包括 Claude 开着的那个）不能被覆盖，要先退出 Claude 再在新窗口里跑
@@ -560,7 +562,6 @@ def cmd_update(args):
         print("\nPyPI 上没装成，改从 GitHub 装：")
         r = subprocess.run(cmds[1])
     if r.returncode == 0:
-        from . import update_check
         update_check.clear()
         print("\n已更新。重启 Claude Desktop 后生效。")
     return r.returncode

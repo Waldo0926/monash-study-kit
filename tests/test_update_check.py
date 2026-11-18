@@ -87,3 +87,27 @@ def test_malformed_update_cache_never_breaks_cli_notices(tmp_path, monkeypatch):
         U.CACHE_FILE.write_text(json.dumps(bad), encoding="utf-8")
         assert U.available() is None
         assert U.read_cache().get("checked_at", 0) == 0
+
+
+def test_update_survives_the_tool_environment_being_replaced(monkeypatch):
+    # uv can delete and rebuild the whole environment while `monash update` runs.
+    # After that the running process cannot import new modules, so anything the
+    # command needs afterwards has to be loaded before the install starts.
+    import subprocess
+    import sys
+    from monash_study_kit import cli
+
+    cleared = []
+    monkeypatch.setattr(U, "clear", lambda: cleared.append(True))
+    monkeypatch.setattr(cli.os, "name", "posix")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/" + name)
+
+    def fake_run(cmd, *a, **k):
+        import monash_study_kit
+        monkeypatch.setitem(sys.modules, "monash_study_kit.update_check", None)
+        monkeypatch.delattr(monash_study_kit, "update_check", raising=False)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    assert cli.cmd_update(None) == 0
+    assert cleared == [True]
