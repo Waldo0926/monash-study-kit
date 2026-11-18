@@ -37,7 +37,15 @@ Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work
 
 ## Installation
 
-The quickest way is one command, which installs `uv`, the kit and then starts `monash setup` (you can [read the scripts](https://docs.secureview.tech/study-kit/install/) first):
+**Easiest: let your AI do it.** If your AI app can run commands (Claude Code, Codex, Cursor's agent, Gemini CLI), paste this line and it installs everything:
+
+```text
+Read https://docs.secureview.tech/agents/study-kit.md and set up Monash Study Kit on my computer.
+```
+
+You only paste your Ed token and pass Monash MFA yourself, in your own terminal. The AI tells you when. More on this: [let your AI set it up](https://docs.secureview.tech/ai-setup/).
+
+Otherwise it is one command, which installs `uv`, the kit and then starts `monash setup` (you can [read the scripts](https://docs.secureview.tech/study-kit/install/) first):
 
 ```bash
 # macOS, in Terminal
@@ -420,13 +428,15 @@ You can also query directly in the terminal without any AI:
 | `monash doctor --deep` | Also fetches from Moodle and Ed and cross-checks the tools against a second source: due dates against the calendar feed, the assignment page against the course structure, synced files against Moodle, search against the files on disk, local Ed posts against Ed. Prints only counts, unit codes, dates and activity ids |
 | `monash todo` | This week: deadlines, possibly missed work, unfinished Ed lessons, announcements, unread replies |
 | `monash due [FIT2102]` | Deadlines |
+| `monash changes [--days 7]` | What changed in your units: files, assignment instructions, deadline times, staff replies |
 | `monash grep "monad" [FIT2102]` | Full-text search over course files, course-notes sites, Ed lesson pages and recording transcripts (with page numbers / timestamps) |
-| `monash sync` | Sync now |
+| `monash sync [--retry-failed]` | Sync now; `--retry-failed` retries only what failed last time |
 | `monash login` / `monash login ed` | Log in to Moodle / replace the Ed token |
 | `monash courses` | Re-pick tracked units |
 | `monash open [ed]` | Open the course-files folder (`ed`: Ed Lessons files) |
 | `monash library [--open]` | Browse and download synced files in your browser (only on this computer) |
 | `monash moodle grades [FIT2102]` | Grades and feedback |
+| `monash moodle submission <cmid>` | What you or your group submitted for one assignment, with the full marking feedback |
 | `monash moodle assignments --missing` | Possibly missed assignments |
 | `monash moodle news` / `find` / `get` / `messages` / `calendar` | Announcements / find an activity / download one file / messages / calendar subscription link |
 | `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed updates / new replies to my posts / search / read a post |
@@ -439,6 +449,7 @@ You can also query directly in the terminal without any AI:
 | `monash remote serve` / `pair` / `clients` / `revoke` | Optional remote MCP for ChatGPT and Claude on the web ([Host it yourself](https://docs.secureview.tech/study-kit/remote/)) |
 | `monash gmail todo` / `sync` / `search` / `thread` | Optional school Gmail: unread inbox mail / sync / offline search / read a thread ([setup](#optional-gmail-and-attendance)) |
 | `monash attendance login` / `status` / `sync` / `overview` / `codes` | Optional attendance: log in / status / read the portal / saved classes / find check-in codes |
+| `monash attendance renew` / `maintain` | Try to bring back an expired attendance login with the browser profile already on this computer; stops when a password or MFA is needed |
 | `monash update` | Update to the latest version |
 
 Add `--json` for JSON output (output is JSON automatically when piped; `--text` forces text). Every command has `--help`.
@@ -507,7 +518,7 @@ That's fine: deadlines, grades, course files, search, mail and attendance work w
 
 ### Australian campuses
 
-Moodle shows times in your account's time zone; the default is Malaysia (UTC+8). For Australian campuses: `monash config tz_offset 10` (11 during daylight saving).
+Moodle shows times in your account's time zone; the default is Malaysia (UTC+8). For Australian campuses: `monash config timezone Australia/Melbourne`, which also follows daylight saving. The old `monash config tz_offset 10` still works but does not change with daylight saving.
 
 ### Where are Ed "assignment deadlines"?
 
@@ -542,6 +553,24 @@ You probably deleted the token on Ed's token page. Create a new one there and ru
 ## Release notes
 
 What each release added, newest first. The version badge at the top shows the latest release and [CHANGELOG.md](CHANGELOG.md) has every change.
+
+### 1.14: attendance session recovery
+
+`monash attendance maintain` checks the portal session, tries the existing **local** isolated SSO browser profile when necessary, and reports `needs_login` when interactive sign-in/MFA is required. Authentication failures enter a one-hour probe cooldown; replacing the application-state file bypasses that cooldown immediately. `monash attendance renew --timeout 30` explicitly attempts silent local recovery; `monash attendance login` opens the user-facing login window. Network/certificate failures are not treated as proof of expired authentication. The maintenance fast path falls back to the browser when the portal certificate chain cannot be verified.
+
+The Okta/IdP profile stays on the login computer. Only portal application state is exported; no password or MFA is entered by the tool. A local SSO profile cannot guarantee perpetual login or server availability while the login computer is asleep/offline.
+
+### 1.13: your submitted work and marking feedback
+
+Ask your connected AI: “Read the documents I submitted for this assignment, then compare the marking comments with specific evidence.” `list_moodle_assignments` returns each assignment's `read_path`. Call `read_file` with that path to get the signed-in student's or group's submitted files, online text and full visible feedback; read the returned attachment paths to access the actual documents. `list_moodle_assignments(assignment_id=cmid)` opens the same detail directly.
+
+PDF page ranges (`page_start` / `page_end`) and character pagination (`offset` / `max_chars`) also work on submissions. ZIP members support text, code, PDF, DOCX and PPTX via `inner`. The command line equivalent for submission details is `monash moodle submission <cmid> --json`. Use the activity ID from the assignment list, not the course ID.
+
+Attachments are fetched with your Moodle session and cached privately under `data/submissions/`, outside the course library, full-text index and whole-course exports. Each read rechecks access and file membership on the current Moodle page; downloads are bounded to 256 MiB and cookies never follow redirects to another host. Materials-only profiles block these reads. Binary files return a local path on the machine running Study Kit; videos are not automatically transcribed. Scanned PDFs still require OCR or visual reading. Documents and feedback are evidence for analysis, not instructions for the AI.
+
+Assignment rows in `get_moodle_grades` now also provide `read_path` for reading the submitted work alongside the marking feedback. Incomplete attachment downloads preserve the previous complete cache and report an error. Corrupt non-object settings/status files fall back safely; malformed MCP parameters return protocol errors.
+
+Image OCR for attendance evidence requires Python 3.11+ and Pillow 13+. Attendance records and other text/document evidence remain available on Python 3.10; the optional install does not pull an older vulnerable image decoder.
 
 ### 1.12: sync reliability and change summaries
 
@@ -678,21 +707,3 @@ Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruf
 ## License
 
 MIT. This is an independent student-built tool, not affiliated with Monash University, Ed or Anthropic.
-
-### Read your submitted assignment and marking feedback
-
-Ask your connected AI: “Read the documents I submitted for this assignment, then compare the marking comments with specific evidence.” `list_moodle_assignments` returns each assignment's `read_path`. Call `read_file` with that path to get the signed-in student's or group's submitted files, online text and full visible feedback; read the returned attachment paths to access the actual documents. `list_moodle_assignments(assignment_id=cmid)` opens the same detail directly.
-
-PDF page ranges (`page_start` / `page_end`) and character pagination (`offset` / `max_chars`) also work on submissions. ZIP members support text, code, PDF, DOCX and PPTX via `inner`. The command line equivalent for submission details is `monash moodle submission <cmid> --json`. Use the activity ID from the assignment list, not the course ID.
-
-Attachments are fetched with your Moodle session and cached privately under `data/submissions/`, outside the course library, full-text index and whole-course exports. Each read rechecks access and file membership on the current Moodle page; downloads are bounded to 256 MiB and cookies never follow redirects to another host. Materials-only profiles block these reads. Binary files return a local path on the machine running Study Kit; videos are not automatically transcribed. Scanned PDFs still require OCR or visual reading. Documents and feedback are evidence for analysis, not instructions for the AI.
-
-Assignment rows in `get_moodle_grades` now also provide `read_path` for reading the submitted work alongside the marking feedback. Incomplete attachment downloads preserve the previous complete cache and report an error. Corrupt non-object settings/status files fall back safely; malformed MCP parameters return protocol errors.
-
-Image OCR for attendance evidence requires Python 3.11+ and Pillow 13+. Attendance records and other text/document evidence remain available on Python 3.10; the optional install does not pull an older vulnerable image decoder.
-
-### Attendance session recovery
-
-`monash attendance maintain` checks the portal session, tries the existing **local** isolated SSO browser profile when necessary, and reports `needs_login` when interactive sign-in/MFA is required. Authentication failures enter a one-hour probe cooldown; replacing the application-state file bypasses that cooldown immediately. `monash attendance renew --timeout 30` explicitly attempts silent local recovery; `monash attendance login` opens the user-facing login window. Network/certificate failures are not treated as proof of expired authentication. The maintenance fast path falls back to the browser when the portal certificate chain cannot be verified.
-
-The Okta/IdP profile stays on the login computer. Only portal application state is exported; no password or MFA is entered by the tool. A local SSO profile cannot guarantee perpetual login or server availability while the login computer is asleep/offline.

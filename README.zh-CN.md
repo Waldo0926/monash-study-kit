@@ -38,7 +38,15 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选
 
 ## 安装
 
-最快的办法是一条命令：装好 `uv` 和本工具，然后直接进入 `monash setup`（可以先[看看脚本内容](https://docs.secureview.tech/zh-cn/study-kit/install/)）：
+**最省事：让 AI 帮你装。** 如果你的 AI 能跑命令（Claude Code、Codex、Cursor 的 agent、Gemini CLI），把下面这句发给它，剩下的它来装：
+
+```text
+Read https://docs.secureview.tech/agents/study-kit.md and set up Monash Study Kit on my computer.
+```
+
+你自己只要在终端里粘贴 Ed 令牌、过 Monash 的 MFA，到时候 AI 会提醒你。详细说明见[让 AI 帮你装](https://docs.secureview.tech/zh-cn/ai-setup/)
+
+不用 AI 的话，也只要一条命令：装好 `uv` 和本工具，然后直接进入 `monash setup`（可以先[看看脚本内容](https://docs.secureview.tech/zh-cn/study-kit/install/)）：
 
 ```bash
 # macOS，在终端里
@@ -404,13 +412,15 @@ npx skills add Waldo0926/monash-study-kit
 | `monash doctor --deep` | 再去 Moodle 和 Ed 拉一遍，拿第二个来源核对工具的结果：截止日期对日历订阅，作业汇总页对课程结构，本地课件对 Moodle，全文搜索对磁盘上的文件，本地 Ed 帖子对 Ed。只输出数量、课号、日期和活动编号 |
 | `monash todo` | 本周待办：截止、可能漏交、Ed 没做完的 lesson、公告、未读回复 |
 | `monash due [FIT2102]` | 截止日期 |
+| `monash changes [--days 7]` | 课程有什么变化：文件、作业说明、截止时间、老师的新回复 |
 | `monash grep "monad" [FIT2102]` | 全文搜课件、课程笔记网页、Ed Lessons 正文、录播字幕稿（带页码/时间戳） |
-| `monash sync` | 立刻同步 |
+| `monash sync [--retry-failed]` | 立刻同步；`--retry-failed` 只重试上次失败的部分 |
 | `monash login` / `monash login ed` | 登录 Moodle / 换 Ed 令牌 |
 | `monash courses` | 重新选要跟踪的课 |
 | `monash open [ed]` | 打开课件文件夹（`ed`：Ed Lessons 的课件） |
 | `monash library [--open]` | 在浏览器里翻和下载已同步的课件（只在本机） |
 | `monash moodle grades [FIT2102]` | 成绩和反馈 |
+| `monash moodle submission <cmid>` | 某个作业你或你们组交了什么，以及完整的评分反馈 |
 | `monash moodle assignments --missing` | 可能漏交的作业 |
 | `monash moodle news` / `find` / `get` / `messages` / `calendar` | 公告 / 找活动 / 下载单个文件 / 站内信 / 日历订阅链接 |
 | `monash ed new` / `following` / `search` / `show FIT2102#42` | Ed 新动态 / 我的帖子有没有新回复 / 搜索 / 读帖子 |
@@ -423,6 +433,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash remote serve` / `pair` / `clients` / `revoke` | 可选：给 ChatGPT 和网页版 Claude 用的远程 MCP（[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)） |
 | `monash gmail todo` / `sync` / `search` / `thread` | 可选：学校邮箱的邮件待办 / 同步 / 离线搜索 / 读对话（[设置](#可选gmail-与考勤)） |
 | `monash attendance login` / `status` / `sync` / `overview` / `codes` | 可选：考勤登录 / 状态 / 读门户 / 已保存的班次 / 找签到码 |
+| `monash attendance renew` / `maintain` | 考勤登录过期时，用这台电脑上已有的浏览器登录状态试着恢复；要密码或 MFA 时会停下 |
 | `monash update` | 更新到最新版 |
 
 加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
@@ -486,7 +497,7 @@ Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + �
 
 ### 澳洲校区
 
-Moodle 页面上的时间按账号时区显示，默认按马来西亚（UTC+8）。澳洲校区：`monash config tz_offset 10`（夏令时 11）。
+Moodle 页面上的时间按账号时区显示，默认按马来西亚（UTC+8）。澳洲校区：`monash config timezone Australia/Melbourne`，夏令时会自动切换。旧的 `monash config tz_offset 10` 还能用，但不会跟着夏令时变
 
 ### Ed 的“作业截止时间”在哪
 
@@ -519,6 +530,20 @@ Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`get_st
 ## 各版本说明
 
 每个版本加了什么，新的在前。最新版本号看页面顶部的徽章，完整记录在[更新日志](CHANGELOG.md)。
+
+### 1.14：考勤登录自动恢复
+
+`monash attendance maintain` 会检查考勤门户的登录，需要时用这台电脑上已有的独立浏览器登录状态悄悄登回去。Monash 要密码或 MFA 时，它报告 `needs_login`，让你自己运行 `monash attendance login`。认证失败后一小时内不会再试；换了新的登录状态文件会马上重新检查。`monash attendance renew --timeout 30` 是手动试一次静默恢复。网络或证书问题不会被当成登录过期
+
+Okta 的登录状态只留在登录的那台电脑上，导出的只有门户本身的登录状态。工具不会替你输密码或 MFA，电脑睡眠或断网时也没法保证一直登录着
+
+### 1.13：读自己交过的作业和评分反馈
+
+在 AI 里问：“把我这个作业交的文件读一遍，再对照老师的评语，具体说说哪里扣分”。`list_moodle_assignments` 会给每个作业一个 `read_path`，用 `read_file` 读它就能拿到你或你们组交的文件、在线文本和完整的反馈；`list_moodle_assignments(assignment_id=cmid)` 可以直接打开某一个。终端里对应的是 `monash moodle submission <cmid> --json`，cmid 用作业列表里的 activity ID，不是课程 ID
+
+PDF 可以按页读（`page_start` / `page_end`），压缩包里的文本、代码、PDF、DOCX 和 PPTX 用 `inner` 读。附件用你的 Moodle 登录下载，单独缓存在 `data/submissions/`，不进课件库、全文索引和整课导出。每次读都会重新检查权限，下载上限 256 MiB，cookie 不会跟着跳转发到别的网站。只导课程资料的账号读不了这些。视频不会自动转文字，扫描版 PDF 还是要 OCR
+
+考勤截图识别需要 Python 3.11 以上和 Pillow 13；Python 3.10 仍然能读考勤记录，只是跳过图片识别
 
 ### 1.12：同步可靠性与变更摘要
 
