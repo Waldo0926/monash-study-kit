@@ -268,7 +268,7 @@ The MCP tool list is exactly `list_files`, `read_file`, `search_content`, `get_e
 
 ## Other AI clients
 
-**ChatGPT:** use the ChatGPT desktop app in Codex mode. It reads the same `~/.codex/config.toml` as Codex, so `monash connect codex` connects it; quit and reopen the app afterwards. ChatGPT on the web needs developer mode (Plus, Pro, Business, Enterprise or Edu) and [remote mode](https://docs.secureview.tech/study-kit/remote/). Step by step: [Use it with ChatGPT](https://docs.secureview.tech/study-kit/chatgpt/).
+**ChatGPT:** normal ChatGPT chat (web, desktop app and phone) reaches Study Kit from OpenAI's servers, so it needs [remote mode](https://docs.secureview.tech/study-kit/remote/): an HTTPS address added as an app in developer mode, which needs a paid plan. Add it once and it works on all three. Codex inside the ChatGPT desktop app is different: it runs on your computer and shares `~/.codex/config.toml`, so `monash connect codex` is enough; type `/mcp` in a new Codex chat to check. Step by step: [Use it with ChatGPT](https://docs.secureview.tech/study-kit/chatgpt/).
 
 MCP is an open protocol and `monash mcp` is a standard local (stdio) MCP server, so any client that supports local MCP servers should in principle work.
 `monash setup` configures Claude Desktop and Claude Code. For the others, run `monash setup` first (login and units), then one command:

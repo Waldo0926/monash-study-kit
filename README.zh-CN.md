@@ -260,7 +260,7 @@ MCP 只注册 `list_files`、`read_file`、`search_content`、`get_ed_lessons`�
 
 ## 接入其他 AI 客户端
 
-**ChatGPT**：用 ChatGPT 桌面版的 Codex 模式。它和 Codex 读同一份 `~/.codex/config.toml`，所以运行 `monash connect codex` 就能接上，接完把 App 完全退出再打开。网页版 ChatGPT 要开发者模式（Plus、Pro、Business、Enterprise 或 Edu）加上[远程模式](https://docs.secureview.tech/zh-cn/study-kit/remote/)。详细步骤见[在 ChatGPT 里用](https://docs.secureview.tech/zh-cn/study-kit/chatgpt/)
+**ChatGPT**：平时的 ChatGPT 聊天（网页、电脑客户端、手机）是从 OpenAI 的服务器去连的，所以要用[远程模式](https://docs.secureview.tech/zh-cn/study-kit/remote/)，拿到 HTTPS 地址后在开发者模式里加成应用，开发者模式要付费会员，加一次三个地方都能用。ChatGPT 桌面版里的 Codex 不一样，它在你电脑上跑，和 Codex 共用 `~/.codex/config.toml`，运行 `monash connect codex` 就行，新开一个 Codex 对话输入 `/mcp` 能看到 monash。详细步骤见[在 ChatGPT 里用](https://docs.secureview.tech/zh-cn/study-kit/chatgpt/)
 
 MCP 是开放协议，`monash mcp` 是标准的本地（stdio）MCP 服务器，所以支持本地 MCP 的客户端理论上都能接。`monash setup` 会配置 Claude Desktop 和 Claude Code。其他客户端先运行 `monash setup`（登录、选课），再运行一条命令：
 
