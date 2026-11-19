@@ -291,7 +291,7 @@ monash connect cursor     # 或 codex、vscode、windsurf、gemini
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | 未测试 |
 | VS Code（Copilot） | 命令面板 → `MCP: Open User Configuration` | 未测试 |
 | Gemini CLI | `~/.gemini/settings.json` | 未测试 |
-| ChatGPT、Claude 网页版 / 手机 App | `monash remote serve`，配自己的域名或 Cloudflare 临时隧道 | 作者的 ChatGPT Plus 加自己域名可用，见[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/) |
+| ChatGPT、Claude 网页版 / 手机 App | `monash remote serve`，用免费的 Cloudflare 临时隧道、固定地址的 Cloudflare 隧道或者自己的服务器 | 作者的 ChatGPT Plus 加自己域名可用，见[远程模式](https://docs.secureview.tech/zh-cn/study-kit/remote/) |
 
 Codex（`~/.codex/config.toml`），或者直接运行 `codex mcp add monash -- /完整路径/monash mcp`：
 

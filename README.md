@@ -301,7 +301,7 @@ Replace `/full/path/monash` in the examples with your path. **In JSON, Windows b
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | Untested |
 | VS Code (Copilot) | Command Palette → `MCP: Open User Configuration` | Untested |
 | Gemini CLI | `~/.gemini/settings.json` | Untested |
-| ChatGPT, Claude web / mobile app | `monash remote serve` behind your own domain or a Cloudflare quick tunnel | ChatGPT Plus works with the author's domain; see [Host it yourself](https://docs.secureview.tech/study-kit/remote/) |
+| ChatGPT, Claude web / mobile app | `monash remote serve` with a free Cloudflare quick tunnel, a Cloudflare tunnel with a fixed address, or your own server | ChatGPT Plus works with the author's domain; see [Remote mode](https://docs.secureview.tech/study-kit/remote/) |
 
 Codex (`~/.codex/config.toml`), or simply run `codex mcp add monash -- /full/path/monash mcp`:
 
