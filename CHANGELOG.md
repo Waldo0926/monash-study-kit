@@ -2,6 +2,10 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.15.1
+
+- `monash update` no longer ends with `ImportError: cannot import name 'update_check'` after a successful update. When uv rebuilt the tool environment for a different Python, the running command could not load that module from the replaced files any more. It is now loaded before the update starts.
+
 ## 1.15.0
 
 The first release on PyPI since 1.11.2. It also carries everything listed under 1.12.0 to 1.14.0 below, which were merged but never tagged.
