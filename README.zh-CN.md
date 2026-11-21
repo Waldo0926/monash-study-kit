@@ -14,11 +14,24 @@
 
 把 Monash 的 **Moodle** 和 **Ed** 接进你电脑上的 AI 软件（Claude、Codex、Cursor、VS Code 等），直接问：
 
-- “这周我有什么要交的？”：Moodle 截止日期、可能漏交的作业、Ed 上还没做的 lesson、最新公告
-- “Ed 上有什么新消息？我上次问的问题有人回了吗？”
-- “FIT2102 哪一周讲了 monad？在哪份讲义第几页？”
-- “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
+- “这周我有哪些作业和任务要完成？”：Moodle 截止日期、可能漏交的作业、Ed 上还没做的 lesson、最新公告
+- “老师和助教在 Ed 上补充了什么？其他同学问了什么？”
+- “回归分析是哪周讲的？在讲义第几页？”
+- “Assignment 2 的要求和评分标准是什么？”、“我 FIT2109 现在成绩多少？”
 - “用 FIT2109 第 3 周的测验题考考我，”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/panel-todo.png" alt="待办面板：快到期的作业、可能漏交的练习、还没开始的 Ed lesson、新课件和公告，旁边有带我过一遍和练测验按钮"></td>
+<td width="50%"><img src="docs/screenshots/ask-assignment-zh.png" alt="问 Assignment 2 的要求，AI 列出要交什么、评分比例、改过的截止时间和 Ed 上助教的补充，每条标着出处"><br><br><img src="docs/screenshots/ask-topic-zh.png" alt="问回归分析是哪周讲的，AI 给出讲义页码、Ed 课前内容和录播时间点"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/ask-ed-zh.png" alt="问老师和助教在 Ed 上补充了什么，AI 列出三条新回复和是谁说的"></td>
+<td><img src="docs/screenshots/panel-quiz.png" alt="测验面板：一道题和四个能点的选项"></td>
+</tr>
+</table>
+
+<sub>图里是编的课程数据，面板是用 Study Kit 自己的面板代码渲染的</sub>
 
 还可以运行 `monash semester --days 7`，把 Moodle 截止、Ed 没做完的 lesson 和未读回复、本地考勤缓存放进一份周视图；加 `--ics` 把 Moodle 截止日期导出成本机的私有日历文件
 
@@ -237,7 +250,7 @@ AI 软件正在后台同步时，`monash sync FIT2102`、`monash export --sync` 
 
 ### 对照评语看自己交的作业
 
-在 AI 软件里问，比如“把我 A2 交的文件读一遍，再对照老师的评语逐条说说”
+在 AI 软件里问，比如“把我 Assignment 2 交的文件读一遍，再对照老师的评语逐条说说”
 
 AI 先用 `list_moodle_assignments` 找到作业，再用 `read_file` 读它的 `read_path`，拿到你或你们组交的文件、在线文本和 Moodle 上能看到的完整反馈
 
@@ -280,7 +293,7 @@ MCP 让它在聊天中途自己去查（`get_study_todo`、`search_content`、`l
 - **答案来自真实数据**：截止时间、公告、成绩都是当下查到的，还能给出处，比如“Workshop 5 Slides 第 25 页”
 - **两边合起来看**：一句“这周要做什么”，同时查 Moodle 截止、Ed 没做完的 lesson、两边的公告
 - **不用手动搬资料**：不用下载 PDF 再上传，AI 按需找到那份课件、只读需要的几页，省事也省额度
-- **可以接着追问**：“A2 spec 要求什么？”“那周讲的 functor 结合讲义解释一下”
+- **可以接着追问**：“Assignment 2 的作业说明要求什么？”“那周讲的 functor 结合讲义解释一下”
 
 **CLI（`monash` 命令）：给人用的接口
 

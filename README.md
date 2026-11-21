@@ -14,11 +14,24 @@
 
 Connect Monash **Moodle** and **Ed** to the AI app on your computer (Claude, Codex, Cursor, VS Code and others), then just ask:
 
-- "What's due this week?": Moodle deadlines, assignments you may have missed, unfinished Ed lessons, latest announcements
-- "Anything new on Ed? Has anyone replied to my question?"
-- "Which week of FIT2102 covered monads? Which slide deck, which page?"
-- "What does the A2 spec ask for?", "What's my current grade in FIT2109?"
+- "What work and tasks do I need to finish this week?": Moodle deadlines, assignments you may have missed, unfinished Ed lessons, latest announcements
+- "What have staff added on Ed? What have other students asked?"
+- "Which week covered regression, and which page of the slides?"
+- "What does Assignment 2 ask for, and how is it marked?", "What's my current grade in FIT2109?"
 - "Quiz me on FIT2109 week 3." In apps that support MCP Apps, to-dos, lesson progress and quiz questions also show up as small panels you can click
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/panel-todo.png" alt="The to-do panel: assignments due soon, a possibly missed exercise, Ed lessons not started, new files and announcements, with walk-through and quiz buttons"></td>
+<td width="50%"><img src="docs/screenshots/ask-assignment-en.png" alt="Asked what Assignment 2 asks for, the AI lists what to submit, the mark split, the moved deadline and a tutor's note on Ed, each with its source"><br><br><img src="docs/screenshots/ask-topic-en.png" alt="Asked which week covered regression, the AI gives the slide pages, the Ed pre-class lesson and a time in the recording"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/ask-ed-en.png" alt="Asked what staff added on Ed, the AI lists three new staff replies and who wrote each"></td>
+<td><img src="docs/screenshots/panel-quiz.png" alt="The quiz panel: a question with four clickable options"></td>
+</tr>
+</table>
+
+<sub>Made-up course data. The panels are rendered from Study Kit's own panel code; their labels are in Chinese.</sub>
 
 You can also run **`monash semester --days 7`** for a combined private week view of Moodle deadlines, Ed lessons/replies and any locally cached attendance records. Add **`--ics`** to export a private `semester.ics` into the Study Kit data directory, or **`--ics /path/to/file.ics`** to choose a path. This is a one-time calendar snapshot, not a live subscription; deadline times must be verified with Moodle. No personal semester data is uploaded to Monash Hub.
 
@@ -187,7 +200,7 @@ In your AI app you can also ask "which files weren't downloaded?" and then say w
 
 ### Check your work against the marking feedback
 
-Ask your AI app something like "read what I submitted for A2 and go through the marking comments one by one". It finds the assignment with `list_moodle_assignments`, then reads its `read_path` with `read_file`: the files you or your group submitted, the online text and the full feedback you can see on Moodle. In a terminal: `monash moodle submission <cmid>`, where cmid is the activity ID from `monash moodle assignments`, not the unit ID.
+Ask your AI app something like "read what I submitted for Assignment 2 and go through the marking comments one by one". It finds the assignment with `list_moodle_assignments`, then reads its `read_path` with `read_file`: the files you or your group submitted, the online text and the full feedback you can see on Moodle. In a terminal: `monash moodle submission <cmid>`, where cmid is the activity ID from `monash moodle assignments`, not the unit ID.
 
 - PDFs can be read page by page, and files inside a ZIP (text, code, PDF, Word, PowerPoint) can be read too
 - Submissions are downloaded with your own Moodle login and kept apart in `data/submissions/`, so they never go into the course library, search or exports. Access is checked again on every read and each download is capped at 256 MiB
@@ -220,7 +233,7 @@ The MCP server lets it look things up mid-conversation (tools such as `get_study
 - **Answers come from real data**: deadlines, announcements and grades are fetched live, with sources such as "Workshop 5 Slides, page 25".
 - **Both platforms at once**: one "what do I need to do this week" checks Moodle deadlines, unfinished Ed lessons and announcements from both.
 - **No manual copying**: no downloading PDFs and re-uploading them. The AI finds the right file and reads only the pages it needs, saving time and usage.
-- **Natural follow-ups**: "What does the A2 spec require?" "Explain that week's functor material using the lecture notes."
+- **Natural follow-ups**: "What does the Assignment 2 spec require?" "Explain that week's functor material using the lecture notes."
 
 **CLI (the `monash` command): the interface for humans.**
 
