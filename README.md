@@ -33,7 +33,8 @@ Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work
 
 - An AI app that supports local MCP: **Claude Desktop** ([download](https://claude.ai/download)) or **Claude Code** are set up automatically; **Codex** (including Codex in the ChatGPT desktop app), **Cursor**, **VS Code**, **Windsurf** and **Gemini CLI** take one more command (see [Other AI clients](#other-ai-clients))
 - **Chrome, Edge or Brave** (the Edge that ships with Windows is fine), used to log in to Moodle
-- A Monash account
+- A Monash account. Ed is optional: if your units don't use Ed (common in business, arts and media), Study Kit works with Moodle only
+- A Windows, macOS or Linux computer
 
 ## Installation
 
@@ -101,7 +102,7 @@ monash setup
 
 Follow the prompts. There are four steps:
 
-1. **Ed**: opens Ed's [API token page](https://edstem.org/au/settings/api-tokens). Click **Create Token**, name it anything,
+1. **Ed**: first it asks whether your units use Ed. Many business, arts and media units don't; answer no (or run `monash setup --no-ed`) and only Moodle is set up. You can add Ed later with `monash login ed`. If you say yes, it opens Ed's [API token page](https://edstem.org/au/settings/api-tokens). Click **Create Token**, name it anything,
    copy the token and paste it back into the terminal (nothing is shown while pasting; that's normal). The token doesn't expire; delete it on the same page whenever you want to revoke it.
 2. **Moodle**: opens a **separate browser window**. Log in to Monash as usual (Okta + MFA). The window closes automatically once you're in.
    This window has its own profile and is completely isolated from your everyday browser: the tool only takes the Moodle session from this window

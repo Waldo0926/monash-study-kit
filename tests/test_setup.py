@@ -91,3 +91,12 @@ def test_due_without_login_uses_ical(monkeypatch):
     assert [(i["name"], i["course"], i["source"]) for i in items] == [("A2", "FIT2102", "ical")]
     other = {"id": None, "shortname": "FIT2109", "fullname": "FIT2109"}
     assert features.due(None, 14, other) == []
+
+
+def test_setup_can_skip_ed(monkeypatch):
+    from monash_study_kit import cli
+    saved = {}
+    monkeypatch.setattr(cli, "save_settings", saved.update)
+    cli._skip_ed()
+    assert saved == {"use_ed": False}
+    assert cli.build_parser().parse_args(["setup", "--no-ed"]).no_ed
