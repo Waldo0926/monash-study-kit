@@ -18,15 +18,25 @@
 - “Ed 上有什么新消息？我上次问的问题有人回了吗？”
 - “FIT2102 哪一周讲了 monad？在哪份讲义第几页？”
 - “帮我看看 A2 的 spec 要求什么”、“我 FIT2109 现在成绩多少？”
-- “用 FIT2109 第 3 周的测验题考考我。”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
+- “用 FIT2109 第 3 周的测验题考考我，”在支持 MCP Apps 的软件里，待办、lesson 进度和测验题还会显示成能点的小面板
 
-还可以运行 `monash semester --days 7`，把 Moodle 截止、Ed 没做完的 lesson 和未读回复、本地考勤缓存放进一份周视图；加 `--ics` 把 Moodle 截止日期导出成本机的私有日历文件。它是一次性的快照，不会自动更新，也不会把你的课表上传到 Monash Hub。具体截止时间以 Moodle 为准。
+还可以运行 `monash semester --days 7`，把 Moodle 截止、Ed 没做完的 lesson 和未读回复、本地考勤缓存放进一份周视图；加 `--ics` 把 Moodle 截止日期导出成本机的私有日历文件
 
-默认把课件、登录状态和数据库保存在**你自己的电脑上**。但你用AI软件查询时，工具返回的课程、邮件或考勤信息会交给你连接的AI服务，具体如何处理由该服务的隐私政策决定。可选远程模式由你自行托管，不经过本项目维护者的服务器。
+它是一次性的快照，不会自动更新，也不会把你的课表上传到 Monash Hub
 
-Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选的学校邮箱和考勤可以帮你起草邮件、改标签、签到，每一项都要先由你确认。
+具体截止时间以 Moodle 为准
 
-适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)。
+默认把课件、登录状态和数据库保存在**你自己的电脑上**
+
+但你用AI软件查询时，工具返回的课程、邮件或考勤信息会交给你连接的AI服务，具体如何处理由该服务的隐私政策决定
+
+可选远程模式由你自行托管，不经过本项目维护者的服务器
+
+Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖
+
+可选的学校邮箱和考勤可以帮你起草邮件、改标签、签到，每一项都要先由你确认
+
+适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)
 
 **第一次用？** [安装](#安装) · [第一次设置](#第一次设置monash-setup) · [平时怎么用](#平时怎么用) · [常见问题](#常见问题)
 
@@ -38,13 +48,17 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖。可选
 
 ## 安装
 
-**最省事：让 AI 帮你装。** 如果你的 AI 能跑命令（Claude Code、Codex、Cursor 的 agent、Gemini CLI），把下面这句发给它，剩下的它来装：
+**最省事：让 AI 帮你装
+
+** 如果你的 AI 能跑命令（Claude Code、Codex、Cursor 的 agent、Gemini CLI），把下面这句发给它，剩下的它来装：
 
 ```text
 Read https://docs.secureview.tech/agents/study-kit.md and set up Monash Study Kit on my computer.
 ```
 
-你自己只要在终端里粘贴 Ed 令牌、过 Monash 的 MFA，到时候 AI 会提醒你。详细说明见[让 AI 帮你装](https://docs.secureview.tech/zh-cn/ai-setup/)
+你自己只要在终端里粘贴 Ed 令牌、过 Monash 的 MFA，到时候 AI 会提醒你
+
+详细说明见[让 AI 帮你装](https://docs.secureview.tech/zh-cn/ai-setup/)
 
 不用 AI 的话，也只要一条命令：装好 `uv` 和本工具，然后直接进入 `monash setup`（可以先[看看脚本内容](https://docs.secureview.tech/zh-cn/study-kit/install/)）：
 
@@ -96,47 +110,59 @@ uv tool install monash-study-kit
 monash setup
 ```
 
-> `uv` 是一个 Python 工具管理器，会自动准备好 Python，不用自己装 Python。
+> `uv` 是一个 Python 工具管理器，会自动准备好 Python，不用自己装 Python
 
 ## 第一次设置（`monash setup`）
 
 跟着提示走，一共四步：
 
-1. **Ed**：会帮你打开 Ed 的 [API 令牌页面](https://edstem.org/au/settings/api-tokens)。点 **Create Token**，名字随便写，把生成的令牌复制，粘贴回终端（粘贴时不显示，正常）。这个令牌不会过期，不想用了在同一个页面删掉就作废。
-2. **Moodle**：会打开一个**单独的浏览器窗口**，在里面照常登录 Monash（Okta + MFA）。登录成功后窗口自动关闭。这个窗口有自己独立的配置，和你平时用的浏览器互不影响。工具只从这个窗口里拿 Moodle 的登录状态，不会去读你日常浏览器里的任何东西。
-3. **选课**：默认跟踪本学期的课，也可以自己挑。
-4. **接进 AI 软件**：自动把 `monash` 加进 Claude Desktop 和 Claude Code。
-   - macOS 上会先帮你退出 Claude Desktop（开着的时候改配置会被它覆盖），改完再打开。
-   - Windows 上会请你先**完全退出** Claude Desktop：右下角托盘里的 Claude 图标 → 右键 → Quit。
-   - 用的是 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI？这一步提示没找到 Claude Desktop 的话，忽略就行。设置完再运行 `monash connect codex`（或 `cursor`、`vscode`、`windsurf`、`gemini`），然后重启那个软件。
+1. **Ed**：会帮你打开 Ed 的 [API 令牌页面](https://edstem.org/au/settings/api-tokens)，点 **Create Token**，名字随便写，把生成的令牌复制，粘贴回终端（粘贴时不显示，正常），这个令牌不会过期，不想用了在同一个页面删掉就作废
+2. **Moodle**：会打开一个**单独的浏览器窗口**，在里面照常登录 Monash（Okta + MFA），登录成功后窗口自动关闭，这个窗口有自己独立的配置，和你平时用的浏览器互不影响，工具只从这个窗口里拿 Moodle 的登录状态，不会去读你日常浏览器里的任何东西
+3. **选课**：默认跟踪本学期的课，也可以自己挑
+4. **接进 AI 软件**：自动把 `monash` 加进 Claude Desktop 和 Claude Code
+   - macOS 上会先帮你退出 Claude Desktop（开着的时候改配置会被它覆盖），改完再打开
+   - Windows 上会请你先**完全退出** Claude Desktop：右下角托盘里的 Claude 图标 → 右键 → Quit
+   - 用的是 Codex、Cursor、VS Code、Windsurf 或 Gemini CLI？这一步提示没找到 Claude Desktop 的话，忽略就行，设置完再运行 `monash connect codex`（或 `cursor`、`vscode`、`windsurf`、`gemini`），然后重启那个软件
 
-最后可以选择马上同步一次。第一次同步会下载所有课件，要几分钟到十几分钟。
+最后可以选择马上同步一次
 
-完成后打开你的 AI 软件。Claude Desktop 在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行；其他软件可以运行 `monash connect` 看哪些已经接上。
+第一次同步会下载所有课件，要几分钟到十几分钟
+
+完成后打开你的 AI 软件
+
+Claude Desktop 在聊天输入框的 **“+” → Connectors** 里能看到 **monash**，开着就行；其他软件可以运行 `monash connect` 看哪些已经接上
 
 ## 平时怎么用
 
-直接在 AI 软件里问就行。软件开着的时候，工具会在后台：
+直接在 AI 软件里问就行
+
+软件开着的时候，工具会在后台：
 
 - 每小时同步一次 Ed 和 Moodle（新帖、新回复、新课件），并更新全文索引；
-- 每 20 分钟给 Moodle 续一次期（Moodle 空闲 4 小时就会把你登出）。
+- 每 20 分钟给 Moodle 续一次期（Moodle 空闲 4 小时就会把你登出）
 
 ### 不知道能问什么
 
-直接用自己的话问就行：AI 按意思挑工具，不是靠关键词触发，“这周有啥要交的”和“我是不是漏交了什么”都能用到待办。想看都能做什么：
+直接用自己的话问就行：AI 按意思挑工具，不是靠关键词触发，“这周有啥要交的”和“我是不是漏交了什么”都能用到待办
 
-- 问 AI “你能做什么”。在 Claude 里还可以从输入框的 **“+” 菜单**选 monash 的预设提示（其他软件放在自己的位置，有的不显示）：功能大全、本周待办、Ed 新消息、找知识点、测验题复习、作业要求、成绩和反馈。预设提示点了才发给 Claude，平时不占额度。
-- 终端里运行 `monash help`：每项功能附一句示例问法和对应的命令。
+想看都能做什么：
+
+- 问 AI “你能做什么”，在 Claude 里还可以从输入框的 **“+” 菜单**选 monash 的预设提示（其他软件放在自己的位置，有的不显示）：功能大全、本周待办、Ed 新消息、找知识点、测验题复习、作业要求、成绩和反馈，预设提示点了才发给 Claude，平时不占额度
+- 终端里运行 `monash help`：每项功能附一句示例问法和对应的命令
 
 ### Moodle 登录过期了怎么办
 
-电脑关机、睡眠久了，Moodle 会话会过期。这时 AI 会告诉你，并问要不要登录，同意的话它会在你电脑上打开登录窗口；如果 Okta 还记得你，会在后台自动登录，连窗口都不用弹。也可以自己在终端运行：
+电脑关机、睡眠久了，Moodle 会话会过期
+
+这时 AI 会告诉你，并问要不要登录，同意的话它会在你电脑上打开登录窗口；如果 Okta 还记得你，会在后台自动登录，连窗口都不用弹
+
+也可以自己在终端运行：
 
 ```bash
 monash login
 ```
 
-登录过期期间，**截止日期照样能查**（用的是 Moodle 的日历订阅链接，不需要登录）；Ed 的功能完全不受影响。
+登录过期期间，**截止日期照样能查**（用的是 Moodle 的日历订阅链接，不需要登录）；Ed 的功能完全不受影响
 
 ### 选择下载哪些文件
 
@@ -193,7 +219,9 @@ FIT2109
 - **只要几个**：`monash skipped --get 3 7`；也可以写文件名的一部分（`monash skipped --get dataset`），写 `all` 就是全部；这样补下的不受大小上限和排除类型的限制
 - **要很多个**：调大上限再同步一次，比如 `monash sync --max-mb 2000` 或 `monash config max_file_mb 0`；已经下好的不会重下，只会补上之前跳过的
 
-在 AI 软件里也可以直接问“有哪些文件没下载？”，再告诉它要哪几个，它会在后台补下。下大文件之前会先看硬盘空间够不够
+在 AI 软件里也可以直接问“有哪些文件没下载？”，再告诉它要哪几个，它会在后台补下
+
+下大文件之前会先看硬盘空间够不够
 
 ### 同步只成功了一部分
 
@@ -221,7 +249,9 @@ AI 先用 `list_moodle_assignments` 找到作业，再用 `read_file` 读它的 
 
 ### AI 没额度了也能用
 
-命令行工具不需要 AI，不耗任何额度。先 `monash sync` 同步一下，然后：
+命令行工具不需要 AI，不耗任何额度
+
+先 `monash sync` 同步一下，然后：
 
 | 想知道 | 命令 |
 |---|---|
@@ -233,30 +263,42 @@ AI 先用 `list_moodle_assignments` 找到作业，再用 `read_file` 读它的 
 | 读某个帖子全文 | `monash ed show FIT2102#42` |
 | 成绩 / 可能漏交的作业 | `monash moodle grades FIT2102` / `monash moodle assignments --missing` |
 
-区别是没人帮你总结，只列出原始信息。另外，后台同步和 Moodle 续期是跟着 AI 软件跑的，因为软件开着时 MCP 服务器才在运行：就算额度用完也照常进行；软件关掉的话，查之前先 `monash sync`，Moodle 过期了 `monash login`。
+区别是没人帮你总结，只列出原始信息
+
+另外，后台同步和 Moodle 续期是跟着 AI 软件跑的，因为软件开着时 MCP 服务器才在运行：就算额度用完也照常进行；软件关掉的话，查之前先 `monash sync`，Moodle 过期了 `monash login`
 
 ## 它由两部分组成
 
 同一套底层代码（登录、同步、查询），给两种“用户”用：
 
-**MCP：给 AI 软件用的接口。** Moodle 和 Ed 都要 Okta + MFA 登录，AI 自己进不去。MCP 让它在聊天中途自己去查（`get_study_todo`、`search_content`、`list_ed_updates` 等工具）：
+**MCP：给 AI 软件用的接口
 
-- **答案来自真实数据**：截止时间、公告、成绩都是当下查到的，还能给出处，比如“Workshop 5 Slides 第 25 页”。
-- **两边合起来看**：一句“这周要做什么”，同时查 Moodle 截止、Ed 没做完的 lesson、两边的公告。
-- **不用手动搬资料**：不用下载 PDF 再上传。AI 按需找到那份课件、只读需要的几页，省事也省额度。
-- **可以接着追问**：“A2 spec 要求什么？”“那周讲的 functor 结合讲义解释一下”。
+** Moodle 和 Ed 都要 Okta + MFA 登录，AI 自己进不去
 
-**CLI（`monash` 命令）：给人用的接口。**
+MCP 让它在聊天中途自己去查（`get_study_todo`、`search_content`、`list_ed_updates` 等工具）：
 
-1. **只有人能做的事**：安装配置、在登录窗口里过 MFA、粘贴 Ed 令牌（令牌不该经过聊天，所以只在终端输入）。
-2. **不依赖 AI**：没额度或只想快速看一眼时，`monash todo` 一秒出结果（见[没额度了也能用](#ai-没额度了也能用)）。
-3. **排错和维护**：`status`、`sync`、`update`、`uninstall`。
+- **答案来自真实数据**：截止时间、公告、成绩都是当下查到的，还能给出处，比如“Workshop 5 Slides 第 25 页”
+- **两边合起来看**：一句“这周要做什么”，同时查 Moodle 截止、Ed 没做完的 lesson、两边的公告
+- **不用手动搬资料**：不用下载 PDF 再上传，AI 按需找到那份课件、只读需要的几页，省事也省额度
+- **可以接着追问**：“A2 spec 要求什么？”“那周讲的 functor 结合讲义解释一下”
 
-简单说：MCP 让你的 AI 软件变成懂你课程的助教，CLI 负责装好、登录和兜底。平时在 AI 软件里问，偶尔用终端。
+**CLI（`monash` 命令）：给人用的接口
+
+**
+
+1. **只有人能做的事**：安装配置、在登录窗口里过 MFA、粘贴 Ed 令牌（令牌不该经过聊天，所以只在终端输入）
+2. **不依赖 AI**：没额度或只想快速看一眼时，`monash todo` 一秒出结果（见[没额度了也能用](#ai-没额度了也能用)）
+3. **排错和维护**：`status`、`sync`、`update`、`uninstall`
+
+简单说：MCP 让你的 AI 软件变成懂你课程的助教，CLI 负责装好、登录和兜底
+
+平时在 AI 软件里问，偶尔用终端
 
 ## 整门课资料导出
 
-不需要 AI 软件也能导出课程资料。安装或升级后，先登录并选择课程，再运行：
+不需要 AI 软件也能导出课程资料
+
+安装或升级后，先登录并选择课程，再运行：
 
 ```bash
 uv tool install --upgrade 'monash-study-kit[gmail]'
@@ -278,24 +320,46 @@ monash export FIT1043 --sync --format both --to "./exports"
 
 ![1.11.2 实际离线导出与 ZIP 内容，使用合成课程数据](docs/screenshots/course-export.png)
 
-截图使用合成资料实际运行 `monash export` 生成，故意保留一个缺失附件和未授权 Google 链接来展示遗漏情况；没有真实账号或课程内容。已有本地缓存时可以省略 `--sync`，失败后可重新同步并导出。完整说明见[整课导出指南](https://docs.secureview.tech/zh-cn/study-kit/materials/)。
+截图使用合成资料实际运行 `monash export` 生成，故意保留一个缺失附件和未授权 Google 链接来展示遗漏情况；没有真实账号或课程内容
+
+已有本地缓存时可以省略 `--sync`，失败后可重新同步并导出
+
+完整说明见[整课导出指南](https://docs.secureview.tech/zh-cn/study-kit/materials/)
 
 ![monash todo 的输出：Moodle 截止、可能漏交的作业、Ed 还没开始的 lesson、新上的课件、公告和未读回复](docs/screenshots/todo.png)
 
-图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的。AI 软件通过 MCP 工具读到的是同样的数据。带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)。
+图里是 `monash todo` 的真实输出，数据库里的课程、课件和帖子都是编的
+
+AI 软件通过 MCP 工具读到的是同样的数据
+
+带图的使用说明：[docs.secureview.tech/zh-cn/study-kit](https://docs.secureview.tech/zh-cn/study-kit/)
 
 ---
 
-之前的[1.1安全审计](docs/security.md)只覆盖当时的功能；新增的远程连接、邮箱与考勤另列有[1.5审查清单](docs/SECURITY-REVIEW-1.5-SCOPE.md)，不能直接沿用旧版结论。
+之前的[1.1安全审计](docs/security.md)只覆盖当时的功能；新增的远程连接、邮箱与考勤另列有[1.5审查清单](docs/SECURITY-REVIEW-1.5-SCOPE.md)，不能直接沿用旧版结论
 
 ## 可选：Gmail 与考勤
 
-1.5.0 新增。两部分在你接上之前都不会打开，只在你自己的电脑上运行。
+1.5.0 新增
 
-- **学校邮箱（Gmail）。** 在本机保存一份 Monash 邮箱的私有副本。问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话和附件里的文字（PDF、Office、图片）。读邮件不会把它标成已读。
-- **考勤。** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”“今天 FIT2102 workshop 的签到码是多少？”。签到码从已同步的 Moodle、Ed 和学校邮件里找，每个都标出处让你核对。只在马来西亚校区的门户上验证过。
+两部分在你接上之前都不会打开，只在你自己的电脑上运行
 
-如果只是想在 Claude 或 ChatGPT 里问问邮箱里有什么，用它们自带的 Gmail 连接器最简单。这里的 Gmail 适合想把邮件和考勤签到码连在一起、离线搜邮件和附件，或者在 Codex、Cursor 这些没有自带 Gmail 的软件里用的人。不用自己去 Google Cloud 设置：安装包里自带一个 Google 应用，授权页会提示“Google 尚未验证此应用”，点“高级”再点“继续”就行。也可以用你自己建的应用。完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)。最简单的是直接在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”：缺的组件会自动安装，然后在你电脑上打开登录窗口，你只要登录就行，不用开终端，密码也不经过聊天。用终端的话是这几步：
+- **学校邮箱（Gmail），** 在本机保存一份 Monash 邮箱的私有副本，问“我邮箱里有什么要处理的？”，AI 会列出最近几天还没读的学校邮件（推广和社交类已去掉），也能离线搜索、读整个对话和附件里的文字（PDF、Office、图片），读邮件不会把它标成已读
+- **考勤，** 从考勤门户读取你的班次和签到状态，可以问“这周还有哪节课没签到？”“今天 FIT2102 workshop 的签到码是多少？”，签到码从已同步的 Moodle、Ed 和学校邮件里找，每个都标出处让你核对，只在马来西亚校区的门户上验证过
+
+如果只是想在 Claude 或 ChatGPT 里问问邮箱里有什么，用它们自带的 Gmail 连接器最简单
+
+这里的 Gmail 适合想把邮件和考勤签到码连在一起、离线搜邮件和附件，或者在 Codex、Cursor 这些没有自带 Gmail 的软件里用的人
+
+不用自己去 Google Cloud 设置：安装包里自带一个 Google 应用，授权页会提示“Google 尚未验证此应用”，点“高级”再点“继续”就行
+
+也可以用你自己建的应用
+
+完整步骤见 [docs/google-and-attendance-setup.md](docs/google-and-attendance-setup.md)，会访问和保存哪些数据见 [PRIVACY.md](PRIVACY.md)
+
+最简单的是直接在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”：缺的组件会自动安装，然后在你电脑上打开登录窗口，你只要登录就行，不用开终端，密码也不经过聊天
+
+用终端的话是这几步：
 
 ```bash
 uv tool install --reinstall "monash-study-kit[gmail,attendance]"
@@ -305,13 +369,35 @@ monash attendance login
 monash attendance sync
 ```
 
-登录完重启 AI 软件。AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`。考勤按课表读，不是按钟点：工作日早上 8 点一次，每节还没签到的课开始 15 分钟后再一次，晚上、周末和课间都不跑（`monash config attendance_auto_sync false` 关掉）。你或 AI 也可以随时让它读一次。每次读只是向门户发一次普通请求（约 5 KB，几秒钟，不开浏览器）；页面要是和预期不一样，会自动改用一个无头浏览器页面。在马来西亚校区的门户上，两种读法对门户提供的 15 天结果完全一致；`monash attendance probe` 可以在你的门户上再对照一次。开了以后 `monash status` 和 `monash doctor` 都会显示这两部分，`monash update` 也会保留你装的可选依赖。
+登录完重启 AI 软件
 
-登录以后 AI 软件里全部功能都打开，包括起草邮件、发送草稿、改标签（归档、标已读、加星标）和签到。AI 必须先把完整预览给你看，你确认了这一项才会执行；签到只有在你说自己到课了才会准备。不会彻底删除邮件。只想让它读邮件，就用 `monash gmail login --read-only` 登录；想关掉某一项，`monash config gmail_manage_enabled false` 或 `monash config attendance_submit_enabled false`。
+AI 软件开着的时候，邮件每 30 分钟在后台同步一次（`monash config gmail_sync_minutes` 改间隔，0 关掉），想马上更新就运行 `monash gmail sync`
 
-用 `monash remote serve` 远程接入时，每个软件在配对页上自己勾选能用哪些功能：只列服务器上已经开了的，只读的默认勾上，写操作默认不勾。比如手机上的 Claude 只开考勤，ChatGPT 只开邮箱，或者都不开。之前已经配对的软件还是只有 Moodle 和 Ed，重新配对才会多出来；`monash remote clients` 能看到每个软件拿到了什么。
+考勤按课表读，不是按钟点：工作日早上 8 点一次，每节还没签到的课开始 15 分钟后再一次，晚上、周末和课间都不跑（`monash config attendance_auto_sync false` 关掉）
 
-每次对话开头都要多发一些工具说明：两部分都登录后约多 1,900 token（总共 5,132，不登录时是 3,232）；不登录就没有任何变化。
+你或 AI 也可以随时让它读一次
+
+每次读只是向门户发一次普通请求（约 5 KB，几秒钟，不开浏览器）；页面要是和预期不一样，会自动改用一个无头浏览器页面
+
+在马来西亚校区的门户上，两种读法对门户提供的 15 天结果完全一致；`monash attendance probe` 可以在你的门户上再对照一次
+
+开了以后 `monash status` 和 `monash doctor` 都会显示这两部分，`monash update` 也会保留你装的可选依赖
+
+登录以后 AI 软件里全部功能都打开，包括起草邮件、发送草稿、改标签（归档、标已读、加星标）和签到
+
+AI 必须先把完整预览给你看，你确认了这一项才会执行；签到只有在你说自己到课了才会准备
+
+不会彻底删除邮件
+
+只想让它读邮件，就用 `monash gmail login --read-only` 登录；想关掉某一项，`monash config gmail_manage_enabled false` 或 `monash config attendance_submit_enabled false`
+
+用 `monash remote serve` 远程接入时，每个软件在配对页上自己勾选能用哪些功能：只列服务器上已经开了的，只读的默认勾上，写操作默认不勾
+
+比如手机上的 Claude 只开考勤，ChatGPT 只开邮箱，或者都不开
+
+之前已经配对的软件还是只有 Moodle 和 Ed，重新配对才会多出来；`monash remote clients` 能看到每个软件拿到了什么
+
+每次对话开头都要多发一些工具说明：两部分都登录后约多 1,900 token（总共 5,132，不登录时是 3,232）；不登录就没有任何变化
 
 **考勤登录过期了**：`monash attendance maintain` 会检查，能的话用这台电脑上已有的浏览器配置悄悄登回去
 
@@ -323,64 +409,87 @@ Monash 要密码或 MFA 时它会报告 `needs_login`，这时自己运行 `mona
 
 从图片里识别签到码需要 Python 3.11 以上
 
-还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户。
+还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户
 
 ## 多账号 / 只导课程资料
 
-不加 `--profile` 或使用 `--profile default`，仍是原来的默认账号，目录规则和功能不变。命名账号在默认数据目录的 `profiles/<名称>/` 中独立保存数据库、课件、凭据和浏览器会话；默认目录仍按 `MONASH_KIT_HOME` > `location.json` > 系统默认位置决定。`default` 是保留名，其他名称只能匹配 `[a-z0-9][a-z0-9_-]{0,31}`。
+命名 profile 是一个单独的账号，有自己的登录、文件、数据库和浏览器会话，放在数据目录的 `profiles/<名字>/` 里，适合有第二个 Monash 账号，或者想单独存一份只有课程资料的情况
+
+不加 `--profile` 就还是原来的账号，profile 名字只能用小写字母、数字、`-` 和 `_`，`default` 不能用
 
 ```bash
-monash --profile alice setup             # 只做登录和选课
-monash --profile alice google login      # 可选：只申请 drive.readonly
+monash --profile alice setup             # 登录并选课
+monash --profile alice google login      # 可选，Drive 只读
 monash --profile alice sync
-monash --profile=alice export FIT1045 --sync
-monash --profile alice mcp               # 本机 stdio，仅课程资料工具
-monash profile list                      # 必须在默认账号下管理
-monash profile remove alice              # 确认后清除登录，保留资料
-monash profile remove alice --all --yes   # 同时删除资料和数据库
+monash --profile alice export FIT1045 --sync
+monash --profile alice mcp               # 本机 MCP，只有课程资料的工具
+monash profile list                      # 这两条在原来的账号下运行
+monash profile remove alice              # 退出登录，保留文件
+monash profile remove alice --all --yes  # 文件和数据库也一起删
 ```
 
-也支持环境变量 `MONASH_KIT_PROFILE=alice`；命令行选择优先。入口在导入服务模块前选定账号，不能在同一个 Python 进程中切换已经初始化的账号。命名账号忽略单项目录覆盖（`MONASH_KIT_DATA`、`MONASH_KIT_SECRETS`、`MONASH_KIT_FILES`、`MONASH_KIT_ED_DATA`、`MONASH_KIT_ED_TOKEN`、`ED_TOKEN` 和 `files_dir`），避免误用默认账号的目录或令牌。目录在支持的系统上设为 700 权限。
+也可以用环境变量 `MONASH_KIT_PROFILE=alice`，两个都设了以 `--profile` 为准
 
-命名 profile **只留在本机**：拒绝 `remote`、`connect`、`setup claude` 和 `move`，`setup` 跳过 AI 软件配置；不能把会话交给远程服务或 AI 软件配置。`mcp` 仍可在本机手动运行。profile 随默认数据目录整体移动，不单独搬家。
+**命名 profile 只管课程资料**：同步 Moodle 文件、Page、Book、作业说明和能看到的评分细则、文件夹、链接的 Google 文件和 Ed Lessons，不同步 Ed 讨论区、邮件和考勤，也不读你的截止日期、成绩和交过的作业
 
-命名 profile 强制开启 `materials_only`，设置文件或环境变量也关不掉。默认账号的该设置默认是 false，可以用 `monash config materials_only true` 开启；资料模式运行中只能查看 `materials_only`，不能用 config 修改。默认账号如需退出，可先用 `MONASH_KIT_MATERIALS_ONLY=false` 临时覆盖，再保存 false；命名账号不接受该覆盖。
+它只能在这台电脑上用：`remote`、`connect`、`setup claude` 和 `move` 都会被拒绝，setup 也不会把它接进 AI 软件，它还会忽略 `MONASH_KIT_DATA`、`MONASH_KIT_SECRETS`、`MONASH_KIT_FILES`、`MONASH_KIT_ED_DATA`、`MONASH_KIT_ED_TOKEN`、`ED_TOKEN` 和 `files_dir` 这些设置，免得用到原来账号的目录或令牌
 
-资料模式同步照常获取 Moodle 课件、Page、Book、作业说明和可见评分细则、文件夹、课程链接中的 Google 文件和 Ed Lessons。Ed 仍拉课程列表以匹配课号，但不抓 threads / replies；跳过 Gmail 后台同步、考勤读取和续期，Moodle 登录时也不获取个人日历。`doctor --deep` 只检查课件和全文索引，不读个人截止、提交状态、成绩或帖子。已有缓存不会因此被删除。
+原来的账号也可以用 `monash config materials_only true` 切到这个模式，想切回来就先用 `MONASH_KIT_MATERIALS_ONLY=false` 运行一次，再把它存成 `false`，已经同步的数据不会被删
 
-资料模式的完整命令清单（被拒绝时退出码 1）：
+**删除 profile** 时会先吊销它的 Google Drive 和 Gmail 授权，吊销失败就什么都不删，可以再试，成功后删掉登录信息（`secrets/`、`browser-profile/`、`attendance-browser/`），下载的文件默认保留，加 `--all` 才会删，不会向 Moodle 发任何请求，Ed 令牌没法从这里吊销，要到 [Ed 的 API 令牌页面](https://edstem.org/au/settings/api-tokens)手动删
 
-- 允许：`setup`（仅登录选课）、`login moodle/ed`、`google login/status/logout`、`sync`、`export`、`courses`、`status`、`doctor`、`open`、`library`、`config`、`grep`、`help`、`mcp`；`ed export/lessons/read/quiz`；`moodle ls/get`；默认账号下的 `profile list/remove`。
-- `config` 不能修改当前启用的 `materials_only`；命名账号也不能修改 `files_dir`。`moodle get` 只接受课件资源和文件入口，拒绝成绩页和提交文件。
-- 拒绝：全部 `gmail`、全部 `attendance`；`todo`、`due`、`semester`、`media`、`uninstall`、`update`、`connect`、`move`、全部 `remote`、`setup claude`；`ed courses/threads/search/show/new/following`；`moodle overview/due/calendar/assignments/grades/news/search/find/open/alerts/messages`。未来新增命令也需显式加入白名单。
+<details>
+<summary>只导课程资料模式下能用哪些命令和工具</summary>
 
-MCP 只注册 `list_files`、`read_file`、`search_content`、`get_ed_lessons`、`export_ed_lessons`；`use_ed=false` 时再去掉后两项。其余工具（包括旧别名）调用均报错。导出只在本机写 zip，不修改上游课程；仍保留其本地写文件的 MCP 标注。个人学习预设提示不在此模式提供。没有任意浏览或搜索 Drive 的命令或工具，Google 文件只在同步时按课程链接导出。
+被拒绝的命令退出码是 1
 
-`profile list` 只检查 Moodle / Ed / Google 凭据文件是否存在及占用空间，不读取或打印内容。`profile remove` 会先依次吊销目标 profile 的 Drive 和 Gmail Google OAuth 授权；任何一个失败时停止，**本机文件一律保留**，可重试（此前已成功的远端吊销无法撤回）。全部成功后删除目标的 `secrets/`、`browser-profile/`、`attendance-browser/`；只有 `--all` 才删整个 profile，默认账号和其他 profile 不受影响。不向 Moodle 发送注销或任何其他请求。Ed 的 API 令牌没有吊销接口，请到 [Ed API tokens](https://edstem.org/au/settings/api-tokens) 手动删除。
+- 能用：`setup`（登录和选课）、`login moodle/ed`、`google login/status/logout`、`sync`、`export`、`courses`、`status`、`doctor`、`open`、`library`、`config`、`grep`、`help`、`mcp`、`changes`、`skipped`；`ed export/lessons/read/quiz`；`moodle ls/get`；在原来账号下的 `profile list/remove`
+- 模式开着时 `config` 改不了 `materials_only`，命名 profile 也改不了 `files_dir`，`moodle get` 只接受课件，不接受成绩页和交过的作业
+- 不能用：全部 `gmail` 和 `attendance` 命令；`todo`、`due`、`semester`、`media`、`uninstall`、`update`、`connect`、`move`、全部 `remote`、`setup claude`；`ed courses/threads/search/show/new/following`；`moodle overview/due/calendar/assignments/grades/news/search/find/open/alerts/messages`，以后新加的命令默认也不能用，要手动加进名单
+- MCP 工具只有 `list_files`、`read_file`、`search_content`、`get_ed_lessons` 和 `export_ed_lessons`（`use_ed=false` 时没有后两个），其他工具会报错，没有浏览或搜索 Drive 的工具
+- `doctor --deep` 只检查课程资料和全文索引
+
+</details>
 
 ## 接入其他 AI 客户端
 
-**ChatGPT**：平时的 ChatGPT 聊天（网页、电脑客户端、手机）是从 OpenAI 的服务器去连的，所以要用[远程模式](https://docs.secureview.tech/zh-cn/study-kit/remote/)，拿到 HTTPS 地址后在开发者模式里加成应用，开发者模式要付费会员，加一次三个地方都能用。ChatGPT 桌面版里的 Codex 不一样，它在你电脑上跑，和 Codex 共用 `~/.codex/config.toml`，运行 `monash connect codex` 就行，新开一个 Codex 对话输入 `/mcp` 能看到 monash。详细步骤见[在 ChatGPT 里用](https://docs.secureview.tech/zh-cn/study-kit/chatgpt/)
+**ChatGPT**：平时的 ChatGPT 聊天（网页、电脑客户端、手机）是从 OpenAI 的服务器去连的，所以要用[远程模式](https://docs.secureview.tech/zh-cn/study-kit/remote/)，拿到 HTTPS 地址后在开发者模式里加成应用，开发者模式要付费会员，加一次三个地方都能用
 
-MCP 是开放协议，`monash mcp` 是标准的本地（stdio）MCP 服务器，所以支持本地 MCP 的客户端理论上都能接。`monash setup` 会配置 Claude Desktop 和 Claude Code。其他客户端先运行 `monash setup`（登录、选课），再运行一条命令：
+ChatGPT 桌面版里的 Codex 不一样，它在你电脑上跑，和 Codex 共用 `~/.codex/config.toml`，运行 `monash connect codex` 就行，新开一个 Codex 对话输入 `/mcp` 能看到 monash
+
+详细步骤见[在 ChatGPT 里用](https://docs.secureview.tech/zh-cn/study-kit/chatgpt/)
+
+MCP 是开放协议，`monash mcp` 是标准的本地（stdio）MCP 服务器，所以支持本地 MCP 的客户端理论上都能接
+
+`monash setup` 会配置 Claude Desktop 和 Claude Code
+
+其他客户端先运行 `monash setup`（登录、选课），再运行一条命令：
 
 ```sh
 monash connect            # 列出所有客户端和接入状态
 monash connect cursor     # 或 codex、vscode、windsurf、gemini
 ```
 
-它只在客户端的配置文件里加 `monash` 这一项，写程序的完整路径，其他内容原样保留，改之前先备份。装了 `codex` 命令的话 Codex 用 `codex mcp add` 接。`--print` 只打印要加的配置不改文件，`--remove` 移除。`monash uninstall` 会从所有客户端移除。
+它只在客户端的配置文件里加 `monash` 这一项，写程序的完整路径，其他内容原样保留，改之前先备份
 
-> **已验证：** Claude Desktop、Claude Code 的本地接入。ChatGPT 和 Codex 通过 v1.3.0 核心的私有远程集成验证过：2026 年 10 月 30 日，Codex 成功查询了 Moodle 和 Ed 课程，ChatGPT 的课程查询也已确认。作者用 ChatGPT Plus 加自己的域名和服务器可以正常使用。
+装了 `codex` 命令的话 Codex 用 `codex mcp add` 接
+
+`--print` 只打印要加的配置不改文件，`--remove` 移除
+
+`monash uninstall` 会从所有客户端移除
+
+> **已验证：** Claude Desktop、Claude Code 的本地接入，ChatGPT 和 Codex 通过 v1.3.0 核心的私有远程集成验证过：2026 年 10 月 30 日，Codex 成功查询了 Moodle 和 Ed 课程，ChatGPT 的课程查询也已确认，作者用 ChatGPT Plus 加自己的域名和服务器可以正常使用
 >
-> 2026 年 10 月 30 日，PyPI 上的 1.4.0 包也在干净环境里用编造的数据测过一遍：stdio 握手、18 个工具的目录、三个面板、`monash library`，以及 `monash remote` 用 Claude 和 ChatGPT 回调地址走完的整套登录和查询流程。这些都不等同于验证 Codex、Cursor、VS Code、Windsurf、Gemini CLI 的原生本地接入。`monash connect` 写的格式照各家官方文档（2026-10），有出入时以官方文档为准。
+> 2026 年 10 月 30 日，PyPI 上的 1.4.0 包也在干净环境里用编造的数据测过一遍：stdio 握手、18 个工具的目录、三个面板、`monash library`，以及 `monash remote` 用 Claude 和 ChatGPT 回调地址走完的整套登录和查询流程，这些都不等同于验证 Codex、Cursor、VS Code、Windsurf、Gemini CLI 的原生本地接入，`monash connect` 写的格式照各家官方文档（2026-10），有出入时以官方文档为准
 
 想手动配置的话，先找到 `monash` 程序的完整路径（很多客户端启动时读不到终端的 PATH）：
 
 - macOS：终端里运行 `which monash`，一般是 `/Users/你的用户名/.local/bin/monash`
 - Windows：PowerShell 里运行 `(Get-Command monash).Source`，一般是 `C:\Users\你的用户名\.local\bin\monash.exe`
 
-下面的例子里把 `/完整路径/monash` 换成你的路径。**Windows 路径写进 JSON 时，反斜杠要写两遍**（`C:\\Users\\...`）；写进 TOML 时用单引号（`'C:\Users\...'`）。
+下面的例子里把 `/完整路径/monash` 换成你的路径
+
+**Windows 路径写进 JSON 时，反斜杠要写两遍**（`C:\\Users\\...`）；写进 TOML 时用单引号（`'C:\Users\...'`）
 
 **手动配置**
 
@@ -421,24 +530,30 @@ VS Code（`mcp.json`，注意外层是 `servers` 不是 `mcpServers`）：
 }
 ```
 
-文件里已经有别的服务器的话，把 `monash` 那一项加进去就行，别把整个文件覆盖掉。改完重启客户端。
+文件里已经有别的服务器的话，把 `monash` 那一项加进去就行，别把整个文件覆盖掉
+
+改完重启客户端
 
 **注意**：
 
-- 登录、选课还是用 `monash setup` 做。没装 Claude 的话，最后一步会提示“没找到 Claude Desktop”，忽略就行。
-- 后台同步和 Moodle 续期只在客户端开着、MCP 在运行时进行。
-- 工具说明是按 Claude 写的，别的模型一般也能照着用，但效果没验证过。
-- 不想折腾的话，命令行本身跟任何 AI 都无关（见[没额度了也能用](#ai-没额度了也能用)），可以把 `monash todo` 之类的输出直接复制给任何 AI。
+- 登录、选课还是用 `monash setup` 做，没装 Claude 的话，最后一步会提示“没找到 Claude Desktop”，忽略就行
+- 后台同步和 Moodle 续期只在客户端开着、MCP 在运行时进行
+- 工具说明是按 Claude 写的，别的模型一般也能照着用，但效果没验证过
+- 不想折腾的话，命令行本身跟任何 AI 都无关（见[没额度了也能用](#ai-没额度了也能用)），可以把 `monash todo` 之类的输出直接复制给任何 AI
 
 ### 给 AI 用的技能包
 
-会读 skill 的 AI 编程工具（Claude Code、Codex、Cursor 等）可以装这个技能包。它告诉 AI 哪个问题用哪条 `monash` 命令、问作业要求时怎么用资料（作业说明和评分细则优先，再看 Ed 上教职员工的回答，每条标出处），以及哪些事必须留给你自己（登录、令牌、交作业）：
+会读 skill 的 AI 编程工具（Claude Code、Codex、Cursor 等）可以装这个技能包
+
+它告诉 AI 哪个问题用哪条 `monash` 命令、问作业要求时怎么用资料（作业说明和评分细则优先，再看 Ed 上教职员工的回答，每条标出处），以及哪些事必须留给你自己（登录、令牌、交作业）：
 
 ```sh
 npx skills add Waldo0926/monash-study-kit
 ```
 
-文件在 [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.md)，有测试检查里面的命令都还存在。`npx skills` 是 Vercel 做的第三方安装工具，要装 Node.js；也可以把文件手动复制到 AI 的 skills 文件夹。
+文件在 [`skills/monash-study-kit/SKILL.md`](skills/monash-study-kit/SKILL.md)，有测试检查里面的命令都还存在
+
+`npx skills` 是 Vercel 做的第三方安装工具，要装 Node.js；也可以把文件手动复制到 AI 的 skills 文件夹
 
 ### 搜得到哪些内容
 
@@ -446,7 +561,7 @@ npx skills add Waldo0926/monash-study-kit
 
 - Moodle 上的课件（PDF、Word、PowerPoint、文本和代码）
 - Ed Lessons 里的 PDF、正文页里附的文件，以及直接写在 Ed 里的正文页
-- **课程笔记网页**：很多课的讲义在老师的公开网站上，比如 FIT2102 的 tgdwyer.github.io、FIT2109 的 yqtian-se.github.io。Moodle 和 Ed 里链接到的这类页面会被抓下来转成文字，存在课件文件夹的 `Course notes (web)` 里。只抓课程直接链接的页面，不会顺着链接整站爬；每页最多一周重抓一次。学校官网、视频、Google 文档之类不抓。不想要的话：`monash config web_notes false`
+- **课程笔记网页**：很多课的讲义在老师的公开网站上，比如 FIT2102 的 tgdwyer.github.io、FIT2109 的 yqtian-se.github.io，Moodle 和 Ed 里链接到的这类页面会被抓下来转成文字，存在课件文件夹的 `Course notes (web)` 里，只抓课程直接链接的页面，不会顺着链接整站爬；每页最多一周重抓一次，学校官网、视频、Google 文档之类不抓，不想要的话：`monash config web_notes false`
 - 录播字幕稿（装了 `[media]` 才有）
 
 ## 隐私和安全
@@ -455,14 +570,22 @@ npx skills add Waldo0926/monash-study-kit
   - macOS：`~/Library/Application Support/monash-study-kit`
   - Windows：`%LOCALAPPDATA%\monash-study-kit`
 
-  这只是默认位置。第一次 `monash setup` 会问数据放在哪，列出每个盘的剩余空间；C 盘剩不到 5 GB 时会推荐别的盘。以后想整个搬走（课件、数据库、登录状态、设置）：先关掉 AI 软件，再运行 `monash move D:\MonashStudyKit`。数据放在别处时，默认目录里只留一个很小的 `location.json` 指过去，不用重新登录。
+  这只是默认位置
 
-  里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）。运行 `monash open` 可以打开课件文件夹，`monash open ed` 打开 Ed Lessons 的课件（在 `data/ed-files` 里，按课号分）。
-- **存了哪些凭据**：Moodle 的会话 cookie、Ed 的 API 令牌、Moodle 日历订阅链接。都只在你电脑上，只用来访问 Moodle / Ed 本身。**别把 `secrets` 文件夹发给别人。**
-- **AI 能看到什么**：只有你提问时 AI 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字）。令牌和 cookie 永远不会发给 AI。**也不要把 Ed 令牌贴进聊天里**，令牌只在终端里输入。
-- **课件浏览页**：`monash library` 只监听 `127.0.0.1`，只提供同步时登记过的文件。页面没有密码，不要把它转发到公网。
-- **可选的远程模式**：`monash remote` 把配对过的软件记在 `secrets/remote-mcp.db`，只存令牌的哈希。访问令牌有效 1 小时，刷新令牌 30 天，每用一次就换新的。`monash remote revoke --all` 可以一次全部撤销。
-- **会对 Moodle / Ed 做什么**：只读。请求之间有间隔，不会像爬虫一样猛打学校的系统。
+  第一次 `monash setup` 会问数据放在哪，列出每个盘的剩余空间；C 盘剩不到 5 GB 时会推荐别的盘
+
+  以后想整个搬走（课件、数据库、登录状态、设置）：先关掉 AI 软件，再运行 `monash move D:\MonashStudyKit`
+
+  数据放在别处时，默认目录里只留一个很小的 `location.json` 指过去，不用重新登录
+
+  里面有课件（`files`）、数据库（`data`）、登录凭据（`secrets`，只有你自己的账户能读）、专用登录窗口的配置（`browser-profile`）
+
+  运行 `monash open` 可以打开课件文件夹，`monash open ed` 打开 Ed Lessons 的课件（在 `data/ed-files` 里，按课号分）
+- **存了哪些凭据**：Moodle 的会话 cookie、Ed 的 API 令牌、Moodle 日历订阅链接，都只在你电脑上，只用来访问 Moodle / Ed 本身，**别把 `secrets` 文件夹发给别人**
+- **AI 能看到什么**：只有你提问时 AI 调用工具返回的内容（比如截止日期列表、某个帖子的全文、某份课件的文字），令牌和 cookie 永远不会发给 AI，**也不要把 Ed 令牌贴进聊天里**，令牌只在终端里输入
+- **课件浏览页**：`monash library` 只监听 `127.0.0.1`，只提供同步时登记过的文件，页面没有密码，不要把它转发到公网
+- **可选的远程模式**：`monash remote` 把配对过的软件记在 `secrets/remote-mcp.db`，只存令牌的哈希，访问令牌有效 1 小时，刷新令牌 30 天，每用一次就换新的，`monash remote revoke --all` 可以一次全部撤销
+- **会对 Moodle / Ed 做什么**：只读，请求之间有间隔，不会像爬虫一样猛打学校的系统
 - **彻底删除**：
 
   ```bash
@@ -470,11 +593,15 @@ npx skills add Waldo0926/monash-study-kit
   uv tool uninstall monash-study-kit
   ```
 
-  `monash uninstall` 会把它从 Claude 和其他 AI 客户端里移除，并询问要不要删掉所有数据。最后记得去 Ed 设置页删掉令牌。
+  `monash uninstall` 会把它从 Claude 和其他 AI 客户端里移除，并询问要不要删掉所有数据
+
+  最后记得去 Ed 设置页删掉令牌
 
 ## Token 用量
 
-每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给模型，不调用也占 token。用 `scripts/measure_tokens.py` 在 1.5.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
+每个 MCP 工具的名字、说明和参数在每次对话开始时都会发给模型，不调用也占 token
+
+用 `scripts/measure_tokens.py` 在 1.5.0 上量的结果（估算：4 个 ASCII 字符或 1 个中文字符算 1 个 token）：
 
 | 每次对话发一次 | Token |
 | --- | ---: |
@@ -482,11 +609,15 @@ npx skills add Waldo0926/monash-study-kit
 | 服务说明 | 270 |
 | **合计** | **3,377** |
 
-1.5.0 加了 `start_school_service_setup`（145），让你在 AI 里说一声就能接上学校邮箱或考勤；两样都接好以后它就不再列出。两样都接上时合计 5,132。1.4.0 的合计是 3,232。
+1.5.0 加了 `start_school_service_setup`（145），让你在 AI 里说一声就能接上学校邮箱或考勤；两样都接好以后它就不再列出
 
-服务说明在 1.2.0 是 187，1.3.0 加了作业问题的规则（作业说明和评分细则优先，再看 Ed 上教职员工的回答）后变成 270。
+两样都接上时合计 5,132
 
-最大的单个工具是 `search_ed_threads`，324。
+1.4.0 的合计是 3,232
+
+服务说明在 1.2.0 是 187，1.3.0 加了作业问题的规则（作业说明和评分细则优先，再看 Ed 上教职员工的回答）后变成 270
+
+最大的单个工具是 `search_ed_threads`，324
 
 回答占多少，用一个学生的真实数据（4 门 Moodle 课、3 门 Ed 课、376 个已索引的文件）加 `--live` 量的：
 
@@ -498,9 +629,13 @@ npx skills add Waldo0926/monash-study-kit
 | 在课件里找 "assignment"（`search_content`） | 2,596 | 25,466 |
 | 读第一个结果的第一页（`read_file`） | 96 | 96 |
 
-“改成把文件贴进去”是搜到的每个文件的全文。先搜再读大约只要它的 10%。
+“改成把文件贴进去”是搜到的每个文件的全文
 
-想量自己的回答（问“这周要做什么”、搜课件时工具返回多少，和把整份文件贴进去比），运行 `uv run python scripts/measure_tokens.py --live --query <词>`，只输出数字。设了 `ANTHROPIC_API_KEY` 再加 `--api`，会用 Anthropic 免费的 token 计数接口算准确值。
+先搜再读大约只要它的 10%
+
+想量自己的回答（问“这周要做什么”、搜课件时工具返回多少，和把整份文件贴进去比），运行 `uv run python scripts/measure_tokens.py --live --query <词>`，只输出数字
+
+设了 `ANTHROPIC_API_KEY` 再加 `--api`，会用 Anthropic 免费的 token 计数接口算准确值
 
 ## 命令速查
 
@@ -511,7 +646,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash status` | 登录状态、上次同步时间 |
 | `monash help` | 能做的事，每条附示例问法和对应命令 |
 | `monash doctor` | 出问题时的体检：一项项查，告诉你怎么修；需要帮忙时把输出整段发给别人 |
-| `monash doctor --deep` | 再去 Moodle 和 Ed 拉一遍，拿第二个来源核对工具的结果：截止日期对日历订阅，作业汇总页对课程结构，本地课件对 Moodle，全文搜索对磁盘上的文件，本地 Ed 帖子对 Ed。只输出数量、课号、日期和活动编号 |
+| `monash doctor --deep` | 再去 Moodle 和 Ed 拉一遍，拿第二个来源核对工具的结果：截止日期对日历订阅，作业汇总页对课程结构，本地课件对 Moodle，全文搜索对磁盘上的文件，本地 Ed 帖子对 Ed，只输出数量、课号、日期和活动编号 |
 | `monash todo` | 本周待办：截止、可能漏交、Ed 没做完的 lesson、公告、未读回复 |
 | `monash due [FIT2102]` | 截止日期 |
 | `monash changes [--days 7]` | 课程有什么变化：文件、作业说明、截止时间、老师的新回复 |
@@ -540,18 +675,22 @@ npx skills add Waldo0926/monash-study-kit
 | `monash attendance renew` / `maintain` | 考勤登录过期时，用这台电脑上已有的浏览器登录状态试着恢复；要密码或 MFA 时会停下 |
 | `monash update` | 更新到最新版 |
 
-加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）。每个命令都有 `--help`。
+加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）
 
-退出码（写脚本时用）：0 成功，1 参数不对，2 需要登录（`monash login` / `monash login ed`），3 连不上 Moodle/Ed 或对方出错，4 找不到课程或帖子，130 被 Ctrl-C 中断。
+每个命令都有 `--help`
+
+退出码（写脚本时用）：0 成功，1 参数不对，2 需要登录（`monash login` / `monash login ed`），3 连不上 Moodle/Ed 或对方出错，4 找不到课程或帖子，130 被 Ctrl-C 中断
 
 ## 录播字幕（可选）
 
 想让 AI 知道“老师上课讲了什么”，可以把录播转成带时间戳的字幕稿：
 
 - Ed 上 “Week N … Recording” 帖子里的 **YouTube** 链接：直接取 YouTube 字幕，很快；
-- **Zoom** 录像：用帖子里的 Passcode 下载，再在你电脑上用 Whisper 转写（普通笔记本上一节两小时的课要二三十分钟）。
+- **Zoom** 录像：用帖子里的 Passcode 下载，再在你电脑上用 Whisper 转写（普通笔记本上一节两小时的课要二三十分钟）
 
-这部分依赖比较大（约 1 GB），默认不装。想要的话重新安装时加上 `[media]`：
+这部分依赖比较大（约 1 GB），默认不装
+
+想要的话重新安装时加上 `[media]`：
 
 ```bash
 uv tool install --reinstall "monash-study-kit[media]"
@@ -571,65 +710,113 @@ Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成�
 monash update
 ```
 
-更新后重启一下你用的 AI 软件。Windows 上它会告诉你先退出 Claude、再运行哪条命令（正在运行的程序没法被覆盖）；用 Codex、Cursor 等的话，更新前先把它们关掉。
+更新后重启一下你用的 AI 软件
 
-有新版本时会提醒你：终端里运行命令后多一行提示，在 AI 里问待办时也会顺带说一句。每天最多查一次 GitHub，不带任何个人信息；不想要的话 `monash config update_check false`。
+Windows 上它会告诉你先退出 Claude、再运行哪条命令（正在运行的程序没法被覆盖）；用 Codex、Cursor 等的话，更新前先把它们关掉
+
+有新版本时会提醒你：终端里运行命令后多一行提示，在 AI 里问待办时也会顺带说一句
+
+每天最多查一次 GitHub，不带任何个人信息；不想要的话 `monash config update_check false`
 
 ## 常见问题
 
 ### AI 软件里看不到 monash
 
-Claude Desktop 或 Claude Code：运行 `monash setup claude` 重新接一次。Windows 上一定要先从托盘**完全退出** Claude 再运行。还不行的话看 Claude Desktop → Settings → Developer 里有没有报错。
+Claude Desktop 或 Claude Code：运行 `monash setup claude` 重新接一次
 
-Codex、Cursor、VS Code、Windsurf 或 Gemini CLI：运行 `monash connect` 看这个软件接上没有，没接上就 `monash connect <软件名>`，再重启软件。
+Windows 上一定要先从托盘**完全退出** Claude 再运行
+
+还不行的话看 Claude Desktop → Settings → Developer 里有没有报错
+
+Codex、Cursor、VS Code、Windsurf 或 Gemini CLI：运行 `monash connect` 看这个软件接上没有，没接上就 `monash connect <软件名>`，再重启软件
 
 ### 登录窗口打不开 / 提示没找到浏览器
 
-装一个 Chrome 或 Edge。浏览器装在不常见的位置的话，指定一下：`monash config browser "C:\Program Files\...\chrome.exe"`。如果之前的专用窗口还开着，先把它关掉。
+装一个 Chrome 或 Edge
+
+浏览器装在不常见的位置的话，指定一下：`monash config browser "C:\Program Files\...\chrome.exe"`
+
+如果之前的专用窗口还开着，先把它关掉
 
 ### Windows 上课件同步报“路径太长”
 
-Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + 文件名叠起来可能超。把课件放到短一点的地方：`monash config files_dir C:\Monash`，然后 `monash sync`。
+Windows 默认整条路径不能超过 260 个字符，课程名 + 周次名 + 文件名叠起来可能超
+
+把课件放到短一点的地方：`monash config files_dir C:\Monash`，然后 `monash sync`
 
 ### C 盘满了
 
-用 `monash move D:\MonashStudyKit` 把所有数据搬到别的盘（先关掉 Claude 等 AI 软件）。程序本身不大；如果连 uv 和 Python 也不想放 C 盘，安装前把 `UV_TOOL_DIR`、`UV_PYTHON_INSTALL_DIR`、`UV_CACHE_DIR` 设成别的盘上的文件夹。
+用 `monash move D:\MonashStudyKit` 把所有数据搬到别的盘（先关掉 Claude 等 AI 软件）
+
+程序本身不大；如果连 uv 和 Python 也不想放 C 盘，安装前把 `UV_TOOL_DIR`、`UV_PYTHON_INSTALL_DIR`、`UV_CACHE_DIR` 设成别的盘上的文件夹
 
 ### 我的课不用 Ed
 
-没关系：截止日期、成绩、课件、全文搜索、邮件和考勤都不依赖 Ed。`monash setup` 问 Ed 令牌时直接回车跳过，再在“不用 Ed 吗”那里选是；或者随时运行 `monash config use_ed false`。之后同步、待办和 `monash doctor` 都不会再提 Ed，AI 软件里也不再列 Ed 的工具。以后要用了，运行 `monash login ed` 就会重新打开。
+没关系：截止日期、成绩、课件、全文搜索、邮件和考勤都不依赖 Ed
+
+`monash setup` 问 Ed 令牌时直接回车跳过，再在“不用 Ed 吗”那里选是；或者随时运行 `monash config use_ed false`
+
+之后同步、待办和 `monash doctor` 都不会再提 Ed，AI 软件里也不再列 Ed 的工具
+
+以后要用了，运行 `monash login ed` 就会重新打开
 
 ### 澳洲校区
 
-Moodle 页面上的时间按账号时区显示，默认按马来西亚（UTC+8）。澳洲校区：`monash config timezone Australia/Melbourne`，夏令时会自动切换。旧的 `monash config tz_offset 10` 还能用，但不会跟着夏令时变
+Moodle 页面上的时间按账号时区显示，默认按马来西亚（UTC+8）
+
+澳洲校区：`monash config timezone Australia/Melbourne`，夏令时会自动切换
+
+旧的 `monash config tz_offset 10` 还能用，但不会跟着夏令时变
 
 ### Ed 的“作业截止时间”在哪
 
-Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`get_study_todo` 里 Ed lesson 部分是按你自己的进度列的（做到第几周，就列到下一周为止没完成的）。
+Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准
+
+`get_study_todo` 里 Ed lesson 部分是按你自己的进度列的（做到第几周，就列到下一周为止没完成的）
 
 ### 出问题了
 
-运行 `monash doctor`，照着每项后面的 → 去修。需要别人帮忙时把整段输出发过去，里面不含令牌、cookie 之类的东西。在 AI 软件里也可以直接说“monash 用不了了”，它会跑同一套检查。MCP 的后台日志在数据目录的 `mcp.log`。
+运行 `monash doctor`，照着每项后面的 → 去修
+
+需要别人帮忙时把整段输出发过去，里面不含令牌、cookie 之类的东西
+
+在 AI 软件里也可以直接说“monash 用不了了”，它会跑同一套检查
+
+MCP 的后台日志在数据目录的 `mcp.log`
 
 ### 提示找不到 `monash` 命令
 
-把终端关掉再重新打开；`uv` 只会给新开的窗口加上工具目录。还是找不到就运行 `uv tool update-shell`，再重开终端。
+把终端关掉再重新打开；`uv` 只会给新开的窗口加上工具目录
+
+还是找不到就运行 `uv tool update-shell`，再重开终端
 
 ### 第一次同步特别久
 
-第一次同步会下载所有已跟踪课程的全部课件。想先拿到某一门课，运行 `monash sync FIT1045`（换成自己的课号）。`monash status` 能看到上次同步是完整还是部分成功，`monash sync --retry-failed` 只重试失败的部分。
+第一次同步会下载所有已跟踪课程的全部课件
+
+想先拿到某一门课，运行 `monash sync FIT1045`（换成自己的课号）
+
+`monash status` 能看到上次同步是完整还是部分成功，`monash sync --retry-failed` 只重试失败的部分
 
 ### 新学期开始了，看不到新课
 
-运行 `monash courses` 重新选课，再 `monash sync`。
+运行 `monash courses` 重新选课，再 `monash sync`
 
 ### Ed 提示令牌无效
 
-多半是在 Ed 的令牌页面把它删了。在那个页面重新建一个，运行 `monash login ed` 粘贴进去。
+多半是在 Ed 的令牌页面把它删了
+
+在那个页面重新建一个，运行 `monash login ed` 粘贴进去
 
 ### 想全部删干净
 
-`monash uninstall` 先把 monash 从 Claude 和其他 AI 软件里移除，再问要不要删除所有数据。选是的话会先向 Google 吊销 Drive 和 Gmail 授权，吊销失败就什么都不删。Ed 令牌没有吊销接口，要到 Ed 的令牌页面手动删。最后运行 `uv tool uninstall monash-study-kit` 卸载程序本身。
+`monash uninstall` 先把 monash 从 Claude 和其他 AI 软件里移除，再问要不要删除所有数据
+
+选是的话会先向 Google 吊销 Drive 和 Gmail 授权，吊销失败就什么都不删
+
+Ed 令牌没有吊销接口，要到 Ed 的令牌页面手动删
+
+最后运行 `uv tool uninstall monash-study-kit` 卸载程序本身
 
 ## 各版本说明
 
@@ -656,11 +843,21 @@ uvx ruff check src tests
 uv run monash --help
 ```
 
-**发新版**：改了 `src/` 就把 `src/monash_study_kit/__init__.py` 里的 `__version__` 加一（修 bug 加最后一位，加功能加中间一位），改了什么记在 [`CHANGELOG.md`](CHANGELOG.md)。CI 的 `version-bump` 检查会拦住忘了改的 PR。合进 main 之后推一个 tag，比如 `v1.1.0`：[`release.yml`](.github/workflows/release.yml) 会核对 tag、`__version__` 和 CHANGELOG，跑测试，打包，用 Trusted Publishing 传到 PyPI，再在三个系统上从 PyPI 装回来试一遍，最后建 GitHub Release。详见 [docs/releasing.md](docs/releasing.md)。
+**发新版**：改了 `src/` 就把 `src/monash_study_kit/__init__.py` 里的 `__version__` 加一（修 bug 加最后一位，加功能加中间一位），改了什么记在 [`CHANGELOG.md`](CHANGELOG.md)
 
-另见 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)（怎么报告安全问题）、[docs/security.md](docs/security.md)（保护了什么、怎么测的）和 [docs/adr](docs/adr)（设计决定）。这几份是英文的。
+CI 的 `version-bump` 检查会拦住忘了改的 PR
 
-每个 PR 也会打包，检查包里有什么（`scripts/check_dist.py`），装进一个干净的 venv 跑 `monash --version`、`monash help` 和一次 MCP 握手（`scripts/smoke_test.py`）。漏打包的模块会在 CI 里报错，不会等到用户装了才发现。
+合进 main 之后推一个 tag，比如 `v1.1.0`：[`release.yml`](.github/workflows/release.yml) 会核对 tag、`__version__` 和 CHANGELOG，跑测试，打包，用 Trusted Publishing 传到 PyPI，再在三个系统上从 PyPI 装回来试一遍，最后建 GitHub Release
+
+详见 [docs/releasing.md](docs/releasing.md)
+
+另见 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)（怎么报告安全问题）、[docs/security.md](docs/security.md)（保护了什么、怎么测的）和 [docs/adr](docs/adr)（设计决定）
+
+这几份是英文的
+
+每个 PR 也会打包，检查包里有什么（`scripts/check_dist.py`），装进一个干净的 venv 跑 `monash --version`、`monash help` 和一次 MCP 握手（`scripts/smoke_test.py`）
+
+漏打包的模块会在 CI 里报错，不会等到用户装了才发现
 
 ### 整体结构
 
@@ -704,10 +901,14 @@ flowchart LR
 | `doctor`、`doctor_deep`、`help_menu`、`update_check`、`claude_setup` | 体检和 `--deep` 对照核对、帮助和预设提示、新版本提示、接进 Claude |
 | `recordings`、`transcribe` | 可选：录播转带时间戳的字幕稿（`[media]`） |
 
-运行时依赖 `pypdf`，Windows 上另装轻量的 `tzdata` 时区数据；HTTP、SQLite、WebSocket、HTML 解析都用标准库。CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外用 `ruff` 查语法错误、未定义的名字和没用的 import。
+运行时依赖 `pypdf`，Windows 上另装轻量的 `tzdata` 时区数据；HTTP、SQLite、WebSocket、HTML 解析都用标准库
+
+CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外用 `ruff` 查语法错误、未定义的名字和没用的 import
 
 </details>
 
 ## 许可
 
-MIT。这是学生自己做的工具，和 Monash University、Ed 或 Anthropic 没有关系。
+MIT
+
+这是学生自己做的工具，和 Monash University、Ed 或 Anthropic 没有关系
