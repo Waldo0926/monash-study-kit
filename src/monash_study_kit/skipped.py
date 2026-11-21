@@ -64,6 +64,26 @@ def pick(rows: list[dict], wanted: list[str]) -> list[dict]:
     return list(chosen.values())
 
 
+SPACE_MARGIN = 500 * 1024 * 1024     # 补完还要给系统留点空间
+
+
+def total_bytes(rows: list[dict]) -> int:
+    return sum(r.get("bytes") or 0 for r in rows)
+
+
+def check_space(picked: list[dict]) -> None:
+    """大文件补下之前看看硬盘够不够，不够就别开始，免得下到一半把盘塞满。"""
+    import shutil
+    need = total_bytes(picked)
+    if not need:
+        return
+    syncer.FILES_DIR.mkdir(parents=True, exist_ok=True)
+    free = shutil.disk_usage(syncer.FILES_DIR).free
+    if free < need + SPACE_MARGIN:
+        raise ValueError(f"硬盘剩 {_mb(free)}，这些文件一共要 {_mb(need)}，先清点空间再补下"
+                      "（monash move 可以把数据搬到别的盘）")
+
+
 def fetch(client, con, picked: list[dict], log=print) -> dict:
     """补下挑出来的文件，不管大小上限和类型设置。按课分批，每门课只走一遍。"""
     names = _course_names(con)

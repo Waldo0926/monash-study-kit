@@ -347,3 +347,63 @@ def test_list_files_can_show_skipped(env, monkeypatch):
     out = M.t_list_files({"skipped": True})
     assert {r["path"].rsplit("/", 1)[-1] for r in out["skipped"]} == {"dataset.csv", "archive.zip"}
     assert "monash skipped --get" in out["how_to_get"]
+
+
+def test_known_skip_is_not_requested_again(env, monkeypatch):
+    monkeypatch.setenv("MONASH_KIT_MAX_FILE_MB", "1")
+    file_url = BASE + "/pluginfile.php/1/mod_resource/content/1/recording"    # 只有响应头说得出是什么
+    c, pages = _resource(file_url)
+    client = FakeMoodle([c], pages, {file_url: b"x" * (2 * MB)}, {file_url: {"Content-Type": "video/mp4"}})
+    run(env, client)
+    run(env, client)
+    assert [u for u in client.requests if u == file_url] == [file_url]      # 第二次同步不再去碰它
+    monkeypatch.setenv("MONASH_KIT_DOWNLOAD_VIDEOS", "true")
+    monkeypatch.setenv("MONASH_KIT_MAX_FILE_MB", "0")
+    run(env, client)
+    assert next(env[1].rglob("recording*")).is_file()
+
+
+def test_windows_reserved_names_get_a_prefix():
+    assert syncer.windows_safe("CON.pdf", windows=True) == "_CON.pdf"
+    assert syncer.windows_safe("nul", windows=True) == "_nul"
+    assert syncer.windows_safe("console.pdf", windows=True) == "console.pdf"
+    assert syncer.windows_safe("CON.pdf", windows=False) == "CON.pdf"
+
+
+def test_get_refuses_when_disk_is_too_small(monkeypatch, tmp_path):
+    import shutil
+    from collections import namedtuple
+    from monash_study_kit import skipped as SK
+    monkeypatch.setattr(syncer, "FILES_DIR", tmp_path)
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda _: usage(10 * MB * 1024, 0, 600 * MB))
+    with pytest.raises(ValueError, match="硬盘"):
+        SK.check_space([{"bytes": 200 * MB}])
+    SK.check_space([{"bytes": 50 * MB}])
+
+
+def test_partial_syncs_wait_for_the_background_sync(monkeypatch, tmp_path):
+    from monash_study_kit import jobs
+    monkeypatch.setattr(jobs, "LOCK_FILE", tmp_path / "sync.lock")
+    assert jobs._lock()
+    with pytest.raises(jobs.SyncBusy):
+        with jobs.sync_lock():
+            pass
+    jobs._unlock()
+    with jobs.sync_lock():
+        assert (tmp_path / "sync.lock").exists()
+    assert not (tmp_path / "sync.lock").exists()
+
+
+def test_ai_can_ask_for_skipped_files(env, monkeypatch):
+    from monash_study_kit import jobs, mcp_server as M, skipped as SK
+    client, _ = _two_big_files(env, monkeypatch)
+    run(env, client)
+    monkeypatch.setattr(M, "db_connect", lambda: _Keep(env[0]))
+    monkeypatch.setattr(M, "MoodleClient", lambda: client)
+    monkeypatch.setattr(jobs, "LOCK_FILE", env[1].parent / "sync.lock")
+    got = []
+    monkeypatch.setattr(SK, "fetch", lambda cl, con, picked, log=None: got.extend(picked) or {"downloaded": [], "failed": []})
+    msg = M.t_sync({"get_skipped": "dataset"})
+    M._sync_thread.join(5)
+    assert "1 个文件" in msg and [r["name"] for r in got] == ["dataset.csv"]

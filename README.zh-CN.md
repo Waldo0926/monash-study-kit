@@ -193,7 +193,7 @@ FIT2109
 - **只要几个**：`monash skipped --get 3 7`；也可以写文件名的一部分（`monash skipped --get dataset`），写 `all` 就是全部；这样补下的不受大小上限和排除类型的限制
 - **要很多个**：调大上限再同步一次，比如 `monash sync --max-mb 2000` 或 `monash config max_file_mb 0`；已经下好的不会重下，只会补上之前跳过的
 
-在 AI 软件里也可以直接问“有哪些文件没下载？”
+在 AI 软件里也可以直接问“有哪些文件没下载？”，再告诉它要哪几个，它会在后台补下。下大文件之前会先看硬盘空间够不够
 
 ### 同步只成功了一部分
 
@@ -202,6 +202,8 @@ FIT2109
 `monash changes --days 7` 列出开始同步以来课程里的变化：新上或换掉的课件、作业说明、截止时间和 Ed 上的教师回复，这些记录都只存在你电脑上
 
 Moodle 登录过期时，工具会用自己的浏览器配置在后台悄悄登回去，不会自己弹出 MFA 窗口；不想要的话 `monash config auto_relogin false`
+
+AI 软件正在后台同步时，`monash sync FIT2102`、`monash export --sync` 和 `monash skipped --get` 会提示你等它跑完再试，免得两边同时写同一个文件夹
 
 详细见 [docs/reliability.md](docs/reliability.md)（英文）
 

@@ -62,6 +62,17 @@ def clean(text: str) -> str:
 NAME_LIMIT = int(load_settings().get("name_limit") or 80)
 
 
+WINDOWS = os.name == "nt"
+# Windows 不让用这些当文件名（带不带扩展名都不行）：CON.pdf 写不进去，整个文件就同步失败
+_RESERVED = re.compile(r"^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)", re.I)
+
+
+def windows_safe(part: str, windows: bool | None = None) -> str:
+    if (WINDOWS if windows is None else windows) and _RESERVED.match(part):
+        return "_" + part
+    return part
+
+
 def safe_name(name: str, limit: int | None = None) -> str:
     """能当文件/目录名用。去掉路径分隔符和 Windows 不认的字符，截短但保留扩展名。
 
@@ -79,7 +90,7 @@ def safe_name(name: str, limit: int | None = None) -> str:
             name = stem[: limit - len(ext) - 1].rstrip() + "." + ext
         else:
             name = name[:limit].rstrip()
-    return name or "untitled"
+    return windows_safe(name) or "untitled"
 
 
 def parse_skip_types(raw) -> set[str]:
@@ -749,6 +760,12 @@ class CourseSync:
         if reason:
             self._skipped(reason, folder, section_title, cm, label, source, guess, None, from_headers=False)
             return
+        # 上次看过响应头才跳过的：地址带 revision，没变就是同一个文件，设置也没放宽的话别再请求一次
+        known = None if self.dry else self.con.execute(
+            "SELECT name, size, file_kind FROM skipped WHERE course_id=? AND source=?", (self.cid, source)).fetchone()
+        if known and (why := self._known_reason(known)):
+            self._skipped(why, folder, section_title, cm, label, source, known["name"], known["size"])
+            return
         rel_dir = f"{self.root}/{folder}"
         if self.dry:
             self.log(f"  + {rel_dir}/{safe_name(guess)}")
@@ -793,6 +810,17 @@ class CourseSync:
         if kind in self.skip_types:
             return f"type:{kind}"
         if self.max_bytes is not None and size is not None and size > self.max_bytes:
+            return "size"
+        return None
+
+    def _known_reason(self, row) -> str | None:
+        """skipped 表里记过的文件，按现在的设置还该不该跳过（录像是按类型记的，文件名里不一定看得出来）。"""
+        kind = row["file_kind"]
+        if kind == "video" and not self.videos:
+            return "video"
+        if kind and kind in self.skip_types:
+            return f"type:{kind}"
+        if self.max_bytes is not None and row["size"] is not None and row["size"] > self.max_bytes:
             return "size"
         return None
 
@@ -879,7 +907,7 @@ def _zip_parts(name: str) -> list[str]:
             continue
         part = re.sub(r'[\\:*?"<>|\x00-\x1f]', "_", part).strip(" ")
         if part:
-            out.append(part)
+            out.append(windows_safe(part))
     return out
 
 

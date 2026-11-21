@@ -11,7 +11,12 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 - `monash skipped` lists every file left out by these settings with a stable number, its size and why. `monash skipped --get 3 7` (or part of a file name, or `all`) downloads just those files, ignoring the limit and the kinds left out; a file inside a folder zip is taken from a fresh copy of that zip without touching the other files. `list_files(skipped=true)` gives the same list to the AI.
 - After `monash sync`, the files skipped for the first time are named with their size, together with the commands to get them.
 - Raising the limit or turning videos on now downloads the skipped files on the next sync, including files inside a folder zip that was cached less than seven days ago. Files already downloaded are not downloaded again.
+- The AI app can download skipped files too: `sync_monash_data(get_skipped="3,7")` runs in the background like a sync. `list_files(skipped=true)` tells it to mention the size first.
+- `monash skipped` shows the total size, and `--get` checks there is enough free disk space before it starts.
+- A file skipped after reading its response headers is not requested again on later syncs unless the settings now allow it.
 - `monash doctor --deep` no longer reports files skipped by these settings as missing.
+- Fix: `monash sync <unit>`, `monash export --sync` and `monash skipped --get` now take the same sync lock as the background sync. Running one while the AI app was syncing could delete the other's partial downloads.
+- Fix: on Windows, file and folder names such as `CON`, `NUL` or `AUX.pdf` (reserved by Windows) get a `_` in front instead of failing to save.
 - README: new sections on choosing what gets downloaded, partial syncs and reading your submitted work. Usage that was only in the per-release notes moved into the export, attendance and everyday-use sections, and the release notes are now one line per version.
 
 ## 1.15.1

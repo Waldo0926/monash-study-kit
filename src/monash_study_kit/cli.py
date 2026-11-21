@@ -375,9 +375,13 @@ def cmd_skipped(args):
         rows = SK.list_skipped(con, cid, include_videos=args.videos or bool(args.get))
         if args.get:
             picked = SK.pick(rows, args.get)
+            SK.check_space(picked)
             if not want_json(args):
-                print(f"补下 {len(picked)} 个文件，不受大小上限和类型设置限制：")
-            res = SK.fetch(MoodleClient(), con, picked, log=lambda line: None)
+                size = SK.total_bytes(picked)
+                print(f"补下 {len(picked)} 个文件" + (f"，一共约 {SK._mb(size)}" if size else "")
+                      + "，不受大小上限和类型设置限制：")
+            with jobs.sync_lock():
+                res = SK.fetch(MoodleClient(), con, picked, log=lambda line: None)
             if want_json(args):
                 emit_json(res)
                 return 0 if not res["failed"] else 3
@@ -403,6 +407,9 @@ def cmd_skipped(args):
                 print(course)
             extra = "，".join(x for x in (r["why"], r["size"]) if x)
             print(f"  [{r['id']}] {r['path']}（{extra}）")
+        total = SK.total_bytes(rows)
+        if total:
+            print(f"\n知道大小的一共约 {SK._mb(total)}")
         videos = 0 if args.videos else con.execute(
             "SELECT COUNT(*) FROM skipped WHERE reason='video'" + (" AND course_id=?" if cid else ""),
             (cid,) if cid else ()).fetchone()[0]
@@ -424,7 +431,11 @@ def cmd_sync(args):
         courses = jobs.load_courses(client, con)
         only = [F.find_course(courses, r) for r in args.courses] if args.courses else None
         con.close()
-        st = jobs.sync_moodle(only=only, dry_run=args.dry_run, refresh_google=getattr(args, "refresh_google", False))
+        if args.dry_run:
+            st = jobs.sync_moodle(only=only, dry_run=True, refresh_google=getattr(args, "refresh_google", False))
+        else:
+            with jobs.sync_lock():
+                st = jobs.sync_moodle(only=only, refresh_google=getattr(args, "refresh_google", False))
         print(f"新下载 {st['downloaded']} 个文件，{st['bytes'] / 1e6:.1f} MB")
         _print_held_back(st)
         return
@@ -816,6 +827,11 @@ def cmd_due(args):
 
 def sync_export_course(ref: str, log=print, refresh_google: bool = False) -> None:
     """先同步指定 Moodle 课，再同步对应 Ed 课，最后补导 Ed 的 Google 链接。"""
+    with jobs.sync_lock():
+        _sync_export_course(ref, log, refresh_google)
+
+
+def _sync_export_course(ref: str, log=print, refresh_google: bool = False) -> None:
     from . import google_export
     client, con = MoodleClient(), db_connect()
     try:
@@ -1320,6 +1336,9 @@ def main(argv: list[str] | None = None) -> int:
     except LookupError as e:                   # 包括 edquery.NotFound
         print(e, file=sys.stderr)
         return EXIT_NOT_FOUND
+    except jobs.SyncBusy as e:
+        print(e, file=sys.stderr)
+        return 1
     except ValueError as e:
         print(e, file=sys.stderr)
         return EXIT_USAGE

@@ -11,12 +11,12 @@ def call(method, params=None):
 
 
 def test_original_17_tools_keep_their_catalog_with_page_range_extension():
-    # 1.13.0：保留原有工具，扩展作业详情参数和 read_file 提交路径。1.16.0：list_files 加 skipped。
+    # 1.13.0：保留原有工具，扩展作业详情参数和 read_file 提交路径。1.16.0：list_files 加 skipped，sync_monash_data 加 get_skipped。
     original = [{k: v for k, v in t.items() if k != "_meta"}
                 for t in M.tool_list() if t["name"] not in ("search_moodle_activities", "start_school_service_setup", "export_ed_lessons")]
     blob = json.dumps(original, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert len(original) == 17
-    assert hashlib.sha256(blob.encode()).hexdigest() == "8f2950c6efc429a5999b31211197071b31367d3f152afb8dc6240508ac97251a"
+    assert hashlib.sha256(blob.encode()).hexdigest() == "6a225ff15f6422cb520bed347a2adbd75b224494178c952cd62cc3d8684389ce"
 
 
 def test_panel_resource_is_packaged_self_contained_and_safe():

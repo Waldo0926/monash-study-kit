@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import json
 import os
 import re
@@ -308,3 +310,19 @@ def _lock() -> bool:
 
 def _unlock() -> None:
     Path(LOCK_FILE).unlink(missing_ok=True)
+
+
+class SyncBusy(RuntimeError):
+    """另一个进程（多半是 AI 软件里的后台同步）正在同步。"""
+
+
+@contextmanager
+def sync_lock():
+    """只同步一门课、补下跳过的文件这些也要拿同一把锁：两边同时写同一个课程目录，
+    clean_partials 会删掉对方正在下的临时文件，数据库也会互相覆盖。"""
+    if not _lock():
+        raise SyncBusy("后台正在同步，等它跑完再试（monash status 能看到进度）")
+    try:
+        yield
+    finally:
+        _unlock()

@@ -179,11 +179,11 @@ Each file gets a number, for example `[3] Week 05/Dataset.csv (too big, 512 MB)`
 - **A few files**: `monash skipped --get 3 7`. Part of the file name also works (`monash skipped --get dataset`), and `all` gets every one. These ignore the size limit and the kinds you left out
 - **Many files**: raise the limit and sync again, for example `monash sync --max-mb 2000` or `monash config max_file_mb 0`. Files you already have are not downloaded again, only the skipped ones are
 
-In your AI app you can also ask "which files weren't downloaded?"
+In your AI app you can also ask "which files weren't downloaded?" and then say which ones you want; it downloads them in the background. Before a big download it checks there is enough free disk space.
 
 ### When a sync only partly works
 
-`monash status` says whether the last sync was complete or partial. `monash sync --retry-failed` retries only what failed. `monash changes --days 7` shows what changed in your units since you started syncing: new or replaced files, assignment instructions, deadline times and staff replies on Ed. Everything stays on your computer. When the Moodle login expires, the kit tries to sign back in quietly with its own browser profile and never opens an MFA window in the background; `monash config auto_relogin false` turns that off. Details: [docs/reliability.md](docs/reliability.md).
+`monash status` says whether the last sync was complete or partial. `monash sync --retry-failed` retries only what failed. `monash changes --days 7` shows what changed in your units since you started syncing: new or replaced files, assignment instructions, deadline times and staff replies on Ed. Everything stays on your computer. When the Moodle login expires, the kit tries to sign back in quietly with its own browser profile and never opens an MFA window in the background; `monash config auto_relogin false` turns that off. If the AI app is syncing in the background, `monash sync FIT2102`, `monash export --sync` and `monash skipped --get` say so and ask you to try again when it's done, so two syncs never write the same folder. Details: [docs/reliability.md](docs/reliability.md).
 
 ### Check your work against the marking feedback
 

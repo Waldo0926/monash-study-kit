@@ -161,6 +161,35 @@ def start_sync() -> bool:
     return True
 
 
+def _start_get_skipped(wanted: str) -> str:
+    """补下 list_files(skipped=true) 里挑中的文件。和同步共用一个后台线程，不会两边一起写课程目录。"""
+    global _sync_thread
+    from . import skipped as SK
+    con = db_connect()
+    try:
+        picked = SK.pick(SK.list_skipped(con), [w for w in re.split(r"[,\s]+", wanted) if w])
+    finally:
+        con.close()
+    if _sync_thread and _sync_thread.is_alive():
+        return "正在同步，等它跑完再补下（get_monash_status 看进度）"
+    SK.check_space(picked)
+
+    def work():
+        c = db_connect()
+        try:
+            with jobs.sync_lock():
+                res = SK.fetch(MoodleClient(), c, picked, log=log)
+            log(f"补下完成：{len(res['downloaded'])} 个，失败 {len(res['failed'])} 个")
+        except Exception:  # noqa: BLE001
+            log("补下出错：\n" + traceback.format_exc())
+        finally:
+            c.close()
+    _sync_thread = threading.Thread(target=work, name="get-skipped", daemon=True)
+    _sync_thread.start()
+    names = "、".join(r["path"].rsplit("/", 1)[-1] for r in picked[:5]) + ("等" if len(picked) > 5 else "")
+    return f"已在后台补下 {len(picked)} 个文件（{names}），不受大小上限限制；下好后 list_files 能看到"
+
+
 def _safe_sync():
     try:
         st = jobs.sync_all(log=log)
@@ -420,6 +449,8 @@ def _after_connect(service: str) -> None:
 
 
 def t_sync(args):
+    if args.get("get_skipped"):
+        return _start_get_skipped(str(args["get_skipped"]))
     if start_sync():
         return "已在后台开始同步（第一次可能要几分钟）。之后用 get_monash_status 看结果。"
     return "已经在同步了，稍后用 get_monash_status 看结果。"
@@ -542,8 +573,8 @@ def t_list_files(args):
         rows = [{k: r[k] for k in ("id", "course", "path", "activity", "size", "why")}
                 for r in SK.list_skipped(con, cid) if not args.get("query") or args["query"].lower() in r["path"].lower()]
         return {"skipped": rows[:200], "how_to_get":
-                "这些文件按设置没下载（太大、排除的类型、录像）。告诉用户在终端运行 monash skipped --get 编号 补下想要的，"
-                "或者 monash sync --max-mb 1000 一次补齐太大的；已经下好的不会重下"}
+                "这些文件按设置没下载（太大、排除的类型、录像）。用户点名要的用 sync_monash_data(get_skipped=编号) 补下，"
+                "先告诉用户大小；终端里是 monash skipped --get 编号，或者 monash sync --max-mb 2000 一次补齐太大的"}
     if args.get("links"):
         if not args.get("course"):
             raise ValueError("links=true 要同时给 course")
@@ -821,7 +852,7 @@ TOOLS = {
                                    "再调用看进度。",
                                {"service": ("string", True, ("gmail", "attendance")), "read_only": ("boolean", False)},
                                False),
-    "sync_monash_data": (t_sync, "刷新 Moodle/Ed 本地数据和全文索引；用户要求刷新或数据过旧时用。诊断错误用 get_monash_status；已在同步时不会重复启动。", {}, False),
+    "sync_monash_data": (t_sync, "刷新 Moodle/Ed 本地数据和全文索引；用户要求刷新或数据过旧时用。诊断错误用 get_monash_status；已在同步时不会重复启动。", {"get_skipped": (S, False)}, False),
     "list_courses": (t_courses, "列出 Moodle/Ed 课程；问有哪些课或其他工具需要先确定课程时用。Moodle 未登录时回退本地课程表。返回课程代码、名称和标识。", {}),
     "list_moodle_due": (t_due, "列 Moodle 未来截止和日历事件；需要提交状态/作业详情用 list_moodle_assignments，需要成绩用 get_moodle_grades。未登录可回退 iCal。返回截止事件和时间。",
                         {"course": (S, False), "days": (I, False)}),
@@ -835,7 +866,7 @@ TOOLS = {
                             {"conversation_id": (I, False), "limit": (I, False)}),
     "search_content": (t_search_content, "全文搜索已同步课件/PDF/笔记/字幕；只列文件用 list_files，拿到 path 后用 read_file。返回匹配片段、文件路径和定位信息。",
                        {"query": (S, True), "course": (S, False), "limit": (I, False)}),
-    "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。问“最近新上了什么课件”用 since_days，没下载的用 skipped。返回文件/外链和可供 read_file 使用的路径。",
+    "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。问“最近新上了什么课件”用 since_days，没下载的用 skipped。",
                    {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False),
                     "since_days": (I, False), "skipped": (B, False)}),
     "read_file": (t_read_file, "读取 list_files/search_content 的课件路径或作业 read_path/附件 path；submission:活动ID 读提交详情和反馈。ZIP 用 inner（支持 PDF/Office），PDF 用 page_start/page_end，长内容用 offset/max_chars 分页。返回文本或文件清单。",
@@ -902,7 +933,8 @@ PARAM_HELP = {
     ("list_files", "query"): "按文件名或路径筛选",
     ("list_files", "links"): "true=列外链；须同时给 course",
     ("list_files", "since_days"): "只看最近几天新同步的，新的排前面",
-    ("list_files", "skipped"): "true=列按设置没下载的文件",
+    ("list_files", "skipped"): "true=列没下载的文件",
+    ("sync_monash_data", "get_skipped"): "补下跳过文件的编号，逗号分隔或 all",
     ("read_file", "path"): "文件搜索或作业列表返回的路径；submission:活动ID 可直接读提交详情",
     ("read_file", "inner"): "ZIP 内路径；省略=列 ZIP 清单",
     ("read_file", "page_start"): "PDF 起始页，从1开始",
