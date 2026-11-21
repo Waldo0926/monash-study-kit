@@ -87,7 +87,8 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
     try:
         courses = load_courses(client, con)
         targets = only or tracked_courses(con, courses)
-        total = {"courses": [], "downloaded": 0, "bytes": 0, "removed": 0, "errors": 0, "failures": []}
+        total = {"courses": [], "downloaded": 0, "bytes": 0, "removed": 0, "errors": 0, "failures": [],
+                 "too_large": 0, "skipped_types": 0}
         for course in targets:
             cmids = None if retry_failures is None else {f["cmid"] for f in retry_failures if f["course_id"] == course["id"]}
             if cmids == set():
@@ -109,6 +110,8 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
             total["downloaded"] += stats.downloaded
             total["bytes"] += stats.bytes
             total["removed"] += stats.removed
+            total["too_large"] += stats.too_large
+            total["skipped_types"] += stats.skipped_types
             total["errors"] += len(stats.errors)
             total["failures"] += [{"course_id": course["id"], "cmid": cid} for cid in stats.failed_cmids]
         if not dry_run:

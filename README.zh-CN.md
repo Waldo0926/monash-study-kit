@@ -138,6 +138,30 @@ monash login
 
 登录过期期间，**截止日期照样能查**（用的是 Moodle 的日历订阅链接，不需要登录）；Ed 的功能完全不受影响。
 
+### 选择下载哪些文件
+
+`monash sync` 默认把课程放在 Moodle 上的文件都下下来，只有两类例外：
+
+- **录像**：直接传到 Moodle 的视频只记成链接。想下载：`monash config download_videos true`
+- **超过 300 MB 的文件**：比如很大的数据集，记成链接并写上大小。改上限：`monash config max_file_mb 100`，填 `0` 就是不限
+
+也可以整类不下：
+
+```bash
+monash config skip_types audio,images
+```
+
+能填的类别：`pdf`、`slides`、`docs`、`sheets`、`archives`、`images`、`audio`、`code`。想恢复就运行 `monash config skip_types ""`
+
+只想这一次不一样、不改设置的话：
+
+```bash
+monash sync --videos                          # 这次连录像一起下
+monash sync --max-mb 50 --skip-types archives
+```
+
+没下载的文件会以链接的形式出现在每周的 `links.md` 里，整门课导出时也会列在“没导出的内容”里。已经下好的文件不会被删。录像除了看文件名，还会看 Moodle 返回的文件类型，地址里没有 `.mp4` 的录像也认得出来。Moodle 文件夹里的文件也按同样的规则处理
+
 ### AI 没额度了也能用
 
 命令行工具不需要 AI，不耗任何额度。先 `monash sync` 同步一下，然后：
@@ -417,6 +441,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash changes [--days 7]` | 课程有什么变化：文件、作业说明、截止时间、老师的新回复 |
 | `monash grep "monad" [FIT2102]` | 全文搜课件、课程笔记网页、Ed Lessons 正文、录播字幕稿（带页码/时间戳） |
 | `monash sync [--retry-failed]` | 立刻同步；`--retry-failed` 只重试上次失败的部分 |
+| `monash sync --videos` / `--max-mb N` / `--skip-types a,b` | 这一次按别的规则下载，见[选择下载哪些文件](#选择下载哪些文件) |
 | `monash login` / `monash login ed` | 登录 Moodle / 换 Ed 令牌 |
 | `monash courses` | 重新选要跟踪的课 |
 | `monash open [ed]` | 打开课件文件夹（`ed`：Ed Lessons 的课件） |
@@ -461,7 +486,7 @@ uv tool install --reinstall "monash-study-kit[media]"
 monash media
 ```
 
-Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成链接。想下载：`monash config download_videos true`。
+Moodle 上直接挂的录像默认也不下载（动辄几百 MB），会记成链接，怎么改见[选择下载哪些文件](#选择下载哪些文件)
 
 ## 更新
 
@@ -532,6 +557,11 @@ Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`get_st
 ## 各版本说明
 
 每个版本加了什么，新的在前。最新版本号看页面顶部的徽章，完整记录在[更新日志](CHANGELOG.md)。
+
+- **1.16**：[选择下载哪些文件](#选择下载哪些文件)，可以设大小上限、整类不下，`monash sync` 也能用 `--videos`、`--max-mb`、`--skip-types` 只改这一次
+
+<details>
+<summary>更早的版本（1.4 到 1.14）</summary>
 
 ### 1.14：考勤登录自动恢复
 
@@ -637,6 +667,8 @@ monash google logout                 # 先向 Google 吊销，再删除本机令
 
 1.4.1 在 `monash --help` 最上面的说明里补上了 `library` 和 `remote`。平时在自己电脑上用，仍然不需要服务器、域名或额外的账号。技术说明见 [docs/panels-library-remote.md](docs/panels-library-remote.md)（英文）。
 
+</details>
+
 ## 开发
 
 ```bash
@@ -653,6 +685,9 @@ uv run monash --help
 每个 PR 也会打包，检查包里有什么（`scripts/check_dist.py`），装进一个干净的 venv 跑 `monash --version`、`monash help` 和一次 MCP 握手（`scripts/smoke_test.py`）。漏打包的模块会在 CI 里报错，不会等到用户装了才发现。
 
 ### 整体结构
+
+<details>
+<summary>结构图和模块说明</summary>
 
 ```mermaid
 flowchart LR
@@ -692,6 +727,8 @@ flowchart LR
 | `recordings`、`transcribe` | 可选：录播转带时间戳的字幕稿（`[media]`） |
 
 运行时依赖 `pypdf`，Windows 上另装轻量的 `tzdata` 时区数据；HTTP、SQLite、WebSocket、HTML 解析都用标准库。CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外用 `ruff` 查语法错误、未定义的名字和没用的 import。
+
+</details>
 
 ## 许可
 

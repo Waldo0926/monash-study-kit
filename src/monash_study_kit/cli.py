@@ -319,7 +319,32 @@ def cmd_changes(args):
             print(f"  {item['url']}")
 
 
+def _sync_overrides(args) -> None:
+    """--videos / --max-mb / --skip-types 只管这一次同步：用环境变量盖掉设置，不写进 settings.json。"""
+    videos = getattr(args, "videos", None)
+    if videos is not None:
+        os.environ["MONASH_KIT_DOWNLOAD_VIDEOS"] = "true" if videos else "false"
+    if getattr(args, "max_mb", None) is not None:
+        if args.max_mb < 0:
+            raise ValueError("--max-mb 要填 0 或正数，0 = 不限")
+        os.environ["MONASH_KIT_MAX_FILE_MB"] = str(args.max_mb)
+    if getattr(args, "skip_types", None) is not None:
+        from .syncer import parse_skip_types
+        os.environ["MONASH_KIT_SKIP_TYPES"] = ",".join(sorted(parse_skip_types(args.skip_types)))
+
+
+def _print_held_back(m: dict) -> None:
+    parts = []
+    if m.get("too_large"):
+        parts.append(f"{m['too_large']} 个文件太大")
+    if m.get("skipped_types"):
+        parts.append(f"{m['skipped_types']} 个按 skip_types 排除")
+    if parts:
+        print(f"  没下载：{'，'.join(parts)}（链接在各周的 links.md，monash config 可以改）")
+
+
 def cmd_sync(args):
+    _sync_overrides(args)
     if getattr(args, "retry_failed", False) and (args.courses or args.dry_run or getattr(args, "refresh_google", False)):
         raise ValueError("--retry-failed 不能与指定课程、--dry-run 或 --refresh-google 同用")
     if args.courses or args.dry_run:
@@ -329,6 +354,7 @@ def cmd_sync(args):
         con.close()
         st = jobs.sync_moodle(only=only, dry_run=args.dry_run, refresh_google=getattr(args, "refresh_google", False))
         print(f"新下载 {st['downloaded']} 个文件，{st['bytes'] / 1e6:.1f} MB")
+        _print_held_back(st)
         return
     options = {}
     if getattr(args, "refresh_google", False):
@@ -342,6 +368,7 @@ def cmd_sync(args):
         f"Moodle 新文件 {m.get('downloaded', 0)} 个（{m.get('bytes', 0) / 1e6:.1f} MB）"
         + (f"、下架 {m['removed']} 个" if m.get("removed") else "") if "moodle" not in st["errors"] else "",
         f"索引了 {idx.get('indexed', 0)} 个文件" if idx else ""] if x))
+    _print_held_back(m)
     if st.get("sync_state") == "partial":
         print("  ! 部分同步成功；上次完整成功：" + str(st.get("last_complete_sync") or "尚无"))
         for name in ("ed", "moodle", "index"):
@@ -386,6 +413,15 @@ def parse_setting(key: str, raw: str, current):
         raise ValueError("export_format 只能是 pdf、both 或 md")
     if key == "google_docs_format" and raw not in {"pdf", "docx"}:
         raise ValueError("google_docs_format 只能是 pdf 或 docx")
+    if key == "skip_types":
+        from .syncer import parse_skip_types
+        return ",".join(sorted(parse_skip_types(raw)))
+    if key == "max_file_mb":
+        try:
+            if float(raw) < 0:
+                raise ValueError
+        except ValueError:
+            raise ValueError("max_file_mb 要填 0 或正数，0 = 不限") from None
     if isinstance(current, bool):
         if raw.lower() in ("true", "yes", "1", "on"):
             return True
@@ -434,6 +470,8 @@ def cmd_config(args):
         for k, v in load_settings().items():
             print(f"{k} = {v}")
         print("\n改：monash config download_videos true")
+        print("    monash config max_file_mb 100        （单个文件超过就不下，0 = 不限）")
+        print("    monash config skip_types audio,images （可选 pdf,slides,docs,sheets,archives,images,audio,code）")
         return
     cur = load_settings()
     if args.key not in cur:
@@ -1057,6 +1095,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
     p.add_argument("--dry-run", action="store_true", help="只列出 Moodle 会下载什么")
     p.add_argument("--refresh-google", action="store_true", help="强制重新导出 Google 文件")
+    vg = p.add_mutually_exclusive_group()
+    vg.add_argument("--videos", dest="videos", action="store_true", default=None, help="这次也下载录像")
+    vg.add_argument("--no-videos", dest="videos", action="store_false", help="这次不下载录像")
+    p.add_argument("--max-mb", type=float, metavar="N", help="这次单个文件超过 N MB 就不下（0 = 不限）")
+    p.add_argument("--skip-types", metavar="TYPES", help="这次不下哪几类，逗号隔开，如 audio,images")
     cmd(sub, "courses", cmd_courses, help="选要跟踪的课")
     p = cmd(sub, "todo", cmd_todo, json_flag=True, help="本周待办")
     p.add_argument("--days", type=int, default=7)

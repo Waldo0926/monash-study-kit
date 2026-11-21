@@ -50,6 +50,8 @@ DEFAULTS = {
     "attendance_keepalive_minutes": 0,  # 多久用一次轻量请求给考勤登录续期；0 = 不续期，先测出登录能维持多久再定
     "attendance_submit_enabled": False,  # 考勤登录时自动打开：签到提交，每次先预览、用户确认才执行
     "download_videos": False,     # 录像动辄几百 MB；没装 [media] 转不了字幕，下下来 Claude 也看不了
+    "max_file_mb": 300,           # 单个课件超过多少 MB 就不下，记成链接；0 = 不限。整个文件夹的 zip 超了会改成一个个下
+    "skip_types": "",             # 不下哪几类文件，逗号隔开：slides,docs,sheets,archives,images,audio,code,pdf（录像看 download_videos）
     "auto_sync_hours": 1,         # MCP 在跑的时候，多久在后台同步一次
     "keepalive_minutes": 20,      # MCP 在跑的时候，多久给 Moodle 会话续一次期（空闲 4 小时就过期）
     "auto_relogin": True,          # 后台只尝试无界面恢复，失败不弹窗

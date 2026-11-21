@@ -2,6 +2,15 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.16.0
+
+- Choose what `monash sync` downloads. Files over `max_file_mb` (default 300 MB, `0` for no limit) are saved as links with their size instead of being downloaded. `skip_types` leaves out whole kinds of files: `pdf`, `slides`, `docs`, `sheets`, `archives`, `images`, `audio`, `code`. Skipped files appear in `links.md` and in the export's list of what was not exported; files already downloaded are kept.
+- `monash sync --videos`, `--no-videos`, `--max-mb N` and `--skip-types a,b` change these choices for one sync without touching the settings.
+- Videos are also recognised by the `Content-Type` Moodle returns and by the real file name in `Content-Disposition`, so a recording whose address has no extension is no longer downloaded in full. The size check reads `Content-Length` before writing anything and stops a download that runs past the limit when the server sends no length, leaving no partial file.
+- The same rules now apply to files inside a Moodle folder. Videos inside a folder zip used to be extracted even with `download_videos` off. A folder zip larger than the limit falls back to downloading its files one by one.
+- `monash doctor --deep` no longer reports files skipped by these settings as missing.
+- README: new "Choose what gets downloaded" section; older release notes and the module list are folded so the page is shorter.
+
 ## 1.15.1
 
 - `monash update` no longer ends with `ImportError: cannot import name 'update_check'` after a successful update. When uv rebuilt the tool environment for a different Python, the running command could not load that module from the replaced files any more. It is now loaded before the update starts.

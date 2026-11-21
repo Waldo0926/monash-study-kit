@@ -144,6 +144,30 @@ monash login
 
 While the login is expired, **deadlines still work** (they come from Moodle's calendar subscription link, which needs no login), and Ed features are unaffected.
 
+### Choose what gets downloaded
+
+`monash sync` downloads every file your units put on Moodle, with two exceptions:
+
+- **Videos** uploaded to Moodle are saved as links. To download them: `monash config download_videos true`
+- **Files over 300 MB**, such as a large dataset, are saved as links with their size. Change the limit with `monash config max_file_mb 100`, or set `0` for no limit
+
+You can also leave out whole kinds of files:
+
+```bash
+monash config skip_types audio,images
+```
+
+Kinds: `pdf`, `slides`, `docs`, `sheets`, `archives`, `images`, `audio`, `code`. Set it back with `monash config skip_types ""`.
+
+To change this for one sync only, without touching your settings:
+
+```bash
+monash sync --videos                          # this time, download videos too
+monash sync --max-mb 50 --skip-types archives
+```
+
+Skipped files are listed as links in each week's `links.md`, and a whole-unit export lists them as not exported. Files you already have are never deleted. Videos are recognised by their file name and also by the file type Moodle reports, so a recording whose address has no `.mp4` is still caught. The same rules apply to the files inside a Moodle folder.
+
 ### Works without AI usage
 
 The CLI doesn't use AI and consumes no usage. Run `monash sync` first, then:
@@ -433,6 +457,7 @@ You can also query directly in the terminal without any AI:
 | `monash changes [--days 7]` | What changed in your units: files, assignment instructions, deadline times, staff replies |
 | `monash grep "monad" [FIT2102]` | Full-text search over course files, course-notes sites, Ed lesson pages and recording transcripts (with page numbers / timestamps) |
 | `monash sync [--retry-failed]` | Sync now; `--retry-failed` retries only what failed last time |
+| `monash sync --videos` / `--max-mb N` / `--skip-types a,b` | One sync with different download choices, see [Choose what gets downloaded](#choose-what-gets-downloaded) |
 | `monash login` / `monash login ed` | Log in to Moodle / replace the Ed token |
 | `monash courses` | Re-pick tracked units |
 | `monash open [ed]` | Open the course-files folder (`ed`: Ed Lessons files) |
@@ -478,7 +503,7 @@ Then run it manually when needed (it never runs in the background, so it won't s
 monash media
 ```
 
-Videos uploaded directly to Moodle aren't downloaded by default either (often hundreds of MB); they are recorded as links. To download them: `monash config download_videos true`.
+Videos uploaded directly to Moodle aren't downloaded by default either (often hundreds of MB); they are recorded as links. See [Choose what gets downloaded](#choose-what-gets-downloaded).
 
 ## Updating
 
@@ -555,6 +580,11 @@ You probably deleted the token on Ed's token page. Create a new one there and ru
 ## Release notes
 
 What each release added, newest first. The version badge at the top shows the latest release and [CHANGELOG.md](CHANGELOG.md) has every change.
+
+- **1.16**: [choose what gets downloaded](#choose-what-gets-downloaded) with a size limit, leaving out kinds of files, and per-sync `--videos`, `--max-mb` and `--skip-types`
+
+<details>
+<summary>Older releases (1.4 to 1.14)</summary>
 
 ### 1.14: attendance session recovery
 
@@ -649,6 +679,8 @@ Details: [Optional: Gmail and attendance](#optional-gmail-and-attendance) and th
 
 1.4.1 adds `library` and `remote` to the summary at the top of `monash --help`. Everyday use on your own computer still needs no server, domain or extra account. Technical notes: [docs/panels-library-remote.md](docs/panels-library-remote.md).
 
+</details>
+
 ## Development
 
 ```bash
@@ -665,6 +697,9 @@ See also [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) (how to 
 Every PR also builds the wheel, checks what went into it (`scripts/check_dist.py`) and installs it into a clean venv to run `monash --version`, `monash help` and an MCP handshake (`scripts/smoke_test.py`), so a module left out of the package fails CI instead of failing for users.
 
 ### How it fits together
+
+<details>
+<summary>Diagram and module list</summary>
 
 ```mermaid
 flowchart LR
@@ -705,6 +740,8 @@ flowchart LR
 
 Runtime dependencies are `pypdf` and, on Windows, `tzdata`; everything else (HTTP, SQLite, WebSocket, HTML parsing) uses the standard library.
 Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruff` checks for syntax errors, undefined names and unused imports.
+
+</details>
 
 ## License
 

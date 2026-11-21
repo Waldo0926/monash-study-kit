@@ -25,15 +25,27 @@ import zipfile
 from dataclasses import dataclass, field
 
 from . import htmlmd, moodle_content
-from .moodlelib import (BASE_URL, FILES_DIR, HOST, MoodleClient, collect_links, filename_from,
-                        is_attachment, now_iso)
+from .moodlelib import (BASE_URL, FILES_DIR, HOST, DownloadSkipped, MoodleClient, collect_links,
+                        filename_from, is_attachment, now_iso)
 from .paths import load_settings
 
 WEEK_RE = re.compile(r"^\s*week\s*0*(\d+)\b\s*[-:–—]?\s*(.*)$", re.I)
 CODE_RE = re.compile(r"\b([A-Z]{3}\d{4})\b")
 SUFFIX_RE = re.compile(r"\s*-\s*((?:MUM\s+)?(?:S[12]|Summer|Winter)\b.*?\d{4}.*|(?:Summer|Winter)\s+MUM\s+\d{4})\s*$",
                        re.I)
-VIDEO_EXT = (".mp4", ".mov", ".m4v", ".webm", ".mkv")
+VIDEO_EXT = (".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".wmv", ".mpg", ".mpeg")
+# monash config skip_types 能填的类别。录像单独由 download_videos 管
+FILE_TYPES = {
+    "pdf": (".pdf",),
+    "slides": (".ppt", ".pptx", ".pps", ".ppsx", ".key", ".odp"),
+    "docs": (".doc", ".docx", ".odt", ".rtf", ".pages"),
+    "sheets": (".xls", ".xlsx", ".xlsm", ".csv", ".ods", ".numbers"),
+    "archives": (".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz"),
+    "images": (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".heic", ".tif", ".tiff"),
+    "audio": (".mp3", ".m4a", ".wav", ".aac", ".ogg", ".flac"),
+    "code": (".py", ".ipynb", ".java", ".c", ".cpp", ".h", ".hpp", ".js", ".ts", ".hs", ".sql", ".r",
+             ".m", ".rs", ".go", ".kt", ".scala", ".sh"),
+}
 # 这些活动里没有能下载的东西（论坛、测验、外部工具…），也不去点开它们
 SKIP_MODULES = {"forum", "quiz", "lti", "shadow", "feedback", "choice", "attendance",
                 "turnitintooltwo", "zoom", "h5pactivity", "scorm", "questionnaire", "workshop"}
@@ -68,6 +80,40 @@ def safe_name(name: str, limit: int | None = None) -> str:
         else:
             name = name[:limit].rstrip()
     return name or "untitled"
+
+
+def parse_skip_types(raw) -> set[str]:
+    """"audio, archives" → {"audio", "archives"}。不认识的名字报错，免得以为设上了其实没生效。"""
+    items = raw if isinstance(raw, (list, tuple, set)) else str(raw or "").split(",")
+    names = {str(x).strip().lower() for x in items if str(x).strip()}
+    bad = names - set(FILE_TYPES)
+    if bad:
+        raise ValueError(f"skip_types 不认识 {', '.join(sorted(bad))}（可选：{', '.join(FILE_TYPES)}）")
+    return names
+
+
+def file_kind(name: str, content_type: str = "") -> str | None:
+    """按文件名后缀分类，后缀看不出来再看 Content-Type。录像返回 "video"。"""
+    low = (name or "").lower()
+    if low.endswith(VIDEO_EXT):
+        return "video"
+    for kind, exts in FILE_TYPES.items():
+        if low.endswith(exts):
+            return kind
+    ct = (content_type or "").split(";", 1)[0].strip().lower()
+    if ct.startswith("video/"):
+        return "video"
+    if ct.startswith("audio/"):
+        return "audio"
+    if ct.startswith("image/"):
+        return "images"
+    if ct == "application/pdf":
+        return "pdf"
+    return None
+
+
+def _mb(size: int | None) -> str:
+    return f"{size / (1024 * 1024):.0f} MB" if size else "大小不明"
 
 
 def course_code(course: dict) -> str | None:
@@ -135,6 +181,8 @@ class SyncStats:
     errors: list[str] = field(default_factory=list)
     failed_cmids: list[int] = field(default_factory=list)
     bytes: int = 0
+    too_large: int = 0           # 超过 max_file_mb、只记了链接的
+    skipped_types: int = 0       # 按 skip_types 没下的
 
 
 class CourseSync:
@@ -152,7 +200,19 @@ class CourseSync:
         self.done_cms: set[str] = set()
         self.seen_links: set[tuple[str, str]] = set()
         self.cms: dict = {}
-        self.videos = load_settings().get("download_videos", False)
+        self.kept_folder_notes: list[dict] = []
+        settings = load_settings()
+        self.videos = bool(settings.get("download_videos", False))
+        try:
+            mb = float(settings.get("max_file_mb") or 0)
+        except (TypeError, ValueError):
+            mb = 0
+        self.max_bytes = int(mb * 1024 * 1024) if mb > 0 else None
+        try:
+            self.skip_types = parse_skip_types(settings.get("skip_types", ""))
+        except ValueError as e:
+            log(f"  ! {e}，这次先不按类型跳过")
+            self.skip_types = set()
 
     # ------------------------------------------------------------ 入口
 
@@ -164,6 +224,10 @@ class CourseSync:
         sections = {s["number"]: s for s in state["section"]}
         if not self.dry and self.only_cmids is None:
             self.clean_partials()
+            # 文件夹 zip 七天才重下一次，没重下的那几天，里面跳过的文件记录要接着留
+            self.kept_folder_notes = [dict(r) for r in self.con.execute(
+                "SELECT folder, title, url, reason FROM notes WHERE course_id=? AND kind='skipped' AND url LIKE 'folder:%'",
+                (self.cid,))]
             # 说明表每轮重写（Google 导出的记录由 google_export 自己管）
             self.con.execute("DELETE FROM notes WHERE course_id=? AND kind NOT LIKE 'google%'", (self.cid,))
 
@@ -440,14 +504,24 @@ class CourseSync:
             self.seen_sources.update(r["source"] for r in rows)
             self.stats.skipped += len(rows)
             self.check_notebooks([r["path"] for r in rows], sub)
+            kept = [n for n in self.kept_folder_notes if n["url"].startswith(prefix)]
+            for n in kept:
+                self.add_note("skipped", n["folder"], n["title"], n["url"], n["reason"])
+            if kept:
+                self.seen_links.add((sub, cm["url"]))
             return
         if self.dry:
             self.log(f"  + {self.root}/{sub}/（整个文件夹）")
             return
         tmp = FILES_DIR / self.root / folder / f".dl-folder-{cm['id']}"
         try:
-            self.c.download(f"{BASE_URL}/mod/folder/download_folder.php?id={cm['id']}", tmp)
+            # 整包超过上限就不要 zip 了，退回一个个下，每个文件单独按上限判断
+            self.c.download(f"{BASE_URL}/mod/folder/download_folder.php?id={cm['id']}", tmp,
+                            check=self._zip_check, max_bytes=self.max_bytes)
             ok = zipfile.is_zipfile(tmp)
+        except DownloadSkipped as e:
+            self.log(f"  {cm.get('name')}：整个文件夹 {_mb(e.size)}，超过上限，改成一个个下")
+            ok = False
         except Exception as e:  # noqa: BLE001
             if e.__class__.__name__ == "MoodleAuthError":
                 raise
@@ -462,9 +536,20 @@ class CourseSync:
             # 有的 zip 外面包了一层和文件夹同名的目录，去掉
             if names and all(len(n) > 1 and n[0] == safe_name(cm["name"]) for n in names):
                 names = [n[1:] for n in names]
-            written = []
+            written, held_back = [], 0
             for info, parts in zip(members, names):
                 if not parts:
+                    continue
+                source = prefix + "/".join(parts)
+                why = self._skip_reason(parts[-1], size=info.file_size)
+                if why:
+                    old = self.con.execute("SELECT path FROM files WHERE course_id=? AND source=?",
+                                           (self.cid, source)).fetchone()
+                    if old and (FILES_DIR / old["path"]).exists():
+                        self.seen_sources.add(source)     # 以前已经下好的留着，不当成下架
+                        continue
+                    held_back += 1
+                    self._skipped_member(why, sub, section_title, "/".join(parts), source, info.file_size)
                     continue
                 rel = f"{self.root}/{sub}/" + "/".join(parts)
                 dest = FILES_DIR / rel
@@ -472,7 +557,6 @@ class CourseSync:
                 with z.open(info) as src, open(dest, "wb") as out:
                     while chunk := src.read(1 << 16):
                         out.write(chunk)
-                source = prefix + "/".join(parts)
                 self.seen_sources.add(source)
                 self.con.execute(
                     "INSERT INTO files (course_id, source, cmid, path, size, section, title, synced_at)"
@@ -484,9 +568,31 @@ class CourseSync:
                 self.stats.bytes += dest.stat().st_size
                 written.append(rel)
         tmp.unlink(missing_ok=True)
+        if held_back:
+            # zip 里的文件没有单独的地址，给一个文件夹页面的链接，想要的自己去点
+            self.add_link(sub, section_title, f"📁 {clean(cm.get('name'))}（{held_back} 个文件按设置没下载）", cm["url"])
         self.con.commit()
         self.log(f"  ↓ {self.root}/{sub}/（{len(written)} 个文件）")
         self.check_notebooks(written, sub)
+
+    def _zip_check(self, resp) -> None:
+        size = _content_length(resp)
+        if self.max_bytes is not None and size is not None and size > self.max_bytes:
+            raise DownloadSkipped("size", "", size)
+
+    def _skipped_member(self, reason: str, folder: str, section: str, name: str, source: str, size: int) -> None:
+        """文件夹 zip 里按设置跳过的文件：只记原因，链接统一给文件夹页面。"""
+        limit = (self.max_bytes or 0) // (1024 * 1024)
+        if reason == "video":
+            text = "录像默认不下载（monash config download_videos true 打开）"
+        elif reason == "size":
+            self.stats.too_large += 1
+            text = f"超过 {limit} MB 上限没下载（{_mb(size)}），monash config max_file_mb 可以调大，0 = 不限"
+        else:
+            self.stats.skipped_types += 1
+            text = f"按 skip_types 设置没下载（{reason.partition(':')[2]}）"
+        self.log(f"  - 跳过 {name}：{text}")
+        self.add_note("skipped", folder, name, source, text)
 
     def _folder_by_page(self, cm: dict, sub: str, section_title: str) -> None:
         """退路：打开文件夹页面（会记一次“查看”），一个个下载，保留 content/<rev>/ 后面的子目录。"""
@@ -586,17 +692,32 @@ class CourseSync:
             self.stats.skipped += 1
             return
         guess = urllib.parse.unquote(urllib.parse.urlsplit(source).path.rsplit("/", 1)[-1])
-        if not self.videos and guess.lower().endswith(VIDEO_EXT):
-            # 默认不下录像：记成链接，在 links.md 里能点开看（monash config download_videos true 改）
-            self.add_link(folder, section_title, f"🎬 {clean(cm.get('name')) or guess}", source)
+        label = clean(cm.get("name")) or guess
+        # 地址上看得出来的先挡掉，一个请求都不用发
+        reason = self._skip_reason(guess)
+        if reason:
+            self._skipped(reason, folder, section_title, label, source, guess, None, from_headers=False)
             return
         rel_dir = f"{self.root}/{folder}"
         if self.dry:
             self.log(f"  + {rel_dir}/{safe_name(guess)}")
             self.stats.downloaded += 1
             return
+
+        def check(resp) -> None:
+            # 地址里常常没有扩展名（CloudFront 签名链接），真名字和大小要等响应头
+            name = filename_from(resp, guess) or guess
+            size = _content_length(resp)
+            why = self._skip_reason(name, resp.headers.get("Content-Type") or "", size)
+            if why:
+                raise DownloadSkipped(why, name, size)
+
         tmp = FILES_DIR / rel_dir / f".dl-{cm['id']}"   # 下载时 client.download 自己会加 .part
-        resp = self.c.download(source, tmp)
+        try:
+            resp = self.c.download(source, tmp, check=check, max_bytes=self.max_bytes)
+        except DownloadSkipped as e:
+            self._skipped(e.reason, folder, section_title, label, source, e.name or guess, e.size)
+            return
         name = safe_name(filename_from(resp, guess) or guess)
         rel = self._unique(f"{rel_dir}/{name}", source)
         dest = FILES_DIR / rel
@@ -612,6 +733,39 @@ class CourseSync:
         self.stats.downloaded += 1
         self.stats.bytes += size
         self.log(f"  ↓ {rel} ({size // 1024} KB)")
+
+    def _skip_reason(self, name: str, content_type: str = "", size: int | None = None) -> str | None:
+        """按设置该不该下：录像 video、排除的类型 type、太大 size；要下就返回 None。"""
+        kind = file_kind(name, content_type)
+        if kind == "video" and not self.videos:
+            return "video"
+        if kind in self.skip_types:
+            return f"type:{kind}"
+        if self.max_bytes is not None and size is not None and size > self.max_bytes:
+            return "size"
+        return None
+
+    def _skipped(self, reason: str, folder: str, section: str, label: str, source: str,
+                 name: str, size: int | None, from_headers: bool = True) -> None:
+        """没下的文件留个记录：录像和太大的记进 links.md 能点开，导出包的“没导出的内容”里写明原因。"""
+        limit = (self.max_bytes or 0) // (1024 * 1024)
+        if reason == "video":
+            # 默认不下录像：记成链接，在 links.md 里能点开看（monash config download_videos true 改）
+            self.add_link(folder, section, f"🎬 {label}", source)
+            if from_headers:   # 地址上看不出是录像的，体检时对不上，记一笔
+                self.add_note("skipped", folder, label, source, "录像默认不下载（monash config download_videos true 打开）")
+            return
+        if reason == "size":
+            self.stats.too_large += 1
+            self.log(f"  - 跳过 {name}：{_mb(size)}，超过 {limit} MB 上限，记在 links.md")
+            self.add_link(folder, section, f"📦 {label}（{_mb(size)}，太大没下载）", source)
+            self.add_note("skipped", folder, label, source,
+                          f"超过 {limit} MB 上限没下载（{_mb(size)}），monash config max_file_mb 可以调大，0 = 不限")
+            return
+        self.stats.skipped_types += 1
+        kind = reason.partition(":")[2] or "?"
+        self.log(f"  - 跳过 {name}：skip_types 里排除了 {kind}")
+        self.add_note("skipped", folder, label, source, f"按 skip_types 设置没下载（{kind}）")
 
     def _unique(self, rel: str, source: str) -> str:
         """同名文件换了内容（revision 变了）或者旧的已经下架，就覆盖旧的；别的来源撞名才加序号。"""
@@ -652,6 +806,14 @@ def is_decorative(url: str) -> bool:
     if host == HOST and parts.path.startswith(("/theme/", "/pix/")):
         return True
     return any(host == h or host.endswith("." + h) for h in DECORATIVE_HOSTS)
+
+
+def _content_length(resp) -> int | None:
+    try:
+        n = int(resp.headers.get("Content-Length") or "")
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 0 else None
 
 
 def _ts(iso: str | None) -> float:

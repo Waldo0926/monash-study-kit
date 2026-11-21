@@ -118,6 +118,10 @@ def deep_assignments(ctx: Context) -> dict:
     return _check(name, OK, detail + "，作业汇总页都解析到了")
 
 
+def _bare_urls(*urls) -> list[str]:
+    return [u.split("?", 1)[0] for u in urls if u]
+
+
 def deep_files(ctx: Context) -> dict:
     name = "核对：课件"
     videos = bool(load_settings().get("download_videos"))
@@ -133,19 +137,22 @@ def deep_files(ctx: Context) -> dict:
                 and not cm.get("stealth")]
         total += len(want)
         lost = [i for i in want if i not in have]
+        # 按设置没下的（太大、排除的类型、响应头才看出来的录像），同步时记在 notes 里
+        held = {r["url"] for r in ctx.con.execute(
+            "SELECT url FROM notes WHERE course_id=? AND kind='skipped'", (c["id"],))}
         for i in lost[:RESOLVE_MAX]:
             # 录像默认不下载、只记链接：问一下 Moodle 文件名，是录像就不算漏
             # 文件名看本站最后那个地址（同步也是按它判断）；CloudFront 的地址常常没有扩展名
             local, external, _ = ctx.client.resolve(cms[i]["url"] + "&redirect=1")
             names = [u.split("?", 1)[0].lower() for u in (local, external) if u]
-            if not videos and any(n.endswith(VIDEO_EXT) for n in names):
+            if (not videos and any(n.endswith(VIDEO_EXT) for n in names)) or held & set(_bare_urls(local, external)):
                 expected += 1
             else:
                 missing.append(f"{course_code(c)} cmid {i}")
         missing += [f"{course_code(c)} cmid {i}" for i in lost[RESOLVE_MAX:]]
         stale += sorted({f"{course_code(c)} cmid {r['cmid']}" for r in rows if r["cmid"] and r["cmid"] not in cms})
         gone_local += [r["path"] for r in rows if not (FILES_DIR / r["path"]).exists()]
-    detail = f"{len(ctx.tracked)} 门课，Moodle 上 {total} 个文件资源" + (f"（{expected} 个是没下载的录像）" if expected else "")
+    detail = f"{len(ctx.tracked)} 门课，Moodle 上 {total} 个文件资源" + (f"（{expected} 个是按设置没下载的录像或大文件）" if expected else "")
     problems = []
     if missing:
         problems.append(f"Moodle 上有、本地没有：{_examples(missing)}")
