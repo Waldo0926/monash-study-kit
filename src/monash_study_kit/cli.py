@@ -174,6 +174,11 @@ def cmd_courses(args):
 
 # ---------------------------------------------------------------- setup / status / sync
 
+def _skip_ed() -> None:
+    save_settings({"use_ed": False})
+    print("好的，不用 Ed，只接 Moodle。以后要用的话运行 monash login ed")
+
+
 def cmd_setup(args):
     from . import claude_setup
     if args.what == "claude":
@@ -196,9 +201,12 @@ def cmd_setup(args):
     print("== 1/4 Ed ==")
     if jobs.have_ed_token():
         print("✓ 已经有 Ed 令牌（要换就运行 monash login ed）")
-    elif not login_ed() and _yes("你的课不用 Ed 吗？选是的话以后不再提醒 Ed，AI 里也不显示 Ed 的功能", default=False):
-        save_settings({"use_ed": False})
-        print("好的，不用 Ed。以后要用的话运行 monash login ed")
+    elif getattr(args, "no_ed", False) or not _yes(
+            "你的课用 Ed 吗？IT、工程的课一般用，商科、传媒等很多课不用（不确定就看 Moodle 里有没有 Ed Discussion 的链接）",
+            default=True):
+        _skip_ed()
+    elif not login_ed() and _yes("没设置 Ed 令牌。你的课是不是不用 Ed？选是的话以后不再提醒 Ed", default=False):
+        _skip_ed()
     print("\n== 2/4 Moodle ==")
     from .browser_login import session_ok
     if session_ok():
@@ -1168,6 +1176,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = cmd(sub, "setup", cmd_setup, help="第一次用：登录、选课、接进 Claude")
     p.add_argument("what", nargs="?", choices=["claude"], help="claude：只做“接进 Claude”这一步")
+    p.add_argument("--no-ed", action="store_true", help="课不用 Ed（商科、传媒等）：跳过 Ed，只接 Moodle")
     p = cmd(sub, "login", cmd_login, help="登录 Moodle（默认）或设置 Ed 令牌")
     p.add_argument("what", nargs="?", choices=["moodle", "ed"], default="moodle")
     p.add_argument("--window", action="store_true", help="直接开窗口，不先试后台自动登录")

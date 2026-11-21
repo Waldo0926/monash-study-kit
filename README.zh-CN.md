@@ -57,7 +57,8 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖
 
 - 支持本地 MCP 的 AI 软件：**Claude Desktop**（[下载](https://claude.ai/download)）和 **Claude Code** 会自动接好；**Codex**（含 ChatGPT 桌面版里的 Codex）、**Cursor**、**VS Code**、**Windsurf**、**Gemini CLI** 多运行一条命令就行（见[接入其他 AI 客户端](#接入其他-ai-客户端)）
 - **Chrome、Edge 或 Brave** 其中一个（Windows 自带 Edge 就行），用来登录 Moodle
-- Monash 账号
+- Monash 账号，Ed 是可选的：课不用 Ed 的话（商科、传媒等很多课都不用），只接 Moodle 也能用
+- 一台 Windows、macOS 或 Linux 电脑
 
 ## 安装
 
@@ -129,7 +130,7 @@ monash setup
 
 跟着提示走，一共四步：
 
-1. **Ed**：会帮你打开 Ed 的 [API 令牌页面](https://edstem.org/au/settings/api-tokens)，点 **Create Token**，名字随便写，把生成的令牌复制，粘贴回终端（粘贴时不显示，正常），这个令牌不会过期，不想用了在同一个页面删掉就作废
+1. **Ed**：先问你的课用不用 Ed，商科、传媒等很多课不用，选不用（或者运行 `monash setup --no-ed`）就只接 Moodle，以后要用再运行 `monash login ed`；选用的话会帮你打开 Ed 的 [API 令牌页面](https://edstem.org/au/settings/api-tokens)，点 **Create Token**，名字随便写，把生成的令牌复制，粘贴回终端（粘贴时不显示，正常），这个令牌不会过期，不想用了在同一个页面删掉就作废
 2. **Moodle**：会打开一个**单独的浏览器窗口**，在里面照常登录 Monash（Okta + MFA），登录成功后窗口自动关闭，这个窗口有自己独立的配置，和你平时用的浏览器互不影响，工具只从这个窗口里拿 Moodle 的登录状态，不会去读你日常浏览器里的任何东西
 3. **选课**：默认跟踪本学期的课，也可以自己挑
 4. **接进 AI 软件**：自动把 `monash` 加进 Claude Desktop 和 Claude Code

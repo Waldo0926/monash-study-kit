@@ -2,6 +2,11 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.16.1
+
+- `monash setup` now asks whether your units use Ed before opening Ed's token page. Many business, arts and media units don't use Ed; answering no (or running `monash setup --no-ed`) skips Ed and sets up Moodle only. `monash login ed` turns it on later.
+- README and docs say clearly that Ed is optional and that Linux works too.
+
 ## 1.16.0
 
 - Choose what `monash sync` downloads. Files over `max_file_mb` (default 300 MB, `0` for no limit) are saved as links with their size instead of being downloaded. `skip_types` leaves out whole kinds of files: `pdf`, `slides`, `docs`, `sheets`, `archives`, `images`, `audio`, `code`. Skipped files appear in `links.md` and in the export's list of what was not exported; files already downloaded are kept.
