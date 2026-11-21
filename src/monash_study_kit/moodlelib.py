@@ -523,6 +523,25 @@ def db_connect(path: Path | None = None) -> sqlite3.Connection:
     );
     CREATE TABLE IF NOT EXISTS state (k TEXT PRIMARY KEY, v TEXT);
     -- 同步时没能存成文件的东西和原因（评分细则不可见、Google 导出失败……），导出的索引里列出来
+    -- 按设置没下载的文件（录像、太大、排除的类型）：monash skipped 列出来，可以单独补下。
+    -- rowid 就是给人看的编号，同步时用 upsert 更新，所以编号在两次同步之间不会变
+    CREATE TABLE IF NOT EXISTS skipped (
+        course_id INTEGER NOT NULL,
+        source    TEXT NOT NULL,        -- 文件地址；文件夹 zip 里的文件是 folder:<cmid>:<路径>
+        cmid      INTEGER,
+        member    INTEGER DEFAULT 0,    -- 1 = 在文件夹 zip 里，补下时要重下这个 zip
+        folder    TEXT,                 -- 相对课程目录：单个文件是它所在的文件夹，zip 里的是文件夹活动所在的周
+        section   TEXT,
+        title     TEXT,                 -- 活动名
+        name      TEXT,                 -- 文件名（zip 里的带子目录）
+        size      INTEGER,
+        file_kind TEXT,
+        reason    TEXT NOT NULL,        -- video / size / type
+        cm_name   TEXT,
+        cm_url    TEXT,
+        synced_at TEXT NOT NULL,
+        PRIMARY KEY (course_id, source)
+    );
     CREATE TABLE IF NOT EXISTS notes (
         course_id INTEGER NOT NULL, kind TEXT NOT NULL, folder TEXT, title TEXT, url TEXT NOT NULL,
         reason TEXT, synced_at TEXT NOT NULL,

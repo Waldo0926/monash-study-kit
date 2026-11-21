@@ -8,8 +8,11 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 - `monash sync --videos`, `--no-videos`, `--max-mb N` and `--skip-types a,b` change these choices for one sync without touching the settings.
 - Videos are also recognised by the `Content-Type` Moodle returns and by the real file name in `Content-Disposition`, so a recording whose address has no extension is no longer downloaded in full. The size check reads `Content-Length` before writing anything and stops a download that runs past the limit when the server sends no length, leaving no partial file.
 - The same rules now apply to files inside a Moodle folder. Videos inside a folder zip used to be extracted even with `download_videos` off. A folder zip larger than the limit falls back to downloading its files one by one.
+- `monash skipped` lists every file left out by these settings with a stable number, its size and why. `monash skipped --get 3 7` (or part of a file name, or `all`) downloads just those files, ignoring the limit and the kinds left out; a file inside a folder zip is taken from a fresh copy of that zip without touching the other files. `list_files(skipped=true)` gives the same list to the AI.
+- After `monash sync`, the files skipped for the first time are named with their size, together with the commands to get them.
+- Raising the limit or turning videos on now downloads the skipped files on the next sync, including files inside a folder zip that was cached less than seven days ago. Files already downloaded are not downloaded again.
 - `monash doctor --deep` no longer reports files skipped by these settings as missing.
-- README: new "Choose what gets downloaded" section; older release notes and the module list are folded so the page is shorter.
+- README: new sections on choosing what gets downloaded, partial syncs and reading your submitted work. Usage that was only in the per-release notes moved into the export, attendance and everyday-use sections, and the release notes are now one line per version.
 
 ## 1.15.1
 

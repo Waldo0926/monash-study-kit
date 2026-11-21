@@ -197,3 +197,153 @@ def test_sync_help_lists_the_new_flags(capsys):
         cli.main(["sync", "--help"])
     out = capsys.readouterr().out
     assert "--no-videos" in out and "--max-mb" in out and "--skip-types" in out
+
+
+# ---------------------------------------------------------------- 跳过清单和补下
+
+def _two_big_files(env, monkeypatch):
+    monkeypatch.setenv("MONASH_KIT_MAX_FILE_MB", "1")
+    small = BASE + "/pluginfile.php/1/mod_resource/content/1/notes.pdf"
+    big1 = BASE + "/pluginfile.php/2/mod_resource/content/1/dataset.csv"
+    big2 = BASE + "/pluginfile.php/3/mod_resource/content/1/archive.zip"
+    cms, pages = [], {}
+    for n, (url, name) in enumerate([(small, "Notes"), (big1, "Dataset"), (big2, "Archive")], start=1):
+        c, p = _resource(url, n, name)
+        cms.append(c)
+        pages.update(p)
+    data = {small: b"%PDF", big1: b"x" * (2 * MB), big2: b"x" * (3 * MB)}
+    env[0].execute("INSERT INTO courses (id, code, fullname) VALUES (1, 'FIT1000', 'FIT1000 Sample')")
+    return FakeMoodle(cms, pages, data), (small, big1, big2)
+
+
+def test_skipped_list_has_stable_ids_and_new_items_once(env, monkeypatch):
+    from monash_study_kit import skipped as SK
+    client, (_, big1, big2) = _two_big_files(env, monkeypatch)
+    s = run(env, client)
+    assert sorted(i["name"] for i in s.new_skips) == ["archive.zip", "dataset.csv"]
+    first = {r["name"]: r["id"] for r in SK.list_skipped(env[0])}
+    s = run(env, client)
+    assert s.new_skips == []                                      # 第二次同步不再当成新跳过的
+    assert {r["name"]: r["id"] for r in SK.list_skipped(env[0])} == first
+    row = next(r for r in SK.list_skipped(env[0]) if r["name"] == "dataset.csv")
+    assert row["course"] == "FIT1000" and row["why"] == "太大" and row["size"] == "2 MB"
+
+
+def test_get_one_skipped_file_ignores_the_limit(env, monkeypatch):
+    from monash_study_kit import skipped as SK
+    client, (_, big1, big2) = _two_big_files(env, monkeypatch)
+    run(env, client)
+    rows = SK.list_skipped(env[0])
+    before = len(client.requests)
+    res = SK.fetch(client, env[0], SK.pick(rows, ["dataset"]), log=lambda _: None)
+    assert [d["path"].rsplit("/", 1)[-1] for d in res["downloaded"]] == ["dataset.csv"] and not res["failed"]
+    assert [r["name"] for r in SK.list_skipped(env[0])] == ["archive.zip"]
+    assert big1 not in {r["url"] for r in env[0].execute("SELECT url FROM links")}
+    assert big2 not in client.requests[before:]                   # 没点名的不去下
+    # 之后的普通同步：上限还是 1 MB，补下的文件留着，另一个照样跳过
+    s = run(env, client)
+    assert next(env[1].rglob("dataset.csv")).is_file() and s.stats.too_large == 1
+
+
+def test_raising_the_limit_downloads_only_what_was_skipped(env, monkeypatch):
+    from monash_study_kit import skipped as SK
+    client, (small, big1, big2) = _two_big_files(env, monkeypatch)
+    run(env, client)
+    monkeypatch.setenv("MONASH_KIT_MAX_FILE_MB", "0")
+    before = len(client.requests)
+    s = run(env, client)
+    fetched = [u for u in client.requests[before:] if "/pluginfile.php/" in u]
+    assert sorted(fetched) == sorted([big1, big2]) and s.stats.downloaded == 2
+    assert SK.list_skipped(env[0]) == []
+
+
+def test_pick_rejects_unknown_and_accepts_all(env, monkeypatch):
+    from monash_study_kit import skipped as SK
+    client, _ = _two_big_files(env, monkeypatch)
+    run(env, client)
+    rows = SK.list_skipped(env[0])
+    assert len(SK.pick(rows, ["all"])) == 2
+    assert len(SK.pick(rows, [str(rows[0]["id"])])) == 1
+    with pytest.raises(LookupError):
+        SK.pick(rows, ["nothing-like-this"])
+
+
+def _folder_with_big_member():
+    c = cm("folder", name="Data")
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("small.txt", b"a")
+        z.writestr("big/huge.csv", b"x" * (2 * MB))
+    return c, BASE + "/mod/folder/download_folder.php?id=1", out.getvalue()
+
+
+def test_raising_the_limit_redownloads_a_cached_folder(env, monkeypatch):
+    monkeypatch.setenv("MONASH_KIT_MAX_FILE_MB", "1")
+    c, url, data = _folder_with_big_member()
+    client = FakeMoodle([c], data={url: data})
+    run(env, client)
+    run(env, client)
+    assert client.requests.count(url) == 1                        # 七天内不重下
+    monkeypatch.setenv("MONASH_KIT_MAX_FILE_MB", "5")
+    run(env, client)
+    assert client.requests.count(url) == 2 and next(env[1].rglob("huge.csv")).is_file()
+
+
+def test_get_a_file_from_inside_a_folder_zip(env, monkeypatch):
+    from monash_study_kit import skipped as SK
+    monkeypatch.setenv("MONASH_KIT_MAX_FILE_MB", "1")
+    c, url, data = _folder_with_big_member()
+    client = FakeMoodle([c], data={url: data})
+    env[0].execute("INSERT INTO courses (id, code, fullname) VALUES (1, 'FIT1000', 'FIT1000 Sample')")
+    run(env, client)
+    rows = SK.list_skipped(env[0])
+    assert [r["path"] for r in rows] == ["Week 01/Data/big/huge.csv"]
+    small = next(env[1].rglob("small.txt"))
+    small.write_text("my notes")                                  # 自己改过的文件，补下时别覆盖
+    res = SK.fetch(client, env[0], rows, log=lambda _: None)
+    assert not res["failed"] and next(env[1].rglob("huge.csv")).is_file()
+    assert small.read_text() == "my notes"
+    assert SK.list_skipped(env[0]) == [] and c["url"] not in {r["url"] for r in env[0].execute("SELECT url FROM links")}
+
+
+def test_cli_lists_skipped_files_with_hints(env, monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    from monash_study_kit import cli
+    client, _ = _two_big_files(env, monkeypatch)
+    run(env, client)
+    monkeypatch.setattr(cli, "db_connect", lambda: _Keep(env[0]))
+    assert cli.cmd_skipped(SimpleNamespace(course=None, get=None, videos=False, json=False, text=True)) == 0
+    out = capsys.readouterr().out
+    assert "dataset.csv" in out and "太大" in out and "monash skipped --get" in out and "--max-mb" in out
+
+
+class _Keep:
+    """cmd_skipped 用完会 close，测试里的连接还要接着用。"""
+
+    def __init__(self, con):
+        self._con = con
+
+    def __getattr__(self, name):
+        return getattr(self._con, name)
+
+    def close(self):
+        pass
+
+
+def test_sync_summary_names_new_skips(capsys):
+    from monash_study_kit import cli
+    cli._print_held_back({"too_large": 1, "new_skips": [{"name": "huge.csv", "size": 2 * MB, "reason": "size",
+                                                         "folder": "Week 2"}]})
+    out = capsys.readouterr().out
+    assert "Week 2/huge.csv" in out and "monash skipped" in out
+
+
+def test_list_files_can_show_skipped(env, monkeypatch):
+    from monash_study_kit import mcp_server as M
+    client, _ = _two_big_files(env, monkeypatch)
+    run(env, client)
+    monkeypatch.setattr(M, "db_connect", lambda: env[0])
+    out = M.t_list_files({"skipped": True})
+    assert {r["path"].rsplit("/", 1)[-1] for r in out["skipped"]} == {"dataset.csv", "archive.zip"}
+    assert "monash skipped --get" in out["how_to_get"]

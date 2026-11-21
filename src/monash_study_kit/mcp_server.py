@@ -536,6 +536,14 @@ def t_find_activities(args):
 
 def t_list_files(args):
     con = db_connect()
+    if args.get("skipped"):
+        from . import skipped as SK
+        cid = _local_course_id(args["course"]) if args.get("course") else None
+        rows = [{k: r[k] for k in ("id", "course", "path", "activity", "size", "why")}
+                for r in SK.list_skipped(con, cid) if not args.get("query") or args["query"].lower() in r["path"].lower()]
+        return {"skipped": rows[:200], "how_to_get":
+                "这些文件按设置没下载（太大、排除的类型、录像）。告诉用户在终端运行 monash skipped --get 编号 补下想要的，"
+                "或者 monash sync --max-mb 1000 一次补齐太大的；已经下好的不会重下"}
     if args.get("links"):
         if not args.get("course"):
             raise ValueError("links=true 要同时给 course")
@@ -827,9 +835,9 @@ TOOLS = {
                             {"conversation_id": (I, False), "limit": (I, False)}),
     "search_content": (t_search_content, "全文搜索已同步课件/PDF/笔记/字幕；只列文件用 list_files，拿到 path 后用 read_file。返回匹配片段、文件路径和定位信息。",
                        {"query": (S, True), "course": (S, False), "limit": (I, False)}),
-    "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。问“最近新上了什么课件”用 since_days。返回文件/外链和可供 read_file 使用的路径。",
+    "list_files": (t_list_files, "列已同步本地课件或外链，不搜索正文；搜正文用 search_content，读取 path 用 read_file。问“最近新上了什么课件”用 since_days，没下载的用 skipped。返回文件/外链和可供 read_file 使用的路径。",
                    {"course": (S, False), "week": (I, False), "query": (S, False), "links": (B, False),
-                    "since_days": (I, False)}),
+                    "since_days": (I, False), "skipped": (B, False)}),
     "read_file": (t_read_file, "读取 list_files/search_content 的课件路径或作业 read_path/附件 path；submission:活动ID 读提交详情和反馈。ZIP 用 inner（支持 PDF/Office），PDF 用 page_start/page_end，长内容用 offset/max_chars 分页。返回文本或文件清单。",
                   {"path": (S, True), "inner": (S, False), "offset": (I, False), "max_chars": (I, False), "page_start": (I, False), "page_end": (I, False)}),
     "list_ed_updates": (t_ed_updates, "列 Ed 新帖、新回复和本人相关未读回复；浏览/搜索历史帖子用 search_ed_threads，读完整帖子用 read_ed_thread。返回更新分组和同步时间。",
@@ -894,6 +902,7 @@ PARAM_HELP = {
     ("list_files", "query"): "按文件名或路径筛选",
     ("list_files", "links"): "true=列外链；须同时给 course",
     ("list_files", "since_days"): "只看最近几天新同步的，新的排前面",
+    ("list_files", "skipped"): "true=列按设置没下载的文件",
     ("read_file", "path"): "文件搜索或作业列表返回的路径；submission:活动ID 可直接读提交详情",
     ("read_file", "inner"): "ZIP 内路径；省略=列 ZIP 清单",
     ("read_file", "page_start"): "PDF 起始页，从1开始",

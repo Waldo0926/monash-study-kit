@@ -22,6 +22,7 @@ FEATURES = [
          'monash grep "monad"'),
         ("读课件原文、帮你解释", "帮我看看 A2 的 spec 要求什么", "monash open"),
         ("某周的课件和外部链接", "FIT2109 第 5 周有哪些资料？", "monash moodle ls FIT2109 5"),
+        ("按设置没下载的文件（太大、排除的类型、录像），挑几个补下", "有哪些文件因为太大没下载？", "monash skipped"),
     ]),
     ("Ed 论坛", [
         ("上次看过之后的新帖和新回复", "Ed 上有什么新消息？", "monash ed new"),

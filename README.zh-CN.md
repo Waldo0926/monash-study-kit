@@ -160,7 +160,40 @@ monash sync --videos                          # 这次连录像一起下
 monash sync --max-mb 50 --skip-types archives
 ```
 
-没下载的文件会以链接的形式出现在每周的 `links.md` 里，整门课导出时也会列在“没导出的内容”里。已经下好的文件不会被删。录像除了看文件名，还会看 Moodle 返回的文件类型，地址里没有 `.mp4` 的录像也认得出来。Moodle 文件夹里的文件也按同样的规则处理
+录像除了看文件名，还会看 Moodle 返回的文件类型，地址里没有 `.mp4` 的录像也认得出来。Moodle 文件夹里的文件也按同样的规则处理。改了这些设置，已经下好的文件也不会被删
+
+**看看跳过了哪些，想要的再补下。** 每次 `monash sync` 完会列出这次新跳过的文件。跳过的文件也会以链接的形式出现在每周的 `links.md` 里，整门课导出时列在“没导出的内容”里。想看全部、带编号的清单：
+
+```bash
+monash skipped              # 后面加课号只看一门课，加 --videos 连录像一起列
+```
+
+```text
+大小上限：300 MB；排除的类型：无；录像：不下载
+
+FIT2109
+  [3] Week 05/Dataset.csv（太大，512 MB）
+  [7] Week 09/Project data/raw.zip（太大，1200 MB）
+```
+
+然后按需要补下：
+
+- **只要几个**：`monash skipped --get 3 7`。也可以写文件名的一部分（`monash skipped --get dataset`），写 `all` 就是全部。这样补下的不受大小上限和排除类型的限制
+- **要很多个**：调大上限再同步一次，比如 `monash sync --max-mb 2000` 或 `monash config max_file_mb 0`。已经下好的不会重下，只会补上之前跳过的
+
+在 AI 软件里也可以直接问“有哪些文件没下载？”
+
+### 同步只成功了一部分
+
+`monash status` 会显示上次同步是完整还是部分成功，`monash sync --retry-failed` 只重试失败的部分。`monash changes --days 7` 列出开始同步以来课程里的变化：新上或换掉的课件、作业说明、截止时间和 Ed 上的教师回复，这些记录都只存在你电脑上。Moodle 登录过期时，工具会用自己的浏览器配置在后台悄悄登回去，不会自己弹出 MFA 窗口；不想要的话 `monash config auto_relogin false`。详细见 [docs/reliability.md](docs/reliability.md)（英文）
+
+### 对照评语看自己交的作业
+
+在 AI 软件里问，比如“把我 A2 交的文件读一遍，再对照老师的评语逐条说说”。AI 先用 `list_moodle_assignments` 找到作业，再用 `read_file` 读它的 `read_path`，拿到你或你们组交的文件、在线文本和 Moodle 上能看到的完整反馈。终端里是 `monash moodle submission <cmid>`，cmid 是 `monash moodle assignments` 里的活动 ID，不是课程 ID
+
+- PDF 可以按页读，ZIP 里的文本、代码、PDF、Word 和 PPT 也能读
+- 交过的文件用你自己的 Moodle 登录下载，单独放在 `data/submissions/`，不进课件库、全文搜索和整课导出。每次读都会重新检查权限，单个下载最多 256 MiB
+- 只导课程资料的账号读不了这些。视频不会自动转文字，扫描版 PDF 还是要 OCR
 
 ### AI 没额度了也能用
 
@@ -208,7 +241,12 @@ monash google login  # 仅导出课程链接中的 Google 文件时需要；独�
 monash export FIT1043 --sync --format both --to "./exports"
 ```
 
-将 `FIT1043` 换成自己的课号。资料包包含 Moodle 文件、Page、Book、作业说明、Ed Lessons 及可访问的 Google 文件；不包含个人提交、成绩、邮件或考勤。检查包内 README 中的遗漏项。1.11.2 修复了 Windows PDF 浏览器冷启动重试。
+将 `FIT1043` 换成自己的课号。资料包包含 Moodle 文件、Page、Book、作业说明和能看到的评分细则、Ed Lessons 及可访问的 Google 文件；不包含个人提交、成绩、邮件或考勤。包里的 `README` 会列出没导出的内容和原因
+
+- **存到哪**：在终端里运行时会先弹窗选文件夹（默认上次选的，没有就是“下载”）。用 `--to 文件夹` 或 `--no-ask` 跳过弹窗
+- **PDF 还是 Markdown**：正文页、链接清单、测验和索引默认导出成 PDF，课件原件照常放在旁边。生成 PDF 要装 Chrome、Edge 或 Brave，没有的话自动改用 Markdown 并说明。`--format both` 两种都要，`--format md` 只要 Markdown，`monash config export_format both` 改默认值。本机同步的 Markdown 不变，照样给 AI 和搜索用
+- **要最新的**：加 `--sync` 先同步这门 Moodle 课和对应的 Ed Lessons 再导出。不加就只用电脑上已有的
+- **Google 文件**（Moodle 或 Ed Lessons 里链接的）：先运行一次 `monash google login`。Slides 和 Docs 导出成 PDF（`monash config google_docs_format docx` 改成 Word），Sheets 导出 XLSX，其他 Drive 文件按原格式；Google 表单导不了。第一次授权 Google 会提示“此应用未经验证”，点“高级”再继续就行。学校管理的账号可能被管理员拦下，这时链接保留为链接，索引里写明原因。只下载课程里链接到的文件，不会去翻你整个 Drive。`monash sync FIT1043 --refresh-google` 重新导出，`monash google logout` 吊销授权
 
 ![1.11.2 实际离线导出与 ZIP 内容，使用合成课程数据](docs/screenshots/course-export.png)
 
@@ -246,6 +284,8 @@ monash attendance sync
 用 `monash remote serve` 远程接入时，每个软件在配对页上自己勾选能用哪些功能：只列服务器上已经开了的，只读的默认勾上，写操作默认不勾。比如手机上的 Claude 只开考勤，ChatGPT 只开邮箱，或者都不开。之前已经配对的软件还是只有 Moodle 和 Ed，重新配对才会多出来；`monash remote clients` 能看到每个软件拿到了什么。
 
 每次对话开头都要多发一些工具说明：两部分都登录后约多 1,900 token（总共 5,132，不登录时是 3,232）；不登录就没有任何变化。
+
+**考勤登录过期了**：`monash attendance maintain` 会检查，能的话用这台电脑上已有的浏览器配置悄悄登回去。Monash 要密码或 MFA 时它会报告 `needs_login`，这时自己运行 `monash attendance login`。失败一次后一小时内不会再试，`monash attendance renew --timeout 30` 可以手动试一次。工具不会替你输密码或 MFA，电脑睡眠或断网时也没法保证一直登录着。从图片里识别签到码需要 Python 3.11 以上
 
 还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户。
 
@@ -442,6 +482,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash grep "monad" [FIT2102]` | 全文搜课件、课程笔记网页、Ed Lessons 正文、录播字幕稿（带页码/时间戳） |
 | `monash sync [--retry-failed]` | 立刻同步；`--retry-failed` 只重试上次失败的部分 |
 | `monash sync --videos` / `--max-mb N` / `--skip-types a,b` | 这一次按别的规则下载，见[选择下载哪些文件](#选择下载哪些文件) |
+| `monash skipped [FIT2102] [--get 3 7\|all] [--videos]` | 因为大小上限、排除的类型或录像设置没下载的文件；`--get` 补下挑中的 |
 | `monash login` / `monash login ed` | 登录 Moodle / 换 Ed 令牌 |
 | `monash courses` | 重新选要跟踪的课 |
 | `monash open [ed]` | 打开课件文件夹（`ed`：Ed Lessons 的课件） |
@@ -556,118 +597,19 @@ Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`get_st
 
 ## 各版本说明
 
-每个版本加了什么，新的在前。最新版本号看页面顶部的徽章，完整记录在[更新日志](CHANGELOG.md)。
+新的在前。每一处改动都在[更新日志](CHANGELOG.md)里，各功能怎么用写在上面对应的章节
 
-- **1.16**：[选择下载哪些文件](#选择下载哪些文件)，可以设大小上限、整类不下，`monash sync` 也能用 `--videos`、`--max-mb`、`--skip-types` 只改这一次
-
-<details>
-<summary>更早的版本（1.4 到 1.14）</summary>
-
-### 1.14：考勤登录自动恢复
-
-`monash attendance maintain` 会检查考勤门户的登录，需要时用这台电脑上已有的独立浏览器登录状态悄悄登回去。Monash 要密码或 MFA 时，它报告 `needs_login`，让你自己运行 `monash attendance login`。认证失败后一小时内不会再试；换了新的登录状态文件会马上重新检查。`monash attendance renew --timeout 30` 是手动试一次静默恢复。网络或证书问题不会被当成登录过期
-
-Okta 的登录状态只留在登录的那台电脑上，导出的只有门户本身的登录状态。工具不会替你输密码或 MFA，电脑睡眠或断网时也没法保证一直登录着
-
-### 1.13：读自己交过的作业和评分反馈
-
-在 AI 里问：“把我这个作业交的文件读一遍，再对照老师的评语，具体说说哪里扣分”。`list_moodle_assignments` 会给每个作业一个 `read_path`，用 `read_file` 读它就能拿到你或你们组交的文件、在线文本和完整的反馈；`list_moodle_assignments(assignment_id=cmid)` 可以直接打开某一个。终端里对应的是 `monash moodle submission <cmid> --json`，cmid 用作业列表里的 activity ID，不是课程 ID
-
-PDF 可以按页读（`page_start` / `page_end`），压缩包里的文本、代码、PDF、DOCX 和 PPTX 用 `inner` 读。附件用你的 Moodle 登录下载，单独缓存在 `data/submissions/`，不进课件库、全文索引和整课导出。每次读都会重新检查权限，下载上限 256 MiB，cookie 不会跟着跳转发到别的网站。只导课程资料的账号读不了这些。视频不会自动转文字，扫描版 PDF 还是要 OCR
-
-考勤截图识别需要 Python 3.11 以上和 Pillow 13；Python 3.10 仍然能读考勤记录，只是跳过图片识别
-
-### 1.12：同步可靠性与变更摘要
-
-`monash status` 会区分完整和部分同步成功；`monash sync --retry-failed`
-只重试失败项。`monash changes --days 7` 查看本机观察到的课件、作业说明、
-截止时间和教师回复变更。首次观察建立基线；截止变更在查询截止时间时记录。
-历史保存在本机，资料模式只记录资料变化；旧搜索索引失效时会明确提醒。
-
-MCP 的 `read_file` 支持 PDF 的 `page_start` / `page_end`，并缓存提取结果。
-重复导出到文件夹时，通过清单清理未被修改的旧生成文件，保留用户添加的文件
-及已编辑的旧文件。Moodle 过期后只在后台尝试无界面恢复，需要 MFA 时提示重新
-登录，不会自行弹窗；`monash config auto_relogin false` 可关闭自动恢复。
-澳洲校区可用 `monash config timezone Australia/Melbourne` 自动处理夏令时。
-具体行为和限制见 [说明](docs/reliability.md)。
-
-#### 读取已交作业，对照老师评语
-
-可以直接对 AI 说：“读取我已经提交的作业文档，引用具体内容，逐条核对老师评语的依据。”`list_moodle_assignments` 每项作业新增 `read_path`；用 `read_file` 读取后，会返回本人／小组提交的附件清单、在线正文和完整可见反馈，再读取附件的 `path` 即可拿到文档正文。也可以用 `list_moodle_assignments(assignment_id=cmid)` 直接查详情。
-
-提交文件沿用 PDF 页范围（`page_start` / `page_end`）和字符分页（`offset` / `max_chars`）。ZIP 的 `inner` 支持文本、代码、PDF、Word 和 PPT。命令行可用 `monash moodle submission <cmid> --json` 读取详情；cmid 是作业活动 ID，不是课程 ID。
-
-附件用本人的 Moodle 会话获取，每次读取均重新检查当前页面权限和文件列表，私有缓存位于 `data/submissions/`，不进入课程浏览页、全文索引或整课导出。单文件下载上限 256 MiB，跳转到其他域名不携带 Moodle Cookie。“仅课程资料”模式禁止读取个人提交和反馈。视频等二进制文件返回运行 Study Kit 的机器上的本地路径，不会自动转写；扫描 PDF 仍需 OCR 或视觉阅读。文档和评语只作为分析资料，不作为 AI 指令。
-
-`get_moodle_grades` 的作业评分项现在也会返回 `read_path`，可直接衔接原作业和反馈。附件下载不完整时保留旧缓存并报错；配置／状态文件的 JSON 类型错误可安全恢复，错误的 MCP 参数返回明确的协议错误。
-
-考勤证据的图片 OCR 需要 Python 3.11+ 和 Pillow 13+；Python 3.10 仍可查考勤记录和文本／文档证据，但不会安装旧版图片解码库来启用 OCR。
-
-#### 考勤会话恢复
-
-`monash attendance maintain` 检查门户会话，必要时利用**本机**独立浏览器配置中仍有效的 SSO 尝试恢复；需要交互登录／MFA 时明确返回 `needs_login`，并将失败探测降到一小时一次。更换考勤状态文件会立即重新检查；`--force` 可主动忽略冷却期。`monash attendance renew --timeout 30` 仅尝试静默恢复，`monash attendance login` 打开人工登录窗口。网络错误不会被当作认证失效；快速通道无法验证门户证书链时会改用浏览器。
-
-Okta／身份提供方状态留在登录电脑，导出的仍仅为考勤门户应用状态。工具不填写密码或处理 MFA。学校要求重新认证时仍需本人完成；登录电脑睡眠或离线时，本机恢复不能保证服务器一直保持有效会话。
-
-### 1.9：补全课程资料导出
-
-- Moodle 的 Page、Book 章节、作业说明和学生能看到的 rubric / marking guide 存成 Markdown；正文里的 Moodle 图片存到课程的 `assets/`，同内容去重。指向本课程 Page、Resource、Folder、Book 的内部链接也会跟进。
-- 文件夹优先整包下载，保留 notebook、图片的原名、子目录和大小写，7 天内跳过重复下载；失败时逐文件下载。索引会说明 notebook 图片缺失、大小写不一致、正文为空或评分细则未显示等情况。
-- Ed Lessons 的 document / code 正文图片只下载 Ed 自己的 `edusercontent.com` 地址，按内容去重并缓存 URL，每张最多 200 MB。下载失败保留原链接并记录原因；独立 Ed 导出和整课导出都包含 `assets/`，图片使用相对路径。
-- Google Slides / Docs 默认导出 PDF，Sheets 导出 XLSX，Drive 普通文件按原格式下载。只处理 Moodle 和 Ed Lessons 里出现过的文件链接；Google 表单不能导出。文件还在时跳过，`monash sync --refresh-google` 强制重新导出。
-- 每次同步检查新出现的 Ed 课程：课号与已跟踪 Moodle 课程相同就自动跟踪，包括归档课程和 `FIT1045/FIT1053` 这样的联合课号；处理过的课程保留用户选择。
-- `monash export <课号>` 导出包里的正文页、链接清单、测验和索引默认是 **PDF（给人看）**，课件原件照常保留。本机同步的 md 不变，继续供 AI、全文搜索和 MCP 使用。用 `--format both` 同时放 PDF 和 md，`--format md` 只放 md；例如 `monash config export_format both` 可将默认值设为同时导出两种格式。需要安装 Chrome / Edge / Brave 才能生成 PDF；没有浏览器时自动回退 md，并在索引和终端说明。PDF 在全新的临时浏览器配置中离线生成，只内嵌本次导出的本地图片，远程图片仅保留替代文字。缓存放在数据目录的 `pdf-cache/`，最多 500 MB；`--json` 新增 `pdf.generated`、`pdf.cached`、`pdf.skipped_reason`。`monash ed export` 的行为不变。
-- `monash export FIT1045 --sync` 先同步这门 Moodle 课和对应的 Ed Lessons（不抓论坛帖子）再导出；加 `--refresh-google` 会重新导出 Google 文件。在终端里运行 `monash export` 时，会先弹出系统的“选择文件夹”窗口选保存位置（默认上次选的，没有就是“下载”），选好才开始；用 `--to 文件夹` 或 `--no-ask` 跳过弹窗。导出过程中会显示保存位置和 PDF 排版进度。普通导出继续只读本机缓存。README 索引列出未导出内容和原因，并统计链接清单数量、Markdown 远程图片数、Google 总数 / 成功 / 按原因分组的失败数；`--json` 的 `statistics` 提供相同数字。
-
-```bash
-# Google 授权依赖与 Gmail 共用，但授权流程和 token 分开
-uv tool install --reinstall 'monash-study-kit[gmail]'
-monash google login                  # 默认使用安装包里的桌面 OAuth 客户端
-monash google login --client client.json  # 也可以用自己的桌面客户端
-monash google status
-monash config google_docs_format docx # 默认 pdf；只影响 Google Docs
-monash sync FIT1045 --refresh-google
-monash export FIT1045 --sync --json
-monash google logout                 # 先向 Google 吊销，再删除本机令牌
-```
-
-自带 OAuth 客户端已发布、但没有经过 Google 验证：第一次授权时 Google 会提示“Google 尚未验证此应用”，点 **高级 → 转至 Monash Student MCP（不安全）** 继续即可。未验证的应用最多 100 个用户；学校管理的账号也可能被管理员拦下，这时 Google 链接会保留为链接，索引里写明原因。`drive.readonly` 在 Google 属于受限 scope，允许读取 Drive 文件；本工具仅下载课程链接里出现的文件，不遍历整个 Drive。令牌单独存在数据目录的 `secrets/google-drive-token.json`（可通过 `MONASH_KIT_SECRETS` 改位置），不修改 Gmail 的授权流程或 `gmail-token.json`。令牌只在终端 / 浏览器授权流程中流转，不要贴进聊天。
-
-课程下载走只读 GET。Drive API 报大小限制或管理员限制时，会尝试专用登录浏览器中已有的 Google 会话；cookie 只在内存使用，不写日志或另存文件，跳转离开 Google 域名会停止。后备路径不能保证绕过管理员限制，仍失败时保留原链接并在索引说明原因。未授权时提示 `monash google login`。Moodle Page、Resource、作业仍会打开 `view.php`，Moodle 会记录查看；文件夹正常下载和 Book 打印视图不打开各自的 `view.php`。文件夹整包下载失败后的逐文件回退需要打开文件夹页，也会记录一次查看。
-
-本版新增测试均使用合成 HTML / JSON、假客户端或假 HTTP，不访问真实课程、Google 账号或 Ed 工作区。Ed code challenge 工作区下载暂未实现，仍需真实只读响应确认接口；多账号 profile 等不在本版范围内。
-
-### 1.7
-
-- **一键打包整门课的 Ed 课件。** `monash ed export FIT2109` 把已经同步下来的 Ed Lessons 打成一个 zip，存到“下载”文件夹：按周分文件夹，里面是 PDF、正文页和附件，每节附一个 `Links.md`（阅读网页和 Ed 原页面链接），最上层的 `README.md` 列出每节的进度。`--module "Week 3"` 只打包一周，`--open` 打包完在访达里显示。在 AI 里说“把 FIT2109 的 Ed 课件打包给我”也行；`monash library --open` 的课件页上每门课旁边也有打包按钮。不联网，只打包本地已有的文件。
-- **Ed 课件按课号存。** 文件夹从数字 id 改成 `FIT2109/03 Week 3 - Editor-Modern IDE/12 W3 Workshop/01 Workshop 3 Slides.pdf` 这样，跟 Ed 页面上的顺序一致。`monash open ed` 直接打开。升级后第一次同步会把旧文件挪过去，不会重新下载。
-- **正文页里附的文件也下载。** starter code 的 zip、讲义之类附在 Ed 正文里的文件（Ed 自己存的那种）现在也会下载、能搜到。单个文件超过 200 MB 跳过。老师换了 PDF 会重新下载，Ed 上删掉的页本地也删掉。
-- **AI 列课件时带上 Ed。** 问“FIT2109 第 3 周有哪些课件”时，`list_files` 会一起列出 Ed Lessons 的文件，可以直接读。
-
-### 1.6
-
-- **学期周视图。** `monash semester --days 7` 把 Moodle 截止、Ed lesson 和回复、本地考勤缓存放在一份视图里；`--ics` 把截止日期导出成本机私有日历文件。
-
-### 1.5
-
-- **学校邮箱（可选）。** 问“我邮箱里有什么要处理的？”，列出最近没读的学校邮件，也能离线搜索、读整个对话和附件里的文字。AI 可以帮你起草回复、发送草稿、归档邮件，每一项都要你确认才执行。
-- **考勤（可选）。** 问“这周还有哪节课没签到？”“今天 workshop 的签到码是多少？”，每个签到码都标出处。按课表自动读，不开浏览器，几秒钟就完。在马来西亚校区门户上验证过。
-- **不用开终端就能接上。** 在 AI 软件里说“帮我接上学校邮箱”或“帮我接上考勤”，缺的组件自动安装，然后打开登录窗口。也不用自己去 Google Cloud 设置。
-- **远程的软件各自选。** 用 `monash remote` 时，每个配对的软件自己勾选能用哪些功能。
-- **课不用 Ed 的话**可以关掉 Ed：`monash config use_ed false`。
-
-详细见[可选：Gmail 与考勤](#可选gmail-与考勤)和[更新日志](CHANGELOG.md)。
-
-### 1.4
-
-- **学习面板。** 在支持 MCP Apps 的软件里，问“这周我有什么要做的”“看看我 FIT2109 的 lesson 进度”“帮我练一下第 3 周的测验”时，回答会附一个小面板：截止日期卡片、按 module 分的 lesson 进度、可以一题一题点的测验题。做完测验点 **交给 AI 批改**，你的选择会发回对话，AI 根据 lesson 内容讲解。不会提交到 Ed。不支持面板的软件照样收到和以前一样的文字回答。
-- **按名字找 Moodle 活动。** 问“Moodle 上第 7 周的 workshop 在哪？”会用新工具 `search_moodle_activities`，要先登录 Moodle。
-- **不用 AI 也能翻课件。** `monash library --open` 会在浏览器里打开一个页面，列出已经同步的 Moodle 和 Ed lesson 文件。可以按课程、周次或文件名筛选，点一下下载原文件。只监听 `127.0.0.1`，别的设备打不开。
-- **可选的远程接入。** `monash remote serve` 让 ChatGPT，或者网页版、手机上的 Claude，通过 HTTPS 查你自己的数据。可以用自己的服务器和域名，也可以在自己电脑上开 Cloudflare 免费的临时隧道先试试，不用注册账号，也不用买域名。每个软件都要用终端里给的一次性配对码配对，远程只开放 16 个只读查询工具。你不运行它就不会启动。步骤见[自己托管（进阶）](https://docs.secureview.tech/zh-cn/study-kit/remote/)。
-
-1.4.1 在 `monash --help` 最上面的说明里补上了 `library` 和 `remote`。平时在自己电脑上用，仍然不需要服务器、域名或额外的账号。技术说明见 [docs/panels-library-remote.md](docs/panels-library-remote.md)（英文）。
-
-</details>
+- **1.16**：[选择下载哪些文件](#选择下载哪些文件)，可以设大小上限、整类不下，`monash skipped` 查看并补下跳过的文件
+- **1.15**：`monash uninstall` 会顺便吊销 Google 授权；1.11.2 之后第一次发到 PyPI
+- **1.14**：[考勤登录](#可选gmail-与考勤)过期后能自己恢复的就自己恢复
+- **1.13**：[对照评语看自己交的作业](#对照评语看自己交的作业)
+- **1.12**：[同步只成功一部分时](#同步只成功了一部分)的提示、`--retry-failed` 和 `monash changes`
+- **1.11**：修了 Windows 上登录窗口和 PDF 导出的问题
+- **1.9**：[整门课导出](#整门课资料导出)补全了 Moodle Page、Book、评分细则、Google 文件，默认导出 PDF
+- **1.7**：`monash ed export` 把一门课的 Ed 课件按周打包；Ed 课件按课号存放
+- **1.6**：`monash semester` 学期周视图和私有日历文件
+- **1.5**：可选的[学校邮箱和考勤](#可选gmail-与考勤)
+- **1.4**：学习面板、`monash library` 和给 ChatGPT 用的[远程模式](#接入其他-ai-客户端)
 
 ## 开发
 

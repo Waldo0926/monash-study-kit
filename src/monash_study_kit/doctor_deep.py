@@ -137,9 +137,8 @@ def deep_files(ctx: Context) -> dict:
                 and not cm.get("stealth")]
         total += len(want)
         lost = [i for i in want if i not in have]
-        # 按设置没下的（太大、排除的类型、响应头才看出来的录像），同步时记在 notes 里
-        held = {r["url"] for r in ctx.con.execute(
-            "SELECT url FROM notes WHERE course_id=? AND kind='skipped'", (c["id"],))}
+        # 按设置没下的（太大、排除的类型、录像），同步时记在 skipped 表里
+        held = {r["source"] for r in ctx.con.execute("SELECT source FROM skipped WHERE course_id=?", (c["id"],))}
         for i in lost[:RESOLVE_MAX]:
             # 录像默认不下载、只记链接：问一下 Moodle 文件名，是录像就不算漏
             # 文件名看本站最后那个地址（同步也是按它判断）；CloudFront 的地址常常没有扩展名

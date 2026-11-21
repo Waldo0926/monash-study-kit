@@ -333,14 +333,86 @@ def _sync_overrides(args) -> None:
         os.environ["MONASH_KIT_SKIP_TYPES"] = ",".join(sorted(parse_skip_types(args.skip_types)))
 
 
+SKIP_SHOW = 8
+
+
 def _print_held_back(m: dict) -> None:
+    """同步完提醒：这一轮新跳过了哪些（太大、排除的类型），怎么补下。录像默认就不下，不在这里刷屏。"""
     parts = []
     if m.get("too_large"):
         parts.append(f"{m['too_large']} 个文件太大")
     if m.get("skipped_types"):
         parts.append(f"{m['skipped_types']} 个按 skip_types 排除")
-    if parts:
-        print(f"  没下载：{'，'.join(parts)}（链接在各周的 links.md，monash config 可以改）")
+    if not parts:
+        return
+    print(f"  按设置没下载：{'，'.join(parts)}")
+    new = m.get("new_skips") or []
+    if new:
+        from .syncer import _mb
+        print("  这次新跳过的：")
+        for item in new[:SKIP_SHOW]:
+            size = f"，{_mb(item['size'])}" if item.get("size") else ""
+            why = "太大" if item["reason"] == "size" else "排除的类型"
+            print(f"    {item['folder']}/{item['name']}（{why}{size}）")
+        if len(new) > SKIP_SHOW:
+            print(f"    …还有 {len(new) - SKIP_SHOW} 个")
+    print("  monash skipped 看全部和编号；monash skipped --get 编号 只补想要的；"
+          "monash sync --max-mb 1000 一次补齐太大的（已经下好的不会重下）")
+
+
+def cmd_skipped(args):
+    from . import skipped as SK
+    con = db_connect()
+    try:
+        cid = None
+        if args.course:
+            row = con.execute("SELECT id FROM courses WHERE code=? COLLATE NOCASE OR fullname LIKE ?",
+                              (args.course, f"%{args.course}%")).fetchone()
+            if not row:
+                print(f"本机没有 {args.course} 这门课（先 monash sync）", file=sys.stderr)
+                return 4
+            cid = row["id"]
+        rows = SK.list_skipped(con, cid, include_videos=args.videos or bool(args.get))
+        if args.get:
+            picked = SK.pick(rows, args.get)
+            if not want_json(args):
+                print(f"补下 {len(picked)} 个文件，不受大小上限和类型设置限制：")
+            res = SK.fetch(MoodleClient(), con, picked, log=lambda line: None)
+            if want_json(args):
+                emit_json(res)
+                return 0 if not res["failed"] else 3
+            for d in res["downloaded"]:
+                print(f"  ↓ {d['path']}（{d['bytes'] / 1e6:.1f} MB）")
+            for f in res["failed"]:
+                print(f"  ! {f['path']}：{f['error']}")
+            return 0 if not res["failed"] else 3
+        if want_json(args):
+            return emit_json(rows)
+        settings = load_settings()
+        limit = settings.get("max_file_mb") or 0
+        print(f"大小上限：{f'{limit} MB' if limit else '不限'}；排除的类型：{settings.get('skip_types') or '无'}；"
+              f"录像：{'下载' if settings.get('download_videos') else '不下载'}\n")
+        if not rows:
+            hidden = "" if args.videos else "（录像没列出来，加 --videos 看）"
+            print("没有按设置跳过的文件" + hidden)
+            return 0
+        course = None
+        for r in rows:
+            if r["course"] != course:
+                course = r["course"]
+                print(course)
+            extra = "，".join(x for x in (r["why"], r["size"]) if x)
+            print(f"  [{r['id']}] {r['path']}（{extra}）")
+        videos = 0 if args.videos else con.execute(
+            "SELECT COUNT(*) FROM skipped WHERE reason='video'" + (" AND course_id=?" if cid else ""),
+            (cid,) if cid else ()).fetchone()[0]
+        if videos:
+            print(f"\n另外有 {videos} 个录像没下载，加 --videos 一起列出来")
+        print("\n只要其中几个：monash skipped --get 3 7（也可以写文件名的一部分，all 是全部）")
+        print("想一次补齐太大的：monash sync --max-mb 1000，或者 monash config max_file_mb 0 不限（已经下好的不会重下）")
+        return 0
+    finally:
+        con.close()
 
 
 def cmd_sync(args):
@@ -1106,6 +1178,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = cmd(sub, "semester", cmd_semester, json_flag=True, help="本周视图：Moodle、Ed及本地考勤；可导出私有日历")
     p.add_argument("--days", type=int, default=7, choices=range(1, 32))
     p.add_argument("--ics", nargs="?", const="", metavar="PATH", help="导出本机ICS文件（默认保存到Study Kit数据目录）")
+    p = cmd(sub, "skipped", cmd_skipped, json_flag=True, help="按设置没下载的文件，可以挑几个补下")
+    p.add_argument("course", nargs="?", help="只看这门课")
+    p.add_argument("--get", nargs="+", metavar="编号", help="补下这几个：编号、文件名的一部分，或 all")
+    p.add_argument("--videos", action="store_true", help="录像也列出来")
     p = cmd(sub, "changes", cmd_changes, json_flag=True, help="本机记录的课程变更，默认最近一轮同步")
     group = p.add_mutually_exclusive_group()
     group.add_argument("--since", help="带时区的 ISO 时间")

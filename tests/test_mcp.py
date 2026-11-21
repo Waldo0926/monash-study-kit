@@ -97,7 +97,8 @@ def test_catalog_stays_small():
     size = len(json.dumps(tools, ensure_ascii=False))
     # 1.5.0 加了 start_school_service_setup（在 AI 里接邮箱和考勤），两样都接好后不再列出
     # 1.7.0 加了 export_ed_lessons（整门课 Ed 课件打包），不用 Ed 的人不列
-    assert len(tools) <= 20 and size <= 9200, (len(tools), size)
+    # 1.16.0 list_files 加了 skipped（列按设置没下载的文件），没有另开工具
+    assert len(tools) <= 20 and size <= 9300, (len(tools), size)
     assert len(M.INSTRUCTIONS) <= 400
     enums = tools[[t["name"] for t in tools].index("search_ed_threads")]["inputSchema"]["properties"]["only"]["enum"]
     assert set(enums) == {"starred", "watching", "unseen", "mine", "unread_replies"}
