@@ -42,6 +42,16 @@ class MoodleError(RuntimeError):
     """Moodle 返回了意料之外的东西：HTTP 错误、跳转太多、AJAX 接口报错。命令行退出码 3。"""
 
 
+class DownloadSkipped(Exception):
+    """按设置不下的文件（录像、太大、排除的类型）。看到响应头就停，正文不读，也不留半个文件。"""
+
+    def __init__(self, reason: str, name: str = "", size: int | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.name = name
+        self.size = size
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -143,11 +153,13 @@ class MoodleClient:
     # 只有发往 Moodle 本站的请求才带 cookie。下载会被 302 到 CloudFront，
     # 自己一步步跟跳转，保证 MoodleSession 不会被带到别的域名去。
     def _request(self, url: str, *, data: bytes | None = None, headers: dict | None = None,
-                 stream_to: Path | None = None, retryable: bool = False) -> Response:
+                 stream_to: Path | None = None, retryable: bool = False, check=None,
+                 max_bytes: int | None = None) -> Response:
         # GET 和明确只读的 AJAX 才重试；表单 POST 不自动重放。
         for attempt in range(3):
             try:
-                response = self._request_once(url, data=data, headers=headers, stream_to=stream_to)
+                response = self._request_once(url, data=data, headers=headers, stream_to=stream_to,
+                                              check=check, max_bytes=max_bytes)
             except (OSError, TimeoutError):
                 if not (data is None or retryable) or attempt == 2:
                     raise
@@ -159,7 +171,7 @@ class MoodleClient:
             time.sleep(min(30, retry_delay(response.headers.get("Retry-After"), attempt)))
 
     def _request_once(self, url: str, *, data: bytes | None = None, headers: dict | None = None,
-                 stream_to: Path | None = None) -> Response:
+                 stream_to: Path | None = None, check=None, max_bytes: int | None = None) -> Response:
         gap = REQUEST_GAP - (time.monotonic() - self._last)
         if gap > 0:
             time.sleep(gap)
@@ -183,11 +195,22 @@ class MoodleClient:
         out = Response(status, url, resp.headers,
                        location=urllib.parse.urljoin(url, location) if location else None)
         if stream_to is not None and status == 200:
+            if check is not None:
+                try:
+                    check(out)       # 只看响应头（文件名、类型、大小），不想要就在这里停
+                except BaseException:
+                    resp.close()
+                    raise
             tmp = stream_to.with_name(stream_to.name + ".part")
             tmp.parent.mkdir(parents=True, exist_ok=True)
             try:
                 with open(tmp, "wb") as f:
+                    got = 0
                     while chunk := resp.read(1 << 16):
+                        got += len(chunk)
+                        # 没给 Content-Length 的也要管住：边下边数，超了就停
+                        if max_bytes is not None and got > max_bytes:
+                            raise DownloadSkipped("size", filename_from(out, ""), got)
                         f.write(chunk)
             except BaseException:
                 tmp.unlink(missing_ok=True)      # 下到一半断了，别在课件目录里留半个文件
@@ -332,11 +355,15 @@ class MoodleClient:
             url = r.location
         raise MoodleError(f"跳转太多：{url}")
 
-    def download(self, url: str, dest: Path, max_hops: int = 8) -> Response:
-        """下载到 dest。站外那一跳（CloudFront 签名链接）不带 cookie。"""
+    def download(self, url: str, dest: Path, max_hops: int = 8, *, check=None,
+                 max_bytes: int | None = None) -> Response:
+        """下载到 dest。站外那一跳（CloudFront 签名链接）不带 cookie。
+
+        check(response) 在开始写文件前调用，可以抛 DownloadSkipped 不下；
+        max_bytes 是下载过程中的硬上限，服务器没给 Content-Length 时靠它。"""
         url = self.abs(url)
         for _ in range(max_hops):
-            r = self._request(url, stream_to=dest)
+            r = self._request(url, stream_to=dest, check=check, max_bytes=max_bytes)
             if not _is_redirect(r):
                 if r.status != 200:
                     raise MoodleError(f"下载失败 {url} -> {r.status}")
@@ -496,6 +523,25 @@ def db_connect(path: Path | None = None) -> sqlite3.Connection:
     );
     CREATE TABLE IF NOT EXISTS state (k TEXT PRIMARY KEY, v TEXT);
     -- 同步时没能存成文件的东西和原因（评分细则不可见、Google 导出失败……），导出的索引里列出来
+    -- 按设置没下载的文件（录像、太大、排除的类型）：monash skipped 列出来，可以单独补下。
+    -- rowid 就是给人看的编号，同步时用 upsert 更新，所以编号在两次同步之间不会变
+    CREATE TABLE IF NOT EXISTS skipped (
+        course_id INTEGER NOT NULL,
+        source    TEXT NOT NULL,        -- 文件地址；文件夹 zip 里的文件是 folder:<cmid>:<路径>
+        cmid      INTEGER,
+        member    INTEGER DEFAULT 0,    -- 1 = 在文件夹 zip 里，补下时要重下这个 zip
+        folder    TEXT,                 -- 相对课程目录：单个文件是它所在的文件夹，zip 里的是文件夹活动所在的周
+        section   TEXT,
+        title     TEXT,                 -- 活动名
+        name      TEXT,                 -- 文件名（zip 里的带子目录）
+        size      INTEGER,
+        file_kind TEXT,
+        reason    TEXT NOT NULL,        -- video / size / type
+        cm_name   TEXT,
+        cm_url    TEXT,
+        synced_at TEXT NOT NULL,
+        PRIMARY KEY (course_id, source)
+    );
     CREATE TABLE IF NOT EXISTS notes (
         course_id INTEGER NOT NULL, kind TEXT NOT NULL, folder TEXT, title TEXT, url TEXT NOT NULL,
         reason TEXT, synced_at TEXT NOT NULL,

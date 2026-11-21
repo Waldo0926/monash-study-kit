@@ -75,7 +75,7 @@ def test_files_compare_course_structure_with_local_sync(tmp_path, monkeypatch):
     ctx.con.execute(add, ("s9", 9, "FIT2102/old.pdf"))          # Moodle 上已经没有了，磁盘上也没有
     r = D.deep_files(ctx)
     assert r["status"] == doctor.WARN
-    assert "1 个是没下载的录像" in r["detail"]                    # cmid 3 是录像，默认不下载，不算漏
+    assert "1 个是按设置没下载的录像或大文件" in r["detail"]                    # cmid 3 是录像，默认不下载，不算漏
     assert "本地没有：FIT2102 cmid 2" in r["detail"] and "FIT2102 cmid 9" in r["detail"]
     assert "磁盘上找不到的文件 1 个" in r["detail"] and "old.pdf" not in r["detail"]
     assert "cmid 5" not in r["detail"] and "3 个文件资源" in r["detail"]

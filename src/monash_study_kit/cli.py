@@ -319,7 +319,109 @@ def cmd_changes(args):
             print(f"  {item['url']}")
 
 
+def _sync_overrides(args) -> None:
+    """--videos / --max-mb / --skip-types 只管这一次同步：用环境变量盖掉设置，不写进 settings.json。"""
+    videos = getattr(args, "videos", None)
+    if videos is not None:
+        os.environ["MONASH_KIT_DOWNLOAD_VIDEOS"] = "true" if videos else "false"
+    if getattr(args, "max_mb", None) is not None:
+        if args.max_mb < 0:
+            raise ValueError("--max-mb 要填 0 或正数，0 = 不限")
+        os.environ["MONASH_KIT_MAX_FILE_MB"] = str(args.max_mb)
+    if getattr(args, "skip_types", None) is not None:
+        from .syncer import parse_skip_types
+        os.environ["MONASH_KIT_SKIP_TYPES"] = ",".join(sorted(parse_skip_types(args.skip_types)))
+
+
+SKIP_SHOW = 8
+
+
+def _print_held_back(m: dict) -> None:
+    """同步完提醒：这一轮新跳过了哪些（太大、排除的类型），怎么补下。录像默认就不下，不在这里刷屏。"""
+    parts = []
+    if m.get("too_large"):
+        parts.append(f"{m['too_large']} 个文件太大")
+    if m.get("skipped_types"):
+        parts.append(f"{m['skipped_types']} 个按 skip_types 排除")
+    if not parts:
+        return
+    print(f"  按设置没下载：{'，'.join(parts)}")
+    new = m.get("new_skips") or []
+    if new:
+        from .syncer import _mb
+        print("  这次新跳过的：")
+        for item in new[:SKIP_SHOW]:
+            size = f"，{_mb(item['size'])}" if item.get("size") else ""
+            why = "太大" if item["reason"] == "size" else "排除的类型"
+            print(f"    {item['folder']}/{item['name']}（{why}{size}）")
+        if len(new) > SKIP_SHOW:
+            print(f"    …还有 {len(new) - SKIP_SHOW} 个")
+    print("  monash skipped 看全部和编号；monash skipped --get 编号 只补想要的；"
+          "monash sync --max-mb 1000 一次补齐太大的（已经下好的不会重下）")
+
+
+def cmd_skipped(args):
+    from . import skipped as SK
+    con = db_connect()
+    try:
+        cid = None
+        if args.course:
+            row = con.execute("SELECT id FROM courses WHERE code=? COLLATE NOCASE OR fullname LIKE ?",
+                              (args.course, f"%{args.course}%")).fetchone()
+            if not row:
+                print(f"本机没有 {args.course} 这门课（先 monash sync）", file=sys.stderr)
+                return 4
+            cid = row["id"]
+        rows = SK.list_skipped(con, cid, include_videos=args.videos or bool(args.get))
+        if args.get:
+            picked = SK.pick(rows, args.get)
+            SK.check_space(picked)
+            if not want_json(args):
+                size = SK.total_bytes(picked)
+                print(f"补下 {len(picked)} 个文件" + (f"，一共约 {SK._mb(size)}" if size else "")
+                      + "，不受大小上限和类型设置限制：")
+            with jobs.sync_lock():
+                res = SK.fetch(MoodleClient(), con, picked, log=lambda line: None)
+            if want_json(args):
+                emit_json(res)
+                return 0 if not res["failed"] else 3
+            for d in res["downloaded"]:
+                print(f"  ↓ {d['path']}（{d['bytes'] / 1e6:.1f} MB）")
+            for f in res["failed"]:
+                print(f"  ! {f['path']}：{f['error']}")
+            return 0 if not res["failed"] else 3
+        if want_json(args):
+            return emit_json(rows)
+        settings = load_settings()
+        limit = settings.get("max_file_mb") or 0
+        print(f"大小上限：{f'{limit} MB' if limit else '不限'}；排除的类型：{settings.get('skip_types') or '无'}；"
+              f"录像：{'下载' if settings.get('download_videos') else '不下载'}\n")
+        if not rows:
+            hidden = "" if args.videos else "（录像没列出来，加 --videos 看）"
+            print("没有按设置跳过的文件" + hidden)
+            return 0
+        course = None
+        for r in rows:
+            if r["course"] != course:
+                course = r["course"]
+                print(course)
+            extra = "，".join(x for x in (r["why"], r["size"]) if x)
+            print(f"  [{r['id']}] {r['path']}（{extra}）")
+        total = SK.total_bytes(rows)
+        if total:
+            print(f"\n知道大小的一共约 {SK._mb(total)}")
+        videos = 0 if args.videos else sum(r["reason"] == "video" for r in SK.list_skipped(con, cid))
+        if videos:
+            print(f"\n另外有 {videos} 个录像没下载，加 --videos 一起列出来")
+        print("\n只要其中几个：monash skipped --get 3 7（也可以写文件名的一部分，all 是全部）")
+        print("想一次补齐太大的：monash sync --max-mb 1000，或者 monash config max_file_mb 0 不限（已经下好的不会重下）")
+        return 0
+    finally:
+        con.close()
+
+
 def cmd_sync(args):
+    _sync_overrides(args)
     if getattr(args, "retry_failed", False) and (args.courses or args.dry_run or getattr(args, "refresh_google", False)):
         raise ValueError("--retry-failed 不能与指定课程、--dry-run 或 --refresh-google 同用")
     if args.courses or args.dry_run:
@@ -327,8 +429,13 @@ def cmd_sync(args):
         courses = jobs.load_courses(client, con)
         only = [F.find_course(courses, r) for r in args.courses] if args.courses else None
         con.close()
-        st = jobs.sync_moodle(only=only, dry_run=args.dry_run, refresh_google=getattr(args, "refresh_google", False))
+        if args.dry_run:
+            st = jobs.sync_moodle(only=only, dry_run=True, refresh_google=getattr(args, "refresh_google", False))
+        else:
+            with jobs.sync_lock():
+                st = jobs.sync_moodle(only=only, refresh_google=getattr(args, "refresh_google", False))
         print(f"新下载 {st['downloaded']} 个文件，{st['bytes'] / 1e6:.1f} MB")
+        _print_held_back(st)
         return
     options = {}
     if getattr(args, "refresh_google", False):
@@ -342,6 +449,7 @@ def cmd_sync(args):
         f"Moodle 新文件 {m.get('downloaded', 0)} 个（{m.get('bytes', 0) / 1e6:.1f} MB）"
         + (f"、下架 {m['removed']} 个" if m.get("removed") else "") if "moodle" not in st["errors"] else "",
         f"索引了 {idx.get('indexed', 0)} 个文件" if idx else ""] if x))
+    _print_held_back(m)
     if st.get("sync_state") == "partial":
         print("  ! 部分同步成功；上次完整成功：" + str(st.get("last_complete_sync") or "尚无"))
         for name in ("ed", "moodle", "index"):
@@ -386,6 +494,15 @@ def parse_setting(key: str, raw: str, current):
         raise ValueError("export_format 只能是 pdf、both 或 md")
     if key == "google_docs_format" and raw not in {"pdf", "docx"}:
         raise ValueError("google_docs_format 只能是 pdf 或 docx")
+    if key == "skip_types":
+        from .syncer import parse_skip_types
+        return ",".join(sorted(parse_skip_types(raw)))
+    if key == "max_file_mb":
+        try:
+            if float(raw) < 0:
+                raise ValueError
+        except ValueError:
+            raise ValueError("max_file_mb 要填 0 或正数，0 = 不限") from None
     if isinstance(current, bool):
         if raw.lower() in ("true", "yes", "1", "on"):
             return True
@@ -434,6 +551,8 @@ def cmd_config(args):
         for k, v in load_settings().items():
             print(f"{k} = {v}")
         print("\n改：monash config download_videos true")
+        print("    monash config max_file_mb 100        （单个文件超过就不下，0 = 不限）")
+        print("    monash config skip_types audio,images （可选 pdf,slides,docs,sheets,archives,images,audio,code）")
         return
     cur = load_settings()
     if args.key not in cur:
@@ -706,6 +825,11 @@ def cmd_due(args):
 
 def sync_export_course(ref: str, log=print, refresh_google: bool = False) -> None:
     """先同步指定 Moodle 课，再同步对应 Ed 课，最后补导 Ed 的 Google 链接。"""
+    with jobs.sync_lock():
+        _sync_export_course(ref, log, refresh_google)
+
+
+def _sync_export_course(ref: str, log=print, refresh_google: bool = False) -> None:
     from . import google_export
     client, con = MoodleClient(), db_connect()
     try:
@@ -1057,12 +1181,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("courses", nargs="*", help="只同步这几门 Moodle 课")
     p.add_argument("--dry-run", action="store_true", help="只列出 Moodle 会下载什么")
     p.add_argument("--refresh-google", action="store_true", help="强制重新导出 Google 文件")
+    vg = p.add_mutually_exclusive_group()
+    vg.add_argument("--videos", dest="videos", action="store_true", default=None, help="这次也下载录像")
+    vg.add_argument("--no-videos", dest="videos", action="store_false", help="这次不下载录像")
+    p.add_argument("--max-mb", type=float, metavar="N", help="这次单个文件超过 N MB 就不下（0 = 不限）")
+    p.add_argument("--skip-types", metavar="TYPES", help="这次不下哪几类，逗号隔开，如 audio,images")
     cmd(sub, "courses", cmd_courses, help="选要跟踪的课")
     p = cmd(sub, "todo", cmd_todo, json_flag=True, help="本周待办")
     p.add_argument("--days", type=int, default=7)
     p = cmd(sub, "semester", cmd_semester, json_flag=True, help="本周视图：Moodle、Ed及本地考勤；可导出私有日历")
     p.add_argument("--days", type=int, default=7, choices=range(1, 32))
     p.add_argument("--ics", nargs="?", const="", metavar="PATH", help="导出本机ICS文件（默认保存到Study Kit数据目录）")
+    p = cmd(sub, "skipped", cmd_skipped, json_flag=True, help="按设置没下载的文件，可以挑几个补下")
+    p.add_argument("course", nargs="?", help="只看这门课")
+    p.add_argument("--get", nargs="+", metavar="编号", help="补下这几个：编号、文件名的一部分，或 all")
+    p.add_argument("--videos", action="store_true", help="录像也列出来")
     p = cmd(sub, "changes", cmd_changes, json_flag=True, help="本机记录的课程变更，默认最近一轮同步")
     group = p.add_mutually_exclusive_group()
     group.add_argument("--since", help="带时区的 ISO 时间")
@@ -1201,6 +1334,9 @@ def main(argv: list[str] | None = None) -> int:
     except LookupError as e:                   # 包括 edquery.NotFound
         print(e, file=sys.stderr)
         return EXIT_NOT_FOUND
+    except jobs.SyncBusy as e:
+        print(e, file=sys.stderr)
+        return 1
     except ValueError as e:
         print(e, file=sys.stderr)
         return EXIT_USAGE

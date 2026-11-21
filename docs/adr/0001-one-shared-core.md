@@ -15,7 +15,7 @@ By October 2026 the copies had drifted both ways. Zip search and `since_days` on
 Server-only behaviour is a setting, not a fork:
 
 - paths: `MONASH_KIT_DATA`, `MONASH_KIT_SECRETS`, `MONASH_KIT_ED_DATA`, `MONASH_KIT_ED_TOKEN`;
-- choices: `name_limit`, `pdf_extractor`, `download_videos`, each also settable as `MONASH_KIT_<NAME>`.
+- choices: `name_limit`, `pdf_extractor`, `download_videos`, `max_file_mb`, `skip_types`, each also settable as `MONASH_KIT_<NAME>`.
 
 Defaults stay what a student on a laptop needs.
 

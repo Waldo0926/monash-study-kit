@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import json
 import os
 import re
@@ -87,13 +89,15 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
     try:
         courses = load_courses(client, con)
         targets = only or tracked_courses(con, courses)
-        total = {"courses": [], "downloaded": 0, "bytes": 0, "removed": 0, "errors": 0, "failures": []}
+        total = {"courses": [], "downloaded": 0, "bytes": 0, "removed": 0, "errors": 0, "failures": [],
+                 "too_large": 0, "skipped_types": 0, "new_skips": []}
         for course in targets:
             cmids = None if retry_failures is None else {f["cmid"] for f in retry_failures if f["course_id"] == course["id"]}
             if cmids == set():
                 continue
             log(f"Moodle {course_code(course) or course_folder(course)}")
-            stats = CourseSync(client, con, course, dry_run=dry_run, log=log, only_cmids=cmids).run()
+            sync = CourseSync(client, con, course, dry_run=dry_run, log=log, only_cmids=cmids)
+            stats = sync.run()
             if not dry_run and retry_failures is None:
                 from . import google_export
                 econ = edlib.db_connect()
@@ -109,6 +113,9 @@ def sync_moodle(log=print, only: list[dict] | None = None, dry_run: bool = False
             total["downloaded"] += stats.downloaded
             total["bytes"] += stats.bytes
             total["removed"] += stats.removed
+            total["too_large"] += stats.too_large
+            total["skipped_types"] += stats.skipped_types
+            total["new_skips"] += sync.new_skips[:50]
             total["errors"] += len(stats.errors)
             total["failures"] += [{"course_id": course["id"], "cmid": cid} for cid in stats.failed_cmids]
         if not dry_run:
@@ -303,3 +310,19 @@ def _lock() -> bool:
 
 def _unlock() -> None:
     Path(LOCK_FILE).unlink(missing_ok=True)
+
+
+class SyncBusy(RuntimeError):
+    """另一个进程（多半是 AI 软件里的后台同步）正在同步。"""
+
+
+@contextmanager
+def sync_lock():
+    """只同步一门课、补下跳过的文件这些也要拿同一把锁：两边同时写同一个课程目录，
+    clean_partials 会删掉对方正在下的临时文件，数据库也会互相覆盖。"""
+    if not _lock():
+        raise SyncBusy("后台正在同步，等它跑完再试（monash status 能看到进度）")
+    try:
+        yield
+    finally:
+        _unlock()

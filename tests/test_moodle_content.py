@@ -12,8 +12,9 @@ BASE = "https://learning.monash.edu"
 
 
 class FakeMoodle:
-    def __init__(self, cms, pages=None, data=None):
+    def __init__(self, cms, pages=None, data=None, headers=None):
         self.cms, self.pages, self.data = cms, pages or {}, data or {}
+        self.headers = headers or {}
         self.requests = []
 
     def course_state(self, cid):
@@ -29,11 +30,17 @@ class FakeMoodle:
         target = self.pages.get(url, url)
         return target, None, SimpleNamespace(status=200, headers={})
 
-    def download(self, url, dest):
+    def download(self, url, dest, *, check=None, max_bytes=None):
         self.requests.append(url)
+        resp = SimpleNamespace(headers=self.headers.get(url, {}), url=url, status=200)
+        if check is not None:
+            check(resp)
+        data = self.data[url]
+        if max_bytes is not None and len(data) > max_bytes:
+            raise moodlelib.DownloadSkipped("size", "", len(data))
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(self.data[url])
-        return SimpleNamespace(headers={}, url=url)
+        dest.write_bytes(data)
+        return resp
 
 
 def cm(kind, n=1, name="Sample"):

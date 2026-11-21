@@ -24,8 +24,10 @@ ATTACHMENT_MAX = 200 * 1024 * 1024  # 正文里附的单个文件最多 200 MB�
 
 
 def _safe_name(name: str) -> str:
-    name = _UNSAFE_NAME.sub("_", name or "file").strip() or "file"
-    return name[:120]
+    from .syncer import windows_safe
+    name = _UNSAFE_NAME.sub("_", name or "file").strip()
+    # Windows 不认结尾的点和空格，也不让用 CON、NUL 这类名字
+    return windows_safe(name[:120].rstrip(" .")) or "file"
 
 
 def _label(name: str | None, fallback: str) -> str:
@@ -33,7 +35,8 @@ def _label(name: str | None, fallback: str) -> str:
     Windows 不允许结尾是点或空格。"""
     s = re.sub(r"\s*:\s*", " - ", (name or "").strip())
     s = re.sub(r"\s+", " ", _UNSAFE_NAME.sub("-", s)).strip(" .")
-    return s[:NAME_MAX].rstrip(" .") or fallback
+    from .syncer import windows_safe
+    return windows_safe(s[:NAME_MAX].rstrip(" .")) or fallback
 
 
 def course_folder(code: str | None, course_id: int) -> str:
