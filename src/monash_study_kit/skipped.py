@@ -30,6 +30,10 @@ def list_skipped(con, course_id: int | None = None, include_videos: bool = True)
     if course_id is not None:
         where.append("course_id=?")
         params.append(course_id)
+    else:
+        # 换学期后不再跟踪的课不会再同步，它们的记录也不会被清掉，默认别列出来
+        where.append("(course_id IN (SELECT id FROM courses WHERE tracked=1)"
+                     " OR NOT EXISTS (SELECT 1 FROM courses WHERE tracked=1))")
     if not include_videos:
         where.append("reason != 'video'")
     if where:

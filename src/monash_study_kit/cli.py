@@ -410,9 +410,7 @@ def cmd_skipped(args):
         total = SK.total_bytes(rows)
         if total:
             print(f"\n知道大小的一共约 {SK._mb(total)}")
-        videos = 0 if args.videos else con.execute(
-            "SELECT COUNT(*) FROM skipped WHERE reason='video'" + (" AND course_id=?" if cid else ""),
-            (cid,) if cid else ()).fetchone()[0]
+        videos = 0 if args.videos else sum(r["reason"] == "video" for r in SK.list_skipped(con, cid))
         if videos:
             print(f"\n另外有 {videos} 个录像没下载，加 --videos 一起列出来")
         print("\n只要其中几个：monash skipped --get 3 7（也可以写文件名的一部分，all 是全部）")

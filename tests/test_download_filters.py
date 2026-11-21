@@ -407,3 +407,12 @@ def test_ai_can_ask_for_skipped_files(env, monkeypatch):
     msg = M.t_sync({"get_skipped": "dataset"})
     M._sync_thread.join(5)
     assert "1 个文件" in msg and [r["name"] for r in got] == ["dataset.csv"]
+
+
+def test_untracked_units_are_left_out_of_the_list(env, monkeypatch):
+    from monash_study_kit import skipped as SK
+    client, _ = _two_big_files(env, monkeypatch)
+    run(env, client)
+    env[0].execute("INSERT INTO courses (id, code, fullname, tracked) VALUES (2, 'FIT2000', 'New unit', 1)")
+    assert SK.list_skipped(env[0]) == []                       # FIT1000 已经不跟踪了
+    assert len(SK.list_skipped(env[0], 1)) == 2                # 点名要看还是能看

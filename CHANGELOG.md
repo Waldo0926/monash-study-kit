@@ -12,7 +12,7 @@ Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patc
 - After `monash sync`, the files skipped for the first time are named with their size, together with the commands to get them.
 - Raising the limit or turning videos on now downloads the skipped files on the next sync, including files inside a folder zip that was cached less than seven days ago. Files already downloaded are not downloaded again.
 - The AI app can download skipped files too: `sync_monash_data(get_skipped="3,7")` runs in the background like a sync. `list_files(skipped=true)` tells it to mention the size first.
-- `monash skipped` shows the total size, and `--get` checks there is enough free disk space before it starts.
+- `monash skipped` shows the total size and only lists units you still track (name a unit to see an old one); `--get` checks there is enough free disk space before it starts.
 - A file skipped after reading its response headers is not requested again on later syncs unless the settings now allow it.
 - `monash doctor --deep` no longer reports files skipped by these settings as missing.
 - Fix: `monash sync <unit>`, `monash export --sync` and `monash skipped --get` now take the same sync lock as the background sync. Running one while the AI app was syncing could delete the other's partial downloads.
