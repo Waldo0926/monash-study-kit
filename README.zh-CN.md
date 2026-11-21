@@ -142,8 +142,8 @@ monash login
 
 `monash sync` 默认把课程放在 Moodle 上的文件都下下来，只有两类例外：
 
-- **录像**：直接传到 Moodle 的视频只记成链接。想下载：`monash config download_videos true`
-- **超过 300 MB 的文件**：比如很大的数据集，记成链接并写上大小。改上限：`monash config max_file_mb 100`，填 `0` 就是不限
+- **录像**：直接传到 Moodle 的视频只记成链接；想下载：`monash config download_videos true`
+- **超过 300 MB 的文件**：比如很大的数据集，记成链接并写上大小；改上限：`monash config max_file_mb 100`，填 `0` 就是不限
 
 也可以整类不下：
 
@@ -151,7 +151,9 @@ monash login
 monash config skip_types audio,images
 ```
 
-能填的类别：`pdf`、`slides`、`docs`、`sheets`、`archives`、`images`、`audio`、`code`。想恢复就运行 `monash config skip_types ""`
+能填的类别：`pdf`、`slides`、`docs`、`sheets`、`archives`、`images`、`audio`、`code`
+
+想恢复就运行 `monash config skip_types ""`
 
 只想这一次不一样、不改设置的话：
 
@@ -160,9 +162,19 @@ monash sync --videos                          # 这次连录像一起下
 monash sync --max-mb 50 --skip-types archives
 ```
 
-录像除了看文件名，还会看 Moodle 返回的文件类型，地址里没有 `.mp4` 的录像也认得出来。Moodle 文件夹里的文件也按同样的规则处理。改了这些设置，已经下好的文件也不会被删
+录像除了看文件名，还会看 Moodle 返回的文件类型，地址里没有 `.mp4` 的录像也认得出来
 
-**看看跳过了哪些，想要的再补下。** 每次 `monash sync` 完会列出这次新跳过的文件。跳过的文件也会以链接的形式出现在每周的 `links.md` 里，整门课导出时列在“没导出的内容”里。想看全部、带编号的清单：
+Moodle 文件夹里的文件也按同样的规则处理
+
+改了这些设置，已经下好的文件也不会被删
+
+**看看跳过了哪些，想要的再补下
+
+** 每次 `monash sync` 完会列出这次新跳过的文件
+
+跳过的文件也会以链接的形式出现在每周的 `links.md` 里，整门课导出时列在“没导出的内容”里
+
+想看全部、带编号的清单：
 
 ```bash
 monash skipped              # 后面加课号只看一门课，加 --videos 连录像一起列
@@ -178,22 +190,32 @@ FIT2109
 
 然后按需要补下：
 
-- **只要几个**：`monash skipped --get 3 7`。也可以写文件名的一部分（`monash skipped --get dataset`），写 `all` 就是全部。这样补下的不受大小上限和排除类型的限制
-- **要很多个**：调大上限再同步一次，比如 `monash sync --max-mb 2000` 或 `monash config max_file_mb 0`。已经下好的不会重下，只会补上之前跳过的
+- **只要几个**：`monash skipped --get 3 7`；也可以写文件名的一部分（`monash skipped --get dataset`），写 `all` 就是全部；这样补下的不受大小上限和排除类型的限制
+- **要很多个**：调大上限再同步一次，比如 `monash sync --max-mb 2000` 或 `monash config max_file_mb 0`；已经下好的不会重下，只会补上之前跳过的
 
 在 AI 软件里也可以直接问“有哪些文件没下载？”
 
 ### 同步只成功了一部分
 
-`monash status` 会显示上次同步是完整还是部分成功，`monash sync --retry-failed` 只重试失败的部分。`monash changes --days 7` 列出开始同步以来课程里的变化：新上或换掉的课件、作业说明、截止时间和 Ed 上的教师回复，这些记录都只存在你电脑上。Moodle 登录过期时，工具会用自己的浏览器配置在后台悄悄登回去，不会自己弹出 MFA 窗口；不想要的话 `monash config auto_relogin false`。详细见 [docs/reliability.md](docs/reliability.md)（英文）
+`monash status` 会显示上次同步是完整还是部分成功，`monash sync --retry-failed` 只重试失败的部分
+
+`monash changes --days 7` 列出开始同步以来课程里的变化：新上或换掉的课件、作业说明、截止时间和 Ed 上的教师回复，这些记录都只存在你电脑上
+
+Moodle 登录过期时，工具会用自己的浏览器配置在后台悄悄登回去，不会自己弹出 MFA 窗口；不想要的话 `monash config auto_relogin false`
+
+详细见 [docs/reliability.md](docs/reliability.md)（英文）
 
 ### 对照评语看自己交的作业
 
-在 AI 软件里问，比如“把我 A2 交的文件读一遍，再对照老师的评语逐条说说”。AI 先用 `list_moodle_assignments` 找到作业，再用 `read_file` 读它的 `read_path`，拿到你或你们组交的文件、在线文本和 Moodle 上能看到的完整反馈。终端里是 `monash moodle submission <cmid>`，cmid 是 `monash moodle assignments` 里的活动 ID，不是课程 ID
+在 AI 软件里问，比如“把我 A2 交的文件读一遍，再对照老师的评语逐条说说”
+
+AI 先用 `list_moodle_assignments` 找到作业，再用 `read_file` 读它的 `read_path`，拿到你或你们组交的文件、在线文本和 Moodle 上能看到的完整反馈
+
+终端里是 `monash moodle submission <cmid>`，cmid 是 `monash moodle assignments` 里的活动 ID，不是课程 ID
 
 - PDF 可以按页读，ZIP 里的文本、代码、PDF、Word 和 PPT 也能读
-- 交过的文件用你自己的 Moodle 登录下载，单独放在 `data/submissions/`，不进课件库、全文搜索和整课导出。每次读都会重新检查权限，单个下载最多 256 MiB
-- 只导课程资料的账号读不了这些。视频不会自动转文字，扫描版 PDF 还是要 OCR
+- 交过的文件用你自己的 Moodle 登录下载，单独放在 `data/submissions/`，不进课件库、全文搜索和整课导出；每次读都会重新检查权限，单个下载最多 256 MiB
+- 只导课程资料的账号读不了这些；视频不会自动转文字，扫描版 PDF 还是要 OCR
 
 ### AI 没额度了也能用
 
@@ -241,12 +263,16 @@ monash google login  # 仅导出课程链接中的 Google 文件时需要；独�
 monash export FIT1043 --sync --format both --to "./exports"
 ```
 
-将 `FIT1043` 换成自己的课号。资料包包含 Moodle 文件、Page、Book、作业说明和能看到的评分细则、Ed Lessons 及可访问的 Google 文件；不包含个人提交、成绩、邮件或考勤。包里的 `README` 会列出没导出的内容和原因
+将 `FIT1043` 换成自己的课号
 
-- **存到哪**：在终端里运行时会先弹窗选文件夹（默认上次选的，没有就是“下载”）。用 `--to 文件夹` 或 `--no-ask` 跳过弹窗
-- **PDF 还是 Markdown**：正文页、链接清单、测验和索引默认导出成 PDF，课件原件照常放在旁边。生成 PDF 要装 Chrome、Edge 或 Brave，没有的话自动改用 Markdown 并说明。`--format both` 两种都要，`--format md` 只要 Markdown，`monash config export_format both` 改默认值。本机同步的 Markdown 不变，照样给 AI 和搜索用
-- **要最新的**：加 `--sync` 先同步这门 Moodle 课和对应的 Ed Lessons 再导出。不加就只用电脑上已有的
-- **Google 文件**（Moodle 或 Ed Lessons 里链接的）：先运行一次 `monash google login`。Slides 和 Docs 导出成 PDF（`monash config google_docs_format docx` 改成 Word），Sheets 导出 XLSX，其他 Drive 文件按原格式；Google 表单导不了。第一次授权 Google 会提示“此应用未经验证”，点“高级”再继续就行。学校管理的账号可能被管理员拦下，这时链接保留为链接，索引里写明原因。只下载课程里链接到的文件，不会去翻你整个 Drive。`monash sync FIT1043 --refresh-google` 重新导出，`monash google logout` 吊销授权
+资料包包含 Moodle 文件、Page、Book、作业说明和能看到的评分细则、Ed Lessons 及可访问的 Google 文件；不包含个人提交、成绩、邮件或考勤
+
+包里的 `README` 会列出没导出的内容和原因
+
+- **存到哪**：在终端里运行时会先弹窗选文件夹（默认上次选的，没有就是“下载”）；用 `--to 文件夹` 或 `--no-ask` 跳过弹窗
+- **PDF 还是 Markdown**：正文页、链接清单、测验和索引默认导出成 PDF，课件原件照常放在旁边；生成 PDF 要装 Chrome、Edge 或 Brave，没有的话自动改用 Markdown 并说明；`--format both` 两种都要，`--format md` 只要 Markdown，`monash config export_format both` 改默认值；本机同步的 Markdown 不变，照样给 AI 和搜索用
+- **要最新的**：加 `--sync` 先同步这门 Moodle 课和对应的 Ed Lessons 再导出；不加就只用电脑上已有的
+- **Google 文件**（Moodle 或 Ed Lessons 里链接的）：先运行一次 `monash google login`；Slides 和 Docs 导出成 PDF（`monash config google_docs_format docx` 改成 Word），Sheets 导出 XLSX，其他 Drive 文件按原格式；Google 表单导不了；第一次授权 Google 会提示“此应用未经验证”，点“高级”再继续就行；学校管理的账号可能被管理员拦下，这时链接保留为链接，索引里写明原因；只下载课程里链接到的文件，不会去翻你整个 Drive；`monash sync FIT1043 --refresh-google` 重新导出，`monash google logout` 吊销授权
 
 ![1.11.2 实际离线导出与 ZIP 内容，使用合成课程数据](docs/screenshots/course-export.png)
 
@@ -285,7 +311,15 @@ monash attendance sync
 
 每次对话开头都要多发一些工具说明：两部分都登录后约多 1,900 token（总共 5,132，不登录时是 3,232）；不登录就没有任何变化。
 
-**考勤登录过期了**：`monash attendance maintain` 会检查，能的话用这台电脑上已有的浏览器配置悄悄登回去。Monash 要密码或 MFA 时它会报告 `needs_login`，这时自己运行 `monash attendance login`。失败一次后一小时内不会再试，`monash attendance renew --timeout 30` 可以手动试一次。工具不会替你输密码或 MFA，电脑睡眠或断网时也没法保证一直登录着。从图片里识别签到码需要 Python 3.11 以上
+**考勤登录过期了**：`monash attendance maintain` 会检查，能的话用这台电脑上已有的浏览器配置悄悄登回去
+
+Monash 要密码或 MFA 时它会报告 `needs_login`，这时自己运行 `monash attendance login`
+
+失败一次后一小时内不会再试，`monash attendance renew --timeout 30` 可以手动试一次
+
+工具不会替你输密码或 MFA，电脑睡眠或断网时也没法保证一直登录着
+
+从图片里识别签到码需要 Python 3.11 以上
 
 还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户。
 
@@ -597,7 +631,7 @@ Ed 的 lesson 大多没有截止日期；作业截止以 Moodle 为准。`get_st
 
 ## 各版本说明
 
-新的在前。每一处改动都在[更新日志](CHANGELOG.md)里，各功能怎么用写在上面对应的章节
+新的在前，每一处改动都在[更新日志](CHANGELOG.md)里，各功能怎么用写在上面对应的章节
 
 - **1.16**：[选择下载哪些文件](#选择下载哪些文件)，可以设大小上限、整类不下，`monash skipped` 查看并补下跳过的文件
 - **1.15**：`monash uninstall` 会顺便吊销 Google 授权；1.11.2 之后第一次发到 PyPI
