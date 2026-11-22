@@ -62,17 +62,17 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖
 
 ## 安装
 
-**最省事：让 AI 帮你装
+**最快的办法：交给 AI 装**
 
-** 如果你的 AI 能跑命令（Claude Code、Codex、Cursor 的 agent、Gemini CLI），把下面这句发给它，剩下的它来装：
+如果你用的 AI 能在电脑上跑命令（Claude Code、Codex、Cursor、Gemini CLI），把这句话发给它就行：
 
 ```text
-Read https://docs.secureview.tech/agents/study-kit.md and set up Monash Study Kit on my computer.
+帮我安装 Monash Study Kit，步骤在这里：https://docs.secureview.tech/agents/study-kit.md
 ```
 
-你自己只要在终端里粘贴 Ed 令牌、过 Monash 的 MFA，到时候 AI 会提醒你
+安装和设置它会自己做完，只有粘贴 Ed 令牌和过 Monash 的 MFA 要你自己在终端里操作，到那一步它会告诉你
 
-详细说明见[让 AI 帮你装](https://docs.secureview.tech/zh-cn/ai-setup/)
+详细说明见[用 AI 安装](https://docs.secureview.tech/zh-cn/ai-setup/)
 
 不用 AI 的话，也只要一条命令：装好 `uv` 和本工具，然后直接进入 `monash setup`（可以先[看看脚本内容](https://docs.secureview.tech/zh-cn/study-kit/install/)）：
 
