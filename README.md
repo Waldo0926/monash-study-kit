@@ -22,16 +22,16 @@ Connect Monash **Moodle** and **Ed** to the AI app on your computer (Claude, Cod
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/panel-todo.png" alt="The to-do panel: assignments due soon, a possibly missed exercise, Ed lessons not started, new files and announcements, with walk-through and quiz buttons"></td>
+<td width="50%"><img src="docs/screenshots/panel-todo-en.png" alt="The to-do panel: assignments due soon, a possibly missed exercise, Ed lessons not started, new files and announcements, with walk-through and quiz buttons"></td>
 <td width="50%"><img src="docs/screenshots/ask-assignment-en.png" alt="Asked what Assignment 2 asks for, the AI lists what to submit, the mark split, the moved deadline and a tutor's note on Ed, each with its source"><br><br><img src="docs/screenshots/ask-topic-en.png" alt="Asked which week covered regression, the AI gives the slide pages, the Ed pre-class lesson and a time in the recording"></td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/ask-ed-en.png" alt="Asked what staff added on Ed, the AI lists three new staff replies and who wrote each"></td>
-<td><img src="docs/screenshots/panel-quiz.png" alt="The quiz panel: a question with four clickable options"></td>
+<td><img src="docs/screenshots/panel-quiz-en.png" alt="The quiz panel: a question with four clickable options"></td>
 </tr>
 </table>
 
-<sub>Made-up course data. The panels are rendered from Study Kit's own panel code; their labels are in Chinese.</sub>
+<sub>Made-up course data. The panels are rendered from Study Kit's own panel code and follow your AI app's language.</sub>
 
 You can also run **`monash semester --days 7`** for a combined private week view of Moodle deadlines, Ed lessons/replies and any locally cached attendance records. Add **`--ics`** to export a private `semester.ics` into the Study Kit data directory, or **`--ics /path/to/file.ics`** to choose a path. This is a one-time calendar snapshot, not a live subscription; deadline times must be verified with Moodle. No personal semester data is uploaded to Monash Hub.
 

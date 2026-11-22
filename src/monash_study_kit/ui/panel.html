@@ -73,6 +73,55 @@
   const PROTOCOL = "2026-01-26";
   let nextId = 1;
   const pending = new Map();
+  // 面板文字跟宿主的语言走：中文界面显示中文，其他语言显示英文
+  let LANG = /^zh/i.test(navigator.language || "") ? "zh" : "en";
+  const TEXT = {
+    zh: {
+      error: "出错了", nothing: "没有可显示的内容", unknown: "不认识的视图",
+      past: "已过", underHour: "不到 1 小时", hours: (n) => `${n} 小时`, days: (n) => `${n} 天`,
+      kind: { "due date": "截止", due: "截止", "is due": "截止", closes: "关闭", opens: "开放", "cut-off date": "最终截止" },
+      next: (n) => `接下来 ${n} 天`, due: "要交 / 要做", missing: "可能漏交", notSubmitted: "没交",
+      notStarted: "Ed 还没开始的 lesson", walk: "带我过一遍", practise: "练测验",
+      half: (n) => `另外 ${n} 个 lesson 做了一半。`, newFiles: "新上的课件", open: "打开",
+      news: "最近公告", unread: "Ed 上有未读回复", replies: "看回复", free: "这段时间没有要做的事 🎉",
+      helpTitle: "能帮你做的事", helpHint: "点示例直接发出去；也可以用自己的话问。",
+      progress: (c) => `${c} · Ed lesson 进度`, noLessons: "这门课在 Ed 上没有 lesson。",
+      noQuiz: "这节没有测验题。", quiz: "测验", qOf: (i, n, a) => `第 ${i} / ${n} 题 · 已答 ${a}`, multi: "多选",
+      prev: "← 上一题", nextQ: "下一题 →", submit: (a, n) => `交给 AI 批改（${a}/${n}）`,
+      count: (t, n) => `${t}（${n}）`, sep: "、", none: "（没答）",
+      askWalk: (c, t) => `用 get_ed_lessons 带我过一遍 ${c} 的 “${t}”：先讲要点，再用这节的测验题考考我。`,
+      askPractise: (c, t) => `用 get_ed_lessons 给我练 ${c} “${t}” 的测验题，lesson 选这节，quiz=true。`,
+      askOpen: (p) => `用 read_file 打开 ${p}：能读的就总结要点，zip 就列出内容，其他文件告诉我本地位置。`,
+      askThread: (r) => `用 read_ed_thread 读 ${r}，告诉我新回复说了什么。`,
+      picked: (x) => `   我选：${x}`,
+      askMark: (c, l, body) => `这是我做 ${c} “${l}” 测验的答案。Ed 不公开标准答案，请用 get_ed_lessons 读这节正文，逐题判断对错并简短解释，最后告诉我该回去看哪几部分：\n\n${body}`,
+      dateLocale: "zh-CN",
+    },
+    en: {
+      error: "Something went wrong", nothing: "Nothing to show", unknown: "Unknown view",
+      past: "Past", underHour: "Under 1 hour", hours: (n) => `${n} h`, days: (n) => `${n} days`,
+      kind: { "due date": "Due", due: "Due", "is due": "Due", closes: "Closes", opens: "Opens", "cut-off date": "Cut-off" },
+      next: (n) => `Next ${n} days`, due: "Due", missing: "Possibly missed", notSubmitted: "Not submitted",
+      notStarted: "Ed lessons not started", walk: "Walk me through", practise: "Practise quiz",
+      half: (n) => `${n} more lesson${n > 1 ? "s are" : " is"} half done.`, newFiles: "New files", open: "Open",
+      news: "Announcements", unread: "Unread replies on Ed", replies: "Read replies", free: "Nothing due in this period 🎉",
+      helpTitle: "What I can help with", helpHint: "Tap an example to send it, or ask in your own words.",
+      progress: (c) => `${c} · Ed lesson progress`, noLessons: "This unit has no lessons on Ed.",
+      noQuiz: "This lesson has no quiz questions.", quiz: "Quiz", qOf: (i, n, a) => `Question ${i} of ${n} · ${a} answered`, multi: "Pick all",
+      prev: "← Back", nextQ: "Next →", submit: (a, n) => `Send to AI to mark (${a}/${n})`,
+      count: (t, n) => `${t} (${n})`, sep: ", ", none: "(no answer)",
+      askWalk: (c, t) => `Use get_ed_lessons to walk me through "${t}" in ${c}: go over the key points first, then quiz me with this lesson's questions.`,
+      askPractise: (c, t) => `Use get_ed_lessons to give me the quiz questions from "${t}" in ${c}, with this lesson and quiz=true.`,
+      askOpen: (p) => `Use read_file to open ${p}: summarise it if it can be read, list the contents if it's a zip, otherwise tell me where it is on my computer.`,
+      askThread: (r) => `Use read_ed_thread to read ${r} and tell me what the new replies say.`,
+      picked: (x) => `   My answer: ${x}`,
+      askMark: (c, l, body) => `Here are my answers to the "${l}" quiz in ${c}. Ed doesn't publish the answers, so use get_ed_lessons to read this lesson, mark each question with a short explanation, and tell me which parts to go back to:\n\n${body}`,
+      dateLocale: "en-AU",
+    },
+  };
+  const T = () => TEXT[LANG];
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+
   const post = (msg) => window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*");
   const request = (method, params) => new Promise((resolve, reject) => {
     const id = nextId++;
@@ -96,6 +145,11 @@
   });
 
   function applyContext(ctx) {
+    const loc = typeof ctx.locale === "string" ? ctx.locale : "";
+    if (loc) {
+      const next = /^zh/i.test(loc) ? "zh" : "en";
+      if (next !== LANG) { LANG = next; document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en"; if (view) render(); }
+    }
     if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
     const vars = ctx.styles && ctx.styles.variables;
     if (vars) for (const [k, v] of Object.entries(vars)) if (v) document.documentElement.style.setProperty(k, v);
@@ -107,7 +161,7 @@
   new ResizeObserver(() => notify("ui/notifications/size-changed",
     { height: Math.ceil(document.documentElement.getBoundingClientRect().height) })).observe(document.body);
 
-  request("ui/initialize", { appInfo: { name: "monash-panel", version: "1.4.0" }, appCapabilities: {}, protocolVersion: PROTOCOL })
+  request("ui/initialize", { appInfo: { name: "monash-panel", version: "1.5.0" }, appCapabilities: {}, protocolVersion: PROTOCOL })
     .then((r) => { applyContext((r && r.hostContext) || {}); notify("ui/notifications/initialized"); })
     .catch(() => notify("ui/notifications/initialized"));
   if (matchMedia("(prefers-color-scheme: dark)").matches && !document.documentElement.dataset.theme)
@@ -123,7 +177,7 @@
     if (!v && res.structuredContent && res.structuredContent.kind) v = res.structuredContent;
     if (!v) {
       const t = (res.content || []).find((c) => c.type === "text");
-      root.replaceChildren(el("div", { class: "empty", style: "white-space:pre-wrap;max-height:40em;overflow:auto" }, t ? t.text : (res.isError ? "出错了" : "没有可显示的内容")));
+      root.replaceChildren(el("div", { class: "empty", style: "white-space:pre-wrap;max-height:40em;overflow:auto" }, t ? t.text : (res.isError ? T().error : T().nothing)));
       return;
     }
     view = v; quiz.i = 0; quiz.picks = {};
@@ -146,62 +200,62 @@
   function when(iso) {
     if (!iso) return "";
     const d = new Date(iso);
-    return d.toLocaleString("zh-CN", { month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleString(T().dateLocale, { month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" });
   }
   function left(iso) {
     const h = (new Date(iso) - Date.now()) / 36e5;
-    if (h < 0) return ["已过", "warn"];
-    if (h < 48) return [h < 1 ? "不到 1 小时" : `${Math.round(h)} 小时`, "soon"];
-    return [`${Math.round(h / 24)} 天`, ""];
+    if (h < 0) return [T().past, "warn"];
+    if (h < 48) return [h < 1 ? T().underHour : T().hours(Math.round(h)), "soon"];
+    return [T().days(Math.round(h / 24)), ""];
   }
 
   function render() {
     const f = { todo: renderTodo, progress: renderProgress, quiz: renderQuiz, help: renderHelp }[view.kind];
-    root.replaceChildren(...(f ? f(view) : [el("div", { class: "empty" }, "不认识的视图")]));
+    root.replaceChildren(...(f ? f(view) : [el("div", { class: "empty" }, T().unknown)]));
   }
 
   function section(title, items, row) {
-    return items && items.length ? [el("h3", {}, `${title}（${items.length}）`), ...items.map(row)] : [];
+    return items && items.length ? [el("h3", {}, T().count(title, items.length)), ...items.map(row)] : [];
   }
 
   function renderTodo(v) {
-    const kind = { "due date": "截止", due: "截止", "is due": "截止", closes: "关闭", opens: "开放", "cut-off date": "最终截止" };
-    const out = [el("h2", {}, `接下来 ${v.days} 天`)];
+    const kind = T().kind;
+    const out = [el("h2", {}, T().next(v.days))];
     (v.notes || []).forEach((n) => out.push(el("div", { class: "note" }, "⚠ " + n)));
-    out.push(...section("要交 / 要做", v.due, (d) => {
+    out.push(...section(T().due, v.due, (d) => {
       const [txt, cls] = left(d.due);
       return el("div", { class: "card" }, el("div", { class: "row" },
         el("span", { class: "chip " + cls }, txt),
         el("span", { class: "grow title" }, el("b", {}, d.course, " "), link(d.activity || d.name, d.url)),
         el("span", { class: "muted" }, `${kind[d.kind] || d.kind} · ${when(d.due)}`)));
     }));
-    out.push(...section("可能漏交", v.possibly_missing, (a) => el("div", { class: "card" }, el("div", { class: "row" },
-      el("span", { class: "chip warn" }, "没交"), el("span", { class: "grow title" }, el("b", {}, a.course, " "), link(a.name, a.url)),
+    out.push(...section(T().missing, v.possibly_missing, (a) => el("div", { class: "card" }, el("div", { class: "row" },
+      el("span", { class: "chip warn" }, T().notSubmitted), el("span", { class: "grow title" }, el("b", {}, a.course, " "), link(a.name, a.url)),
       el("span", { class: "muted" }, when(a.due))))));
     const notStarted = (v.ed_lessons || []).filter((l) => l.status !== "attempted");
     const half = (v.ed_lessons || []).length - notStarted.length;
-    out.push(...section("Ed 还没开始的 lesson", notStarted, (l) => el("div", { class: "card" }, el("div", { class: "row" },
+    out.push(...section(T().notStarted, notStarted, (l) => el("div", { class: "card" }, el("div", { class: "row" },
       el("span", { class: "grow title" }, el("b", {}, l.course, " "), link(l.title, l.url)),
-      acts(btn("带我过一遍", () => say(`用 get_ed_lessons 带我过一遍 ${l.course} 的 “${l.title}”：先讲要点，再用这节的测验题考考我。`)),
-        l.has_quiz ? btn("练测验", () => say(`用 get_ed_lessons 给我练 ${l.course} “${l.title}” 的测验题，lesson 选这节，quiz=true。`)) : null)))));
-    if (half) out.push(el("div", { class: "muted" }, `另外 ${half} 个 lesson 做了一半。`));
-    out.push(...section("新上的课件", v.new_files, (f) => el("div", { class: "card" }, el("div", { class: "row" },
+      acts(btn(T().walk, () => say(T().askWalk(l.course, l.title))),
+        l.has_quiz ? btn(T().practise, () => say(T().askPractise(l.course, l.title))) : null)))));
+    if (half) out.push(el("div", { class: "muted" }, T().half(half)));
+    out.push(...section(T().newFiles, v.new_files, (f) => el("div", { class: "card" }, el("div", { class: "row" },
       el("span", { class: "grow title" }, el("b", {}, f.course, " "), f.path.split("/").pop()),
       el("span", { class: "muted" }, when(f.synced_at)),
-      acts(btn("打开", () => say(`用 read_file 打开 ${f.path}：能读的就总结要点，zip 就列出内容，其他文件告诉我本地位置。`)))))));
-    out.push(...section("最近公告", v.announcements, (n) => el("div", { class: "card" }, el("div", { class: "row" },
+      acts(btn(T().open, () => say(T().askOpen(f.path))))))));
+    out.push(...section(T().news, v.announcements, (n) => el("div", { class: "card" }, el("div", { class: "row" },
       el("span", { class: "grow title" }, el("b", {}, n.course, " "), link(n.title, n.url)),
       el("span", { class: "muted" }, when(n.time))))));
-    out.push(...section("Ed 上有未读回复", v.ed_unread_replies, (t) => el("div", { class: "card" }, el("div", { class: "row" },
+    out.push(...section(T().unread, v.ed_unread_replies, (t) => el("div", { class: "card" }, el("div", { class: "row" },
       el("span", { class: "chip" + (t.mine_or_watched ? " ok" : "") }, `+${t.new}`),
       el("span", { class: "grow title" }, link(`${t.ref} ${t.title}`, t.url)),
-      btn("看回复", () => say(`用 read_ed_thread 读 ${t.ref}，告诉我新回复说了什么。`))))));
-    if (out.length === 1) out.push(el("div", { class: "empty" }, "这段时间没有要做的事 🎉"));
+      btn(T().replies, () => say(T().askThread(t.ref)))))));
+    if (out.length === 1) out.push(el("div", { class: "empty" }, T().free));
     return out;
   }
 
   function renderHelp(v) {
-    const out = [el("h2", {}, "能帮你做的事"), el("div", { class: "muted" }, "点示例直接发出去；也可以用自己的话问。")];
+    const out = [el("h2", {}, T().helpTitle), el("div", { class: "muted" }, T().helpHint)];
     for (const g of v.groups) {
       out.push(el("h3", {}, g.name));
       for (const it of g.items) out.push(el("div", { class: "card" },
@@ -213,7 +267,7 @@
   }
 
   function renderProgress(v) {
-    const out = [el("h2", {}, `${v.course} · Ed lesson 进度`)];
+    const out = [el("h2", {}, T().progress(v.course))];
     for (const m of v.modules) {
       const pct = m.total ? Math.round(100 * m.completed / m.total) : 0;
       out.push(el("div", { class: "card" },
@@ -223,16 +277,16 @@
         ...m.unfinished.map((l) => el("div", { class: "row" },
           el("span", { class: "muted" }, l.status === "attempted" ? "◐" : "○"),
           el("span", { class: "grow title" }, link(l.title, l.url)),
-          acts(btn("带我过一遍", () => say(`用 get_ed_lessons 带我过一遍 ${v.course} 的 “${l.title}”：先讲要点，再用这节的测验题考考我。`)),
-            l.has_quiz ? btn("练测验", () => say(`用 get_ed_lessons 给我练 ${v.course} “${l.title}” 的测验题，lesson 选这节，quiz=true。`)) : null)))));
+          acts(btn(T().walk, () => say(T().askWalk(v.course, l.title))),
+            l.has_quiz ? btn(T().practise, () => say(T().askPractise(v.course, l.title))) : null)))));
     }
-    if (!v.modules.length) out.push(el("div", { class: "empty" }, "这门课在 Ed 上没有 lesson。"));
+    if (!v.modules.length) out.push(el("div", { class: "empty" }, T().noLessons));
     return out;
   }
 
   function renderQuiz(v) {
     const qs = v.questions;
-    if (!qs.length) return [el("div", { class: "empty" }, "这节没有测验题。")];
+    if (!qs.length) return [el("div", { class: "empty" }, T().noQuiz)];
     const q = qs[quiz.i];
     const picked = quiz.picks[quiz.i] || [];
     const toggle = (k) => {
@@ -243,20 +297,20 @@
     };
     const answered = Object.values(quiz.picks).filter((p) => p.length).length;
     const submit = () => {
-      const lines = qs.map((x, i) => `${x.n}. ${x.question}\n   我选：${(quiz.picks[i] || []).map((k) => String.fromCharCode(65 + k)).join("、") || "（没答）"}`);
-      say(`这是我做 ${v.course} “${v.lesson}” 测验的答案。Ed 不公开标准答案，请用 get_ed_lessons 读这节正文，逐题判断对错并简短解释，最后告诉我该回去看哪几部分：\n\n${lines.join("\n")}`);
+      const lines = qs.map((x, i) => `${x.n}. ${x.question}\n` + T().picked((quiz.picks[i] || []).map((k) => String.fromCharCode(65 + k)).join(T().sep) || T().none));
+      say(T().askMark(v.course, v.lesson, lines.join("\n")));
     };
     return [
       el("h2", {}, `${v.lesson}`),
-      el("div", { class: "row muted" }, el("span", { class: "grow" }, v.quiz_title || "测验"), `第 ${quiz.i + 1} / ${qs.length} 题 · 已答 ${answered}`),
+      el("div", { class: "row muted" }, el("span", { class: "grow" }, v.quiz_title || T().quiz), T().qOf(quiz.i + 1, qs.length, answered)),
       el("div", { class: "card" },
-        el("div", {}, el("b", {}, `${q.n}. `), q.multiple ? el("span", { class: "chip" }, "多选") : null, " ", q.question),
+        el("div", {}, el("b", {}, `${q.n}. `), q.multiple ? el("span", { class: "chip" }, T().multi) : null, " ", q.question),
         ...q.options.map((o, k) => el("button", { class: "opt" + (picked.includes(k) ? " picked" : ""), on: { click: () => toggle(k) } },
           `${String.fromCharCode(65 + k)}. ${o}`))),
       el("div", { class: "nav" },
-        btn("← 上一题", () => { quiz.i--; render(); }, null),
-        quiz.i < qs.length - 1 ? btn("下一题 →", () => { quiz.i++; render(); }) :
-          btn(`交给 AI 批改（${answered}/${qs.length}）`, submit, "primary")),
+        btn(T().prev, () => { quiz.i--; render(); }, null),
+        quiz.i < qs.length - 1 ? btn(T().nextQ, () => { quiz.i++; render(); }) :
+          btn(T().submit(answered, qs.length), submit, "primary")),
     ].map((n, i, all) => { if (i === all.length - 1) n.firstChild.disabled = quiz.i === 0; return n; });
   }
 })();
