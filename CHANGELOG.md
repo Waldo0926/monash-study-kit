@@ -2,6 +2,11 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.17.0
+
+- The to-do, lesson progress and quiz panels now show English when your AI app is set to a language other than Chinese, and Chinese when it is set to Chinese. The messages the panel buttons send to the AI follow the same language.
+- The English README shows the panels in English.
+
 ## 1.16.1
 
 - `monash setup` now asks whether your units use Ed before opening Ed's token page. Many business, arts and media units don't use Ed; answering no (or running `monash setup --no-ed`) skips Ed and sets up Moodle only. `monash login ed` turns it on later.
