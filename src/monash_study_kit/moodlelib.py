@@ -2,7 +2,7 @@
 
 登录靠浏览器里拿到的 cookie（Okta SAML 没法在这里走，见 browser_login.py）。Monash 关掉了
 移动端 Web Service（tool_mobile_get_public_config 里 enablemobilewebservice=0），
-所以 moodle-cli 那种"用移动端令牌无限续期"的办法在这里用不了，只能靠定时
+所以没法用移动端令牌来续期，只能靠定时
 core_session_touch 让会话一直不空闲。
 """
 from __future__ import annotations
