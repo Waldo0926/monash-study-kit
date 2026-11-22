@@ -51,13 +51,13 @@ Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work
 
 ## Installation
 
-**Easiest: let your AI do it.** If your AI app can run commands (Claude Code, Codex, Cursor's agent, Gemini CLI), paste this line and it installs everything:
+**Quickest way: ask your AI.** If your AI app can run commands on your computer (Claude Code, Codex, Cursor, Gemini CLI), send it this:
 
 ```text
-Read https://docs.secureview.tech/agents/study-kit.md and set up Monash Study Kit on my computer.
+Install Monash Study Kit for me. The steps are here: https://docs.secureview.tech/agents/study-kit.md
 ```
 
-You only paste your Ed token and pass Monash MFA yourself, in your own terminal. The AI tells you when. More on this: [let your AI set it up](https://docs.secureview.tech/ai-setup/).
+It handles the install and setup. Two things you do yourself in the terminal: paste your Ed token and finish Monash MFA. It will let you know when. More details: [setting up with AI](https://docs.secureview.tech/ai-setup/).
 
 Otherwise it is one command, which installs `uv`, the kit and then starts `monash setup` (you can [read the scripts](https://docs.secureview.tech/study-kit/install/) first):
 
