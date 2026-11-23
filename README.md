@@ -633,6 +633,7 @@ You probably deleted the token on Ed's token page. Create a new one there and ru
 
 Newest first. [CHANGELOG.md](CHANGELOG.md) has every change, and how to use each feature is in the sections above.
 
+- **1.17**: the to-do, lesson progress and quiz panels follow your AI app's language, English or Chinese
 - **1.16**: [choose what gets downloaded](#choose-what-gets-downloaded) with a size limit and kinds of files to leave out, plus `monash skipped` to see and get what was left out
 - **1.15**: `monash uninstall` also revokes Google access; first PyPI release since 1.11.2
 - **1.14**: the [attendance login](#optional-gmail-and-attendance) comes back on its own when it can
