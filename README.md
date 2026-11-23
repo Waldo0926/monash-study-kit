@@ -705,6 +705,10 @@ Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruf
 
 </details>
 
+## Acknowledgements
+
+The Moodle part of this project took its design and feature set from [moodle-cli](https://github.com/bunizao/moodle-cli) by [bunizao](https://github.com/bunizao). The code here was written separately in Python. bunizao also made [edstem-cli](https://github.com/bunizao/edstem-cli), which is worth a look if you want a general Ed tool that works at any school. Thanks for building these in the open.
+
 ## License
 
 MIT. This is an independent student-built tool, not affiliated with Monash University, Ed or Anthropic.
