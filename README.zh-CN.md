@@ -51,7 +51,7 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)
 
-本项目 Moodle 部分基于 [bunizao](https://github.com/bunizao) 的 [moodle-cli](https://github.com/bunizao/moodle-cli)，见[致谢](#致谢)
+本项目 Moodle 的查询命令（overview、due、grades、alerts、论坛等）基于 [bunizao](https://github.com/bunizao) 的 [moodle-cli](https://github.com/bunizao/moodle-cli)，见[致谢](#致谢)
 
 **第一次用？** [安装](#安装) · [第一次设置](#第一次设置monash-setup) · [平时怎么用](#平时怎么用) · [常见问题](#常见问题)
 
@@ -929,7 +929,7 @@ CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外�
 
 | 项目 | 做什么 | 和本项目的关系 | 协议 |
 |---|---|---|---|
-| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle 命令行工具，查截止日期、成绩、论坛 | 本项目 Moodle 部分基于它 | MIT |
+| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle 命令行工具，查截止日期、成绩、论坛 | 本项目 Moodle 的查询命令和它们的实现方式（浏览器会话、AJAX 接口加网页解析）基于它 | MIT |
 | [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed 命令行工具和 MCP，任何学校都能用 | 同类工具，本项目的 Ed 部分来自我之前自己做的 Ed 项目 | MIT |
 
 感谢 bunizao 把这些项目开源出来
