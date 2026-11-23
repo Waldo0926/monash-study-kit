@@ -40,7 +40,7 @@ All Moodle and Ed tools are **read-only**: they never submit assignments, attemp
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
 
-The Moodle part of this project is based on [moodle-cli](https://github.com/bunizao/moodle-cli) by [bunizao](https://github.com/bunizao). See [Acknowledgements](#acknowledgements).
+The Moodle query commands in this project (overview, due, grades, alerts, forums and others) are based on [moodle-cli](https://github.com/bunizao/moodle-cli) by [bunizao](https://github.com/bunizao). See [Acknowledgements](#acknowledgements).
 
 **New here?** [Install](#installation) · [First-time setup](#first-time-setup-monash-setup) · [Everyday use](#everyday-use) · [FAQ](#faq)
 
@@ -713,7 +713,7 @@ Other open source projects for Monash students that this one relates to:
 
 | Project | What it does | How it relates | License |
 |---|---|---|---|
-| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle part here is based on it | MIT |
+| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle query commands here, and the way they work through the browser session, Moodle's AJAX API and page parsing, are based on it | MIT |
 | [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed CLI and MCP server that works at any school | Similar tool. The Ed part here comes from my own earlier Ed project | MIT |
 
 Thanks to bunizao for building these in the open.
