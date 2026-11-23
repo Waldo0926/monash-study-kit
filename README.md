@@ -40,6 +40,8 @@ All Moodle and Ed tools are **read-only**: they never submit assignments, attemp
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
 
+The Moodle part of this project is based on [moodle-cli](https://github.com/bunizao/moodle-cli) by [bunizao](https://github.com/bunizao). See [Acknowledgements](#acknowledgements).
+
 **New here?** [Install](#installation) · [First-time setup](#first-time-setup-monash-setup) · [Everyday use](#everyday-use) · [FAQ](#faq)
 
 ## Requirements
@@ -711,7 +713,7 @@ Other open source projects for Monash students that this one relates to:
 
 | Project | What it does | How it relates | License |
 |---|---|---|---|
-| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle commands here follow its design. The code is a separate Python implementation | MIT |
+| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle part here is based on it. The code is a separate Python implementation | MIT |
 | [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed CLI and MCP server that works at any school | Similar tool. The Ed part here grew out of my own earlier Ed projects and was written independently | MIT |
 
 Thanks to bunizao for building these in the open.
