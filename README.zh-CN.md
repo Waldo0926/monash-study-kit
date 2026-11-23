@@ -921,6 +921,14 @@ CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外�
 
 </details>
 
+## 致谢
+
+本项目 Moodle 部分的设计和功能参考了 [bunizao](https://github.com/bunizao) 的 [moodle-cli](https://github.com/bunizao/moodle-cli)，代码是用 Python 另外写的
+
+bunizao 还做了 [edstem-cli](https://github.com/bunizao/edstem-cli)，想要一个任何学校都能用的 Ed 工具可以去看看
+
+感谢他把这些项目开源出来
+
 ## 许可
 
 MIT
