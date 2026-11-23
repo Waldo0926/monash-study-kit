@@ -923,11 +923,14 @@ CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外�
 
 ## 致谢
 
-本项目 Moodle 部分的设计和功能参考了 [bunizao](https://github.com/bunizao) 的 [moodle-cli](https://github.com/bunizao/moodle-cli)，代码是用 Python 另外写的
+和本项目有关的其他 Monash 开源项目：
 
-bunizao 还做了 [edstem-cli](https://github.com/bunizao/edstem-cli)，想要一个任何学校都能用的 Ed 工具可以去看看
+| 项目 | 做什么 | 和本项目的关系 | 协议 |
+|---|---|---|---|
+| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle 命令行工具，查截止日期、成绩、论坛 | 本项目 Moodle 部分的命令设计参考了它，代码是用 Python 另外写的 | MIT |
+| [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed 命令行工具和 MCP，任何学校都能用 | 同类工具，本项目的 Ed 部分来自我之前自己做的 Ed 项目，是独立写的 | MIT |
 
-感谢他把这些项目开源出来
+感谢 bunizao 把这些项目开源出来
 
 ## 许可
 

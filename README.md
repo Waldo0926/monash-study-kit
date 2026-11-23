@@ -707,7 +707,14 @@ Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruf
 
 ## Acknowledgements
 
-The Moodle part of this project took its design and feature set from [moodle-cli](https://github.com/bunizao/moodle-cli) by [bunizao](https://github.com/bunizao). The code here was written separately in Python. bunizao also made [edstem-cli](https://github.com/bunizao/edstem-cli), which is worth a look if you want a general Ed tool that works at any school. Thanks for building these in the open.
+Other open source projects for Monash students that this one relates to:
+
+| Project | What it does | How it relates | License |
+|---|---|---|---|
+| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle commands here follow its design. The code is a separate Python implementation | MIT |
+| [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed CLI and MCP server that works at any school | Similar tool. The Ed part here grew out of my own earlier Ed projects and was written independently | MIT |
+
+Thanks to bunizao for building these in the open.
 
 ## License
 
