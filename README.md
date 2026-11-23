@@ -711,8 +711,8 @@ Other open source projects for Monash students that this one relates to:
 
 | Project | What it does | How it relates | License |
 |---|---|---|---|
-| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle commands here follow its design. The code is a separate Python implementation | MIT |
-| [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed CLI and MCP server that works at any school | Similar tool. The Ed part here grew out of my own earlier Ed projects and was written independently | MIT |
+| [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle part took ideas and the command structure from it | MIT |
+| [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed CLI and MCP server that works at any school | Similar tool. The Ed part here comes from my own earlier Ed project | MIT |
 
 Thanks to bunizao for building these in the open.
 
