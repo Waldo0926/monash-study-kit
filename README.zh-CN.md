@@ -438,12 +438,14 @@ Monash 要密码或 MFA 时它会报告 `needs_login`，这时自己运行 `mona
 - **安全边界，** MCP 默认只注册只读工具（`ontrack_units`、`ontrack_tasks`、`ontrack_task_sheet`、`ontrack_chats`，都不会把评论标为已读）；只有显式开启 `monash config ontrack_write_enabled true`（或登录时加 `--allow-write`）后才增加经预览与确认执行的 `ontrack_prepare_action`（读评论历史、发评论、改任务状态），且绝不通过 MCP 提交作业文件；终端里的写操作（`set`、`submit`、`chat-send` 以及会标已读的 `chats <课程> <任务>`）均须先预览并加 `--confirm` / `--yes`（或用 `--dry-run` 先看计划）；远程配对页上 `ontrack.read` 默认勾选、`ontrack.write` 默认不勾
 
 ```bash
-monash ontrack login --url https://<你的OnTrack域名>   # 登录时请勾选 Remember me 以便自动续期
+monash ontrack login                                    # 默认连接 https://ontrack.infotech.monash.edu；登录时勾选 Remember me
 monash ontrack sync                                     # 同步到本地缓存，并入 monash todo / semester
 monash ontrack tasks FIT2004
 monash ontrack read FIT2004 1.1P                        # 把任务书 PDF 转成 Markdown
 monash ontrack chats FIT2004                            # 只读查看各任务未读导师评论数
 ```
+
+如需连接其他 OnTrack / Doubtfire 站点，可加 `--url https://<域名>` 或设置 `monash config ontrack_url`
 
 还没验证的：真实 Monash OnTrack / Doubtfire 站点上的实机登录、作业提交和弹性日期边界情况（目前基于 OnTrack API 契约完成离线测试）
 

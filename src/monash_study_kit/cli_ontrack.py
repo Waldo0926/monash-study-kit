@@ -499,7 +499,7 @@ def add_commands(sub) -> None:
         p.add_argument("--yes", "-y", action="store_true", help="同 --confirm")
 
     p = cmd("login", "登录 OnTrack / Doubtfire（默认复用本机专用浏览器配置）")
-    p.add_argument("--url", help="OnTrack 站点地址（HTTPS），如 https://ontrack.example.edu")
+    p.add_argument("--url", help=f"OnTrack 站点地址（默认 {ontrack.DEFAULT_BASE_URL}）")
     p.add_argument("--window", action="store_true", help="直接开登录窗口，不先试后台自动续期")
     p.add_argument("--paste", action="store_true", help="粘贴 Cookie / cURL / access-token JSON 或 refresh_token 登录")
     p.add_argument("--username", help="配合 --paste 粘贴裸 refresh_token 时指定用户名")

@@ -314,12 +314,14 @@ New in 1.18.0. Off until you sign in, pure Python (no Node.js or extra packages 
 - **Safety boundaries.** By default, MCP exposes only read-only OnTrack tools (`ontrack_units`, `ontrack_tasks`, `ontrack_task_sheet`, `ontrack_chats`, none of which mark comments read). Enabling optional MCP writes (`monash config ontrack_write_enabled true` or `monash ontrack login --allow-write`) adds preview-and-confirm actions (`chat_read`, `chat_send`, `task_state`) via `ontrack_prepare_action` + `execute_student_action`, and never exposes file submission in MCP. In the terminal, mutating commands (`set`, `submit`, `chat-send`, and reading a task's chat history which marks comments read on OnTrack) show a preview and require confirmation (`--confirm` / `--yes`, or `--dry-run` to inspect first). With `monash remote serve`, `ontrack.read` defaults to ticked and `ontrack.write` to unticked on the pairing page.
 
 ```bash
-monash ontrack login --url https://<your-ontrack-host>   # tick "Remember me" for refresh-cookie renewal
+monash ontrack login                                     # defaults to https://ontrack.infotech.monash.edu; tick "Remember me"
 monash ontrack sync                                      # cache active units/tasks for monash todo & semester
 monash ontrack tasks FIT2004
 monash ontrack read FIT2004 1.1P                         # task sheet PDF as Markdown
 monash ontrack chats FIT2004                             # unread tutor comment counts (read-only)
 ```
+
+Use `--url https://<host>` (or `monash config ontrack_url`) if you need a different OnTrack / Doubtfire site.
 
 Not verified yet: live sign-in, task submission, and flexible-date edge cases against a real Monash OnTrack/Doubtfire deployment (tested offline against simulated OnTrack API contracts).
 

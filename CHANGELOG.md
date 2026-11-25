@@ -2,6 +2,10 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.18.1
+
+- Default `ontrack_url` to Monash's OnTrack site (`https://ontrack.infotech.monash.edu`), so `monash ontrack login` works without passing `--url` (`--url`, `ONTRACK_BASE_URL` and `monash config ontrack_url` still override it).
+
 ## 1.18.0
 
 - Optional pure-Python OnTrack / Doubtfire support (`monash ontrack`), inspired by and crediting [`bunizao/ontrack-cli`](https://github.com/bunizao/ontrack-cli) (MIT License), with no Node.js or extra runtime dependencies.

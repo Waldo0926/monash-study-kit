@@ -33,6 +33,7 @@ SESSION_FILE = SECRETS_DIR / "ontrack-session.json"
 CACHE_DIR = DATA_DIR / "ontrack"
 CACHE_FILE = CACHE_DIR / "snapshot.json"
 SHEETS_DIR = CACHE_DIR / "sheets"
+DEFAULT_BASE_URL = "https://ontrack.infotech.monash.edu"
 
 MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024
 MAX_ERROR_BYTES = 64 * 1024
@@ -161,12 +162,11 @@ def configured_base_url(explicit: str | None = None) -> str:
         os.environ.get("MONASH_KIT_ONTRACK_URL"),
         os.environ.get("ONTRACK_BASE_URL"),
         load_settings().get("ontrack_url"),
+        DEFAULT_BASE_URL,
     ):
         if candidate and str(candidate).strip():
             return normalize_base_url(str(candidate))
-    raise OnTrackAuthError(
-        "尚未配置 OnTrack 站点地址。请运行 monash ontrack login --url https://<你的OnTrack域名>"
-    )
+    return DEFAULT_BASE_URL
 
 
 def _redact(text: str, *secrets_to_hide: str | None) -> str:
@@ -887,7 +887,12 @@ def resolve_session(
 
 def local_status() -> dict[str, Any]:
     settings = load_settings()
-    url = os.environ.get("MONASH_KIT_ONTRACK_URL") or os.environ.get("ONTRACK_BASE_URL") or settings.get("ontrack_url") or ""
+    url = (
+        os.environ.get("MONASH_KIT_ONTRACK_URL")
+        or os.environ.get("ONTRACK_BASE_URL")
+        or settings.get("ontrack_url")
+        or DEFAULT_BASE_URL
+    )
     stored = load_stored_session()
     now = _now_utc()
     refresh_expiry = None
