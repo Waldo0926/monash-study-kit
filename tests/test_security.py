@@ -161,12 +161,13 @@ def _real_chromium():
 def test_pipe_cdp_talks_to_a_real_browser_without_opening_a_port(tmp_path):
     from monash_study_kit.cdp import PipeCDP
     # CI 上的 google-chrome 偶尔启动很慢（第一次运行、找钥匙串），30 秒不够，多给点时间，能跳过的都跳过
-    c = PipeCDP([_real_chromium(), "--headless=new", "--no-sandbox", f"--user-data-dir={tmp_path}",
-                 "--no-first-run", "--no-default-browser-check", "--password-store=basic",
+    c = PipeCDP([_real_chromium(), "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+                 f"--user-data-dir={tmp_path}", "--no-first-run", "--no-default-browser-check",
+                 "--use-mock-keychain", "--password-store=basic",
                  "--remote-debugging-pipe", "about:blank"])
     try:
         assert c.call("Browser.getVersion", timeout=90)["product"].startswith(("Chrome", "HeadlessChrome"))
-        assert c.call("Storage.getCookies") == {"cookies": []}
+        assert c.call("Storage.getCookies", timeout=60) == {"cookies": []}
         assert not (tmp_path / "DevToolsActivePort").exists()      # 开端口的话 Chrome 会写这个文件
     finally:
         try:
