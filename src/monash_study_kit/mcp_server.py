@@ -218,8 +218,11 @@ def _student_hint(tools: dict) -> str:
                 + ("、学校邮件" if "get_gmail_inbox_todo" in tools else "")
                 + " 里找，候选码要给用户核对）。这几个返回 job_id，用 student_job_status 查结果。"
                 "登录过期请用户在终端运行 monash attendance login。")
+    if "ontrack_units" in tools:
+        out += ("问 OnTrack 任务进度、任务书或未读导师回复用 ontrack_units、ontrack_tasks、ontrack_task_sheet、"
+                "ontrack_chats（均只读，不标已读）；登录过期请用户在终端运行 monash ontrack login。")
     if "execute_student_action" in tools:
-        out += ("邮箱操作和签到提交先用对应的 prepare 工具拿到完整预览，原样给用户看；用户明确确认这一项后才调 "
+        out += ("邮箱、考勤和 OnTrack 写操作先用对应的 prepare 工具拿到完整预览，原样给用户看；用户明确确认这一项后才调 "
                 "execute_student_action（user_confirmed=true）。不能自己替用户确认，结果未知时不要重试，先去核对实际状态。")
     return out
 
@@ -977,6 +980,20 @@ PARAM_HELP = {
     ("student_job_status", "job_id"): "同步、找码、导出返回的 job_id",
     ("gmail_read_attachment", "message_id"): "邮件 ID，来自搜索结果或对话",
     ("gmail_read_attachment", "part_id"): "read_gmail_cached_thread 里附件的 part_id",
+    ("ontrack_units", "include_inactive"): "true=包含往期学期的课程",
+    ("ontrack_tasks", "unit"): "课程代码、名称或项目 ID（如 FIT2004）",
+    ("ontrack_tasks", "task"): "任务编号（如 1.1P）或 task_definition_id；省略=列全部任务",
+    ("ontrack_tasks", "statuses"): "按原始状态筛选，逗号分隔，如 not_started,fix_and_resubmit",
+    ("ontrack_task_sheet", "unit"): "课程代码、名称或项目 ID",
+    ("ontrack_task_sheet", "task"): "任务编号（如 1.1P）或 task_definition_id",
+    ("ontrack_task_sheet", "offset"): "Markdown 字符起点，默认0",
+    ("ontrack_task_sheet", "max_chars"): "最大字符数，默认20000，最高100000",
+    ("ontrack_chats", "unit"): "课程代码、名称或项目 ID",
+    ("ontrack_prepare_action", "operation"): "chat_read（读评论历史，会标已读）/ chat_send（发评论）/ task_state（改状态）",
+    ("ontrack_prepare_action", "unit"): "课程代码、名称或项目 ID",
+    ("ontrack_prepare_action", "task"): "任务编号（如 1.1P）或 task_definition_id",
+    ("ontrack_prepare_action", "message"): "chat_send 时要发送的完整评论正文",
+    ("ontrack_prepare_action", "state"): "task_state 时的目标状态：not_started / working_on_it / need_help",
 }
 
 ED_TOOLS = ("list_ed_updates", "search_ed_threads", "read_ed_thread", "get_ed_lessons", "export_ed_lessons")

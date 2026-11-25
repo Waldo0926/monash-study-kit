@@ -38,8 +38,12 @@ Talk to the student in the language they use with you. Command output is in Chin
 | Find a school email (optional) | `monash gmail search exchange` |
 | Which classes I haven't checked in to (optional) | `monash attendance overview` |
 | Attendance code for a class (optional) | `monash attendance codes` |
+| OnTrack units and task progress (optional, only if set up) | `monash ontrack courses` |
+| OnTrack tasks for a unit (optional) | `monash ontrack tasks FIT2004` |
+| Read an OnTrack task sheet PDF as Markdown (optional) | `monash ontrack read FIT2004 1.1P` |
+| Check OnTrack unread tutor comments (optional, read-only) | `monash ontrack chats FIT2004` |
 
-The Gmail and attendance rows only work if the student set them up; `monash help` lists them once they are on. If not, the command says what to install or log in to: pass that on and stop. School mail lives in this tool, so for "my email" questions prefer it over a general Gmail connector unless the student means another mailbox. Attendance codes from `monash attendance codes` are candidates found in course posts and mail: show where each came from and let the student check.
+The Gmail, attendance and OnTrack rows only work if the student set them up; `monash help` lists them once they are on. If not, the command says what to install or log in to: pass that on and stop. School mail lives in this tool, so for "my email" questions prefer it over a general Gmail connector unless the student means another mailbox. Attendance codes from `monash attendance codes` are candidates found in course posts and mail: show where each came from and let the student check. OnTrack write commands (`set`, `submit`, `chat-send`, and reading a single task's chat history which marks comments read on the server) require `--confirm` after showing the preview to the student; never pass `--confirm` without explicit confirmation.
 
 `monash grep` searches slides, PDFs, course web pages, Ed lessons and lecture transcripts (`.transcript.md`, with timestamps). Each hit has a file path under the student's Study Kit folder. Read that file to quote the original. No hit can mean the data is not synced yet: suggest `monash sync`. `monash help` lists every feature with an example question.
 

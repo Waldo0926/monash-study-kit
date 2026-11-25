@@ -2,6 +2,14 @@
 
 Version numbers follow `__version__` in `src/monash_study_kit/__init__.py`: patch for bug fixes, minor for new features.
 
+## 1.18.0
+
+- Optional pure-Python OnTrack / Doubtfire support (`monash ontrack`), inspired by and crediting [`bunizao/ontrack-cli`](https://github.com/bunizao/ontrack-cli) (MIT License), with no Node.js or extra runtime dependencies.
+- Reuses the dedicated isolated browser profile (`browser-profile`) for login and silent headless session renewal, plus `POST /api/auth/access-token` refresh-cookie renewal and `--paste` fallback.
+- Supports units, task progress/deadlines/grades, task sheet PDF-to-Markdown (`monash ontrack read` via `pypdf`), resource downloads, unread tutor chat counts, local snapshot sync (`monash ontrack sync`), and confirmation-gated writes (`set`, `submit`, `chats <unit> <task>`, `chat-send`).
+- When enabled (`ontrack_enabled`), synced OnTrack upcoming/overdue tasks and unread tutor comments are included in `monash todo`, `monash semester`, `monash status`, and `monash doctor`.
+- Optional local and remote MCP tools (`ontrack_units`, `ontrack_tasks`, `ontrack_task_sheet`, `ontrack_chats`, plus opt-in confirmation-gated `ontrack_prepare_action` when `ontrack_write_enabled` is turned on; file submission stays terminal/website-only).
+
 ## 1.17.0
 
 - The to-do, lesson progress and quiz panels now show English when your AI app is set to a language other than Chinese, and Chinese when it is set to Chinese. The messages the panel buttons send to the AI follow the same language.

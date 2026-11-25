@@ -27,6 +27,8 @@ def semester_data(todo_data: dict, attendance_data: dict | None = None) -> dict:
         "attendance": (attendance_data or {}).get("records", []),
         "notes": list(todo_data.get("notes", [])),
     }
+    if "ontrack" in todo_data:
+        data["ontrack"] = todo_data["ontrack"]
     if attendance_data is not None:
         data["notes"].append("考勤只显示已同步到本机的班次，缓存中没有记录不等于已经签到")
     elif load_settings().get("attendance_enabled"):
@@ -56,6 +58,15 @@ def render(data: dict) -> str:
         lines.append(f"\n本地考勤缓存（{len(data['attendance'])}）")
         for item in data["attendance"]:
             lines.append(f"  {item.get('date','')} [{item.get('course','?')}] {item.get('session','')}：{item.get('status','unknown')}")
+    ot = data.get("ontrack")
+    if ot and (ot.get("due") or ot.get("attention") or ot.get("unread_chats")):
+        lines.append("\nOnTrack 任务与未读评论")
+        for item in ot.get("due", []):
+            lines.append(f"  {item.get('deadline','-')} [{item.get('course','?')}] {item.get('task','')} {item.get('name','')} ({item.get('status_label','')})")
+        for item in ot.get("attention", []):
+            lines.append(f"  ! {item.get('deadline','-')} [{item.get('course','?')}] {item.get('task','')} {item.get('name','')} ({item.get('status_label','')})")
+        for item in ot.get("unread_chats", []):
+            lines.append(f"  ● [{item.get('course','?')}] {item.get('task','')} +{item.get('unread_comments',0)} 条未读评论")
     return "\n".join(lines)
 
 def _escape(value: str) -> str:

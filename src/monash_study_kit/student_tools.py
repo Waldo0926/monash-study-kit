@@ -29,12 +29,15 @@ GMAIL_READ = ("gmail_read_attachment",)   # 附件不在镜像里时要下载，
 # 同步、找码、导出要开浏览器或读很多文件，交给后台任务，返回 job_id 再用 student_job_status 查
 ATTENDANCE_READ = ("attendance_status", "attendance_sync", "attendance_overview", "attendance_find_codes",
                    "attendance_export")
+ONTRACK_READ = ("ontrack_units", "ontrack_tasks", "ontrack_task_sheet", "ontrack_chats")
 JOB_STATUS = "student_job_status"
 GMAIL_WRITE = ("gmail_prepare_action",)
 ATTENDANCE_WRITE = ("attendance_prepare_submit",)
+ONTRACK_WRITE = ("ontrack_prepare_action",)
 EXECUTE = "execute_student_action"
 # 远程 MCP 按这个名单整组拒绝
-NAMES = frozenset(gmail_tools.TOOLS) | frozenset(GMAIL_READ + ATTENDANCE_READ + GMAIL_WRITE + ATTENDANCE_WRITE
+NAMES = frozenset(gmail_tools.TOOLS) | frozenset(GMAIL_READ + ATTENDANCE_READ + ONTRACK_READ
+                                                 + GMAIL_WRITE + ATTENDANCE_WRITE + ONTRACK_WRITE
                                                  + (EXECUTE, JOB_STATUS))
 
 
@@ -50,6 +53,10 @@ def scopes(settings: dict) -> set[str]:
         out.add("attendance.read")
         if settings.get("attendance_submit_enabled"):
             out.add("attendance.submit")
+    if settings.get("ontrack_enabled"):
+        out.add("ontrack.read")
+        if settings.get("ontrack_write_enabled"):
+            out.add("ontrack.write")
     return out
 
 
@@ -73,6 +80,9 @@ def _runner(name: str, granted: set[str]):
             raise PermissionError(f"Gmail 授权失效或权限不够（{e}）。请用户在终端运行 "
                                   "monash gmail login。") from e
         except RuntimeError as e:
+            from . import ontrack
+            if isinstance(e, ontrack.OnTrackAuthError):
+                raise PermissionError(f"OnTrack 登录过期或还没登录（{e}）。请用户在终端运行 monash ontrack login。") from e
             from .attendance import AttendanceAuthError
             if isinstance(e, AttendanceAuthError):
                 raise PermissionError(f"考勤门户登录过期或还没登录（{e}）。请用户在终端运行 monash attendance login。") from e
@@ -87,11 +97,15 @@ def tools(settings: dict) -> dict:
     names = list(GMAIL_READ) if "gmail.read" in granted else []
     if "attendance.read" in granted:
         names += ATTENDANCE_READ
+    if "ontrack.read" in granted:
+        names += ONTRACK_READ
     if "gmail.manage" in granted:
         names += GMAIL_WRITE
     if "attendance.submit" in granted:
         names += ATTENDANCE_WRITE
-    if granted & {"gmail.manage", "attendance.submit"}:
+    if "ontrack.write" in granted:
+        names += ONTRACK_WRITE
+    if granted & {"gmail.manage", "attendance.submit", "ontrack.write"}:
         names.append(EXECUTE)
     if "attendance.read" in granted:
         names.append(JOB_STATUS)
@@ -135,6 +149,8 @@ REMOTE_CHOICES = {
     "gmail.manage": "邮箱操作：起草、发送草稿、改标签。每次都先给你看预览，你确认后才执行",
     "attendance.read": "考勤（只读）：查班次和签到状态",
     "attendance.submit": "签到提交：你说自己到课了才准备，每次都要你确认",
+    "ontrack.read": "OnTrack（只读）：查课程、任务进度、任务书和未读评论数",
+    "ontrack.write": "OnTrack 写操作：读评论历史（会标已读）、发评论、改任务状态（不含交作业）；每次都要你确认",
 }
 
 
@@ -145,6 +161,8 @@ def remote_scopes(token_scopes, settings: dict) -> set[str]:
         granted.add("gmail.read")
     if "attendance.submit" in granted:
         granted.add("attendance.read")
+    if "ontrack.write" in granted:
+        granted.add("ontrack.read")
     return granted
 
 
@@ -190,6 +208,9 @@ def remote_call(name: str, arguments: dict, granted: set[str], owner: str) -> di
     except (ValueError, LookupError) as e:
         return _error(str(e))
     except Exception as e:  # noqa: BLE001
+        from . import ontrack
+        if isinstance(e, ontrack.OnTrackAuthError):
+            return _error(f"OnTrack 登录过期（{e}）。请用户在服务器的终端运行 monash ontrack login。")
         from .attendance import AttendanceAuthError
         if isinstance(e, AttendanceAuthError):
             return _error(f"考勤门户登录过期（{e}）。请用户在服务器的终端运行 monash attendance login。")
@@ -222,9 +243,11 @@ def remote_hint(granted: set[str]) -> str:
                 "连接器，除非用户明确说的是别的邮箱。")
     if "attendance.read" in granted:
         out += "问签到/考勤用 attendance_overview；签到码用 attendance_find_codes。"
-    if granted:
+    if "ontrack.read" in granted:
+        out += "问 OnTrack 课程/任务/任务书/未读导师评论用 ontrack_units、ontrack_tasks、ontrack_task_sheet、ontrack_chats。"
+    if granted & {"gmail.read", "attendance.read"}:
         out += "同步类工具返回 job_id，用 student_job_status 查结果。"
-    if granted & {"gmail.manage", "attendance.submit"}:
+    if granted & {"gmail.manage", "attendance.submit", "ontrack.write"}:
         out += ("写操作先用 prepare 工具拿完整预览原样给用户看，用户明确确认这一项后才调 execute_student_action"
                 "（user_confirmed=true）；不能自己替用户确认，结果未知时不要重试。")
     return out

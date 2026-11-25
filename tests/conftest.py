@@ -11,6 +11,8 @@ for key in tuple(os.environ):
 
 os.environ["MONASH_KIT_HOME"] = tempfile.mkdtemp(prefix="monash-kit-test-")
 os.environ.pop("ED_TOKEN", None)
+for key in ("ONTRACK_BASE_URL", "ONTRACK_USERNAME", "ONTRACK_AUTH_TOKEN"):
+    os.environ.pop(key, None)
 os.environ["MONASH_KIT_NO_UPDATE_CHECK"] = "1"   # 测试不联网查新版本；update_check 的测试自己打开
 
 

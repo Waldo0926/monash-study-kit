@@ -272,6 +272,11 @@ def cmd_status(args):
         print(f"考勤：已保存 {a['cached_records']} 个班次，上次读取 "
               f"{local_time(a['last_success'], '%Y-%m-%d %H:%M') if a['last_success'] else '还没有'}"
               + ("" if a["configured"] else "（还没登录 → monash attendance login）"))
+    if "ontrack" in out:
+        ot = out["ontrack"]
+        print(f"OnTrack：{ot['cached_units']} 门课、{ot['cached_tasks']} 个任务，上次同步 "
+              f"{local_time(ot['last_sync'], '%Y-%m-%d %H:%M') if ot['last_sync'] else '还没有'}"
+              + ("" if ot["configured"] else "（还没登录 → monash ontrack login）"))
 
 
 def _optional_status() -> dict:
@@ -290,6 +295,9 @@ def _optional_status() -> dict:
         if settings.get("attendance_enabled"):
             from . import attendance
             out["attendance"] = attendance.status()
+        if settings.get("ontrack_enabled"):
+            from . import ontrack
+            out["ontrack"] = ontrack.local_status()
     except Exception as e:  # noqa: BLE001
         out["optional_problem"] = f"{type(e).__name__}: {e}"
     return out
@@ -797,6 +805,15 @@ def cmd_todo(args):
         print("\n== Ed 上有未读新回复 ==")
         for t in data["ed_unread_replies"]:
             print(f"{t['ref']:<13} +{t['new']}  {t['title']}{'  ★我发的/关注的' if t['mine_or_watched'] else ''}")
+    ot = data.get("ontrack")
+    if ot and (ot.get("due") or ot.get("attention") or ot.get("unread_chats")):
+        print(f"\n== OnTrack 任务与评论（{data['days']} 天内 / 需跟进）==")
+        for t in ot.get("due", []):
+            print(f"{t.get('deadline') or '-':<12}  [{t['course']}] {t['task']} {t['name']}  ({t['status_label']})")
+        for t in ot.get("attention", []):
+            print(f"! {t.get('deadline') or '-':<10}  [{t['course']}] {t['task']} {t['name']}  ({t['status_label']})")
+        for t in ot.get("unread_chats", []):
+            print(f"● [{t['course']}] {t['task']} +{t['unread_comments']} 条未读导师/学生评论")
 
 
 KIND_ZH = {"due": "截止", "due date": "截止", "closes": "关闭", "is due": "截止", "opens": "开放",
@@ -1160,7 +1177,7 @@ class _Parser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from . import cli_attendance, cli_ed, cli_gmail, cli_google, cli_profile
+    from . import cli_attendance, cli_ed, cli_gmail, cli_google, cli_ontrack, cli_profile
     ap = _Parser(prog="monash", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"monash-study-kit {__version__}")
     sub = ap.add_subparsers(dest="cmd")
@@ -1292,6 +1309,8 @@ def build_parser() -> argparse.ArgumentParser:
     cli_gmail.add_commands(sub.add_parser("gmail", help="Gmail 同步、离线搜索与可选邮箱操作").add_subparsers(dest="gcmd", required=True))
     cli_attendance.add_commands(sub.add_parser("attendance", help="考勤门户：登录、状态、读取签到记录（要装 [attendance]）")
                                 .add_subparsers(dest="acmd", required=True))
+    cli_ontrack.add_commands(sub.add_parser("ontrack", help="OnTrack / Doubtfire：课程、任务、任务书、导师评论与提交")
+                             .add_subparsers(dest="ocmd", required=True))
     return ap
 
 
