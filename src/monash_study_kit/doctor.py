@@ -252,7 +252,7 @@ def check_ontrack() -> dict | None:
     from . import ontrack
     st = ontrack.local_status()
     if not st.get("base_url"):
-        return _check("OnTrack", FAIL, "未配置站点地址", "monash ontrack login --url https://<你的OnTrack域名>")
+        return _check("OnTrack", FAIL, "未配置站点地址", "monash ontrack login")
     if not st.get("configured"):
         return _check("OnTrack", FAIL, "还没登录 OnTrack", "monash ontrack login")
     hours = _age(st.get("last_sync"))

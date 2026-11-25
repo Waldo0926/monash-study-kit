@@ -201,10 +201,13 @@ def isolated_ontrack(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------- URL、安全边界与脱敏
 
-def test_normalize_base_url_enforces_https_and_rejects_credentials():
+def test_normalize_base_url_enforces_https_and_rejects_credentials(monkeypatch):
     assert ontrack.normalize_base_url("https://ontrack.example.edu/") == "https://ontrack.example.edu"
     assert ontrack.normalize_base_url("ontrack.example.edu/app/") == "https://ontrack.example.edu/app"
     assert ontrack.normalize_base_url("http://127.0.0.1:8080/") == "http://127.0.0.1:8080"
+    monkeypatch.setattr(ontrack, "load_settings", lambda: {})
+    assert ontrack.configured_base_url() == "https://ontrack.infotech.monash.edu"
+    assert ontrack.configured_base_url("https://other.example.edu/") == "https://other.example.edu"
     for bad in (
         "http://ontrack.example.edu",
         "https://user:pass@ontrack.example.edu",
