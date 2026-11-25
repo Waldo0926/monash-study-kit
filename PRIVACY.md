@@ -17,6 +17,7 @@ Depending on which parts you set up, the software signs in as you and reads:
 - **Google Drive** (optional, separate from Gmail): course-linked Google Docs, Slides, Sheets and Drive files that your account can access, exported to your own machine.
 - **Gmail** (optional): if you connect a Google account, messages, threads, labels and attachments, through the Gmail API.
 - **Attendance** (optional): your attendance records on the university attendance portal.
+- **OnTrack / Doubtfire** (optional): if you connect an OnTrack site, your enrolled units, tasks, due dates, grades, task sheets, resources and tutor comments. Access tokens and refresh cookies stay in `secrets/ontrack-session.json` (owner-only), and synced snapshots stay locally under `data/ontrack/`. By default MCP tools are read-only; optional write actions (`ontrack_write_enabled`) require explicit preview and confirmation and never submit graded files via MCP.
 
 Gmail access is requested only when you choose to connect it. The package includes a Google OAuth client (a "desktop app" registered in the maintainer's Google Cloud project) so you can sign in without creating your own. It only tells Google which app is asking; your mail goes from Google straight to your own computer and never passes through the maintainer, who cannot see your tokens or messages. You can use your own client instead with `--client`. By default the software asks for `gmail.modify`, which lets it read mail and, when you ask for it, create drafts, send a draft you reviewed or change labels (archive, mark as read, star). It cannot permanently delete email. If you only want reading, log in with `--read-only` and it asks for `gmail.readonly` instead. Every mailbox action and every attendance check-in runs only after you review the full preview and confirm that specific action.
 
@@ -76,7 +77,8 @@ Changes to this policy are published in this file, with the history visible in t
 - Gmail 为可选功能；普通 `monash gmail login` 默认申请 `gmail.modify`，可以读邮件、创建草稿、发送已审阅的草稿和修改标签。只需要读取时用 `monash gmail login --read-only`，申请 `gmail.readonly`。邮箱操作在你确认具体内容后才执行，软件不提供彻底删除邮件的操作。
 - Google 课程文件另用 `monash google login` 授权，独立保存令牌，只申请 `https://www.googleapis.com/auth/drive.readonly`；该权限允许读取账号有权访问的全部 Drive 文件，课程导出器实际处理所选课程中链接的文件，不能修改文件，也不授予 Gmail 权限。Docs、Slides 默认导出 PDF（Docs 可改 DOCX），Sheets 导出 XLSX，其他文件保留原格式。API 受限或文件过大时会尝试专用登录浏览器的 Google 会话，Cookie 只在内存中；失败项在索引中保留链接和原因。`monash google logout` 先吊销授权再删除本机令牌，失败则保留令牌供重试。
 - 命名 `--profile NAME` 隔离凭据、数据库、课件和浏览器会话，强制只导课程资料，跳过 Gmail、考勤和 Ed 讨论区；不能远程服务或用 `monash connect` 配置进 AI 软件。整课导出包含作业说明和可见评分标准，但排除个人提交、成绩、反馈、邮件、私信和考勤；导出是普通本地文件，分享前请检查内容。
-- 数据只发给你连接的服务（Moodle、Ed、Google、考勤门户）和你接入的 AI 应用（仅限它代你查询的结果）；不用于广告、不出售、不用于训练模型。
+- OnTrack / Doubtfire 为可选功能；登录后令牌与刷新 Cookie 仅保存在 `secrets/ontrack-session.json`（仅本人可读），同步的任务快照与任务书保存在本机 `data/ontrack/`。MCP 默认只读；开启可选写操作（`ontrack_write_enabled`）后每次操作也须先展示预览并获确认，且不通过 MCP 提交作业文件。
+- 数据只发给你连接的服务（Moodle、Ed、Google、考勤门户、OnTrack）和你接入的 AI 应用（仅限它代你查询的结果）；不用于广告、不出售、不用于训练模型。
 - 使用 Google API 获取的数据遵守 Google API Services User Data Policy 及其 Limited Use 要求。
 - 可随时在 <https://myaccount.google.com/permissions> 撤销 Google 授权，删除数据目录即可清除全部本地数据。
 

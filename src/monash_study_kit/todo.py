@@ -178,5 +178,17 @@ def build(client: MoodleClient | None, courses: list[dict], days: int = 7) -> di
     out["announcements"] = sorted(news, key=lambda n: _ts(n["time"]), reverse=True)
     from . import changes
     out["changes"] = changes.recent(limit=20)
+    if load_settings().get("ontrack_enabled"):
+        from . import ontrack
+        ot = ontrack.todo_summary(days)
+        if ot is not None:
+            if ot.get("missing_cache"):
+                notes.append("还没同步过 OnTrack（monash ontrack sync）：OnTrack 任务缺失")
+            out["ontrack"] = {
+                "synced_at": ot.get("synced_at"),
+                "due": ot.get("due", []),
+                "attention": ot.get("attention", []),
+                "unread_chats": ot.get("unread_chats", []),
+            }
     out["notes"] = notes
     return out

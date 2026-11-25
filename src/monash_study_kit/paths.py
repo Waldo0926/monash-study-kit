@@ -49,6 +49,9 @@ DEFAULTS = {
     "attendance_fast_read": True,   # 不开浏览器直接请求门户页面（结构对不上会自动改用浏览器）；monash attendance probe 可以对照
     "attendance_keepalive_minutes": 0,  # 多久用一次轻量请求给考勤登录续期；0 = 不续期，先测出登录能维持多久再定
     "attendance_submit_enabled": False,  # 考勤登录时自动打开：签到提交，每次先预览、用户确认才执行
+    "ontrack_enabled": False,     # monash ontrack login 成功后自动打开：OnTrack / Doubtfire 本地与远程 MCP 工具及待办整合
+    "ontrack_url": "",            # OnTrack / Doubtfire 站点地址（HTTPS），如 https://ontrack.example.edu
+    "ontrack_write_enabled": False,  # 默认只读；设为 true 后 MCP 允许预览并经用户确认后修改任务状态、读/发导师消息（不含交作业）
     "download_videos": False,     # 录像动辄几百 MB；没装 [media] 转不了字幕，下下来 Claude 也看不了
     "max_file_mb": 300,           # 单个课件超过多少 MB 就不下，记成链接；0 = 不限。整个文件夹的 zip 超了会改成一个个下
     "skip_types": "",             # 不下哪几类文件，逗号隔开：slides,docs,sheets,archives,images,audio,code,pdf（录像看 download_videos）

@@ -71,6 +71,16 @@ OPTIONAL = {
     "attendance_submit_enabled": ("签到提交（先预览，确认后才执行）", [
         ("你确认自己到课了，再用签到码帮你提交", "我刚上完 FIT2102 的 workshop，签到码是 ABCDE", ""),
     ]),
+    "ontrack_enabled": ("OnTrack / Doubtfire", [
+        ("列出 OnTrack 课程、任务进度、截止日期和等级", "我在 OnTrack 上 FIT2004 的任务做到哪了？", "monash ontrack tasks FIT2004"),
+        ("把任务书 PDF 转成 Markdown 阅读", "帮我读一下 FIT2004 任务 1.1P 的任务书", "monash ontrack read FIT2004 1.1P"),
+        ("查看各任务的未读导师评论数（只读，不标已读）", "OnTrack 上有没有导师的新回复？", "monash ontrack chats FIT2004"),
+        ("把 OnTrack 课程和任务同步到本地缓存，并入 monash todo", "同步一下 OnTrack", "monash ontrack sync"),
+    ]),
+    "ontrack_write_enabled": ("OnTrack 写操作（先预览，确认后才执行）", [
+        ("读取某任务完整导师评论历史（OnTrack 会标已读）或发送评论", "查看并回复 FIT2004 1.1P 的导师评论", "monash ontrack chats FIT2004 1.1P"),
+        ("修改任务进度状态（not_started / working_on_it / need_help）", "把 FIT2004 1.1P 标成 working_on_it", "monash ontrack set FIT2004 1.1P working_on_it"),
+    ]),
 }
 # 还没接上的可选功能放在“维护”里，告诉用户在 AI 里说一声就能接；接好了就不再显示
 SETUP = {
@@ -78,7 +88,11 @@ SETUP = {
     "attendance_enabled": ("接上考勤：自动安装、打开登录窗口，你只要登录", "帮我接上考勤", "monash attendance login"),
 }
 # 写操作要先开对应的只读功能
-REQUIRES = {"gmail_manage_enabled": "gmail_enabled", "attendance_submit_enabled": "attendance_enabled"}
+REQUIRES = {
+    "gmail_manage_enabled": "gmail_enabled",
+    "attendance_submit_enabled": "attendance_enabled",
+    "ontrack_write_enabled": "ontrack_enabled",
+}
 
 
 def features(settings: dict | None = None) -> list:

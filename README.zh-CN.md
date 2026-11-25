@@ -51,7 +51,7 @@ Moodle和Ed始终**只读**：不会交作业、做测验或在Ed发帖
 
 适合 Monash 马来西亚校区（时间按 UTC+8 处理）；澳洲校区也能用，见[常见问题](#常见问题)
 
-本项目 Moodle 的查询命令（overview、due、grades、alerts、论坛等）基于 [bunizao](https://github.com/bunizao) 的 [moodle-cli](https://github.com/bunizao/moodle-cli)，见[致谢](#致谢)
+本项目 Moodle 的查询命令（overview、due、grades、alerts、论坛等）基于 [bunizao](https://github.com/bunizao) 的 [moodle-cli](https://github.com/bunizao/moodle-cli)，可选的 OnTrack / Doubtfire 支持基于 [ontrack-cli](https://github.com/bunizao/ontrack-cli)，见[致谢](#致谢)
 
 **第一次用？** [安装](#安装) · [第一次设置](#第一次设置monash-setup) · [平时怎么用](#平时怎么用) · [常见问题](#常见问题)
 
@@ -427,6 +427,26 @@ Monash 要密码或 MFA 时它会报告 `needs_login`，这时自己运行 `mona
 
 还没验证的：考勤提交、考勤登录能维持多久、马来西亚以外校区的门户
 
+## 可选：OnTrack / Doubtfire
+
+1.18.0 新增
+
+默认关闭，纯 Python 实现（不需要 Node.js，也不增加任何额外依赖），只在你自己的电脑上运行
+
+- **复用现有登录体系，** 直接复用 Study Kit 的专用浏览器配置（`browser-profile`）：如果之前登录 Moodle 时 Okta 已经记住你，登录和静默续期都可以直接完成，绝不保存密码；日常访问令牌到期前会先用刷新 Cookie 走纯 HTTPS 换取（`POST /api/auth/access-token`），也支持 `--paste` 粘贴 Cookie、cURL、access-token JSON 或裸 `refresh_token`
+- **能做什么，** 列课程、查任务进度/截止日期/等级（含弹性日期与 special consideration 顺延）、用内置 `pypdf` 把任务书 PDF 转成 Markdown（`monash ontrack read`）、下载课程或任务资源、查各任务未读导师评论数；运行 `monash ontrack sync` 缓存后，`monash todo`、`monash semester`、`monash status` 和 `monash doctor` 会把 OnTrack 任务与未读评论一并整合进来
+- **安全边界，** MCP 默认只注册只读工具（`ontrack_units`、`ontrack_tasks`、`ontrack_task_sheet`、`ontrack_chats`，都不会把评论标为已读）；只有显式开启 `monash config ontrack_write_enabled true`（或登录时加 `--allow-write`）后才增加经预览与确认执行的 `ontrack_prepare_action`（读评论历史、发评论、改任务状态），且绝不通过 MCP 提交作业文件；终端里的写操作（`set`、`submit`、`chat-send` 以及会标已读的 `chats <课程> <任务>`）均须先预览并加 `--confirm` / `--yes`（或用 `--dry-run` 先看计划）；远程配对页上 `ontrack.read` 默认勾选、`ontrack.write` 默认不勾
+
+```bash
+monash ontrack login --url https://<你的OnTrack域名>   # 登录时请勾选 Remember me 以便自动续期
+monash ontrack sync                                     # 同步到本地缓存，并入 monash todo / semester
+monash ontrack tasks FIT2004
+monash ontrack read FIT2004 1.1P                        # 把任务书 PDF 转成 Markdown
+monash ontrack chats FIT2004                            # 只读查看各任务未读导师评论数
+```
+
+还没验证的：真实 Monash OnTrack / Doubtfire 站点上的实机登录、作业提交和弹性日期边界情况（目前基于 OnTrack API 契约完成离线测试）
+
 ## 多账号 / 只导课程资料
 
 命名 profile 是一个单独的账号，有自己的登录、文件、数据库和浏览器会话，放在数据目录的 `profiles/<名字>/` 里，适合有第二个 Monash 账号，或者想单独存一份只有课程资料的情况
@@ -689,6 +709,7 @@ npx skills add Waldo0926/monash-study-kit
 | `monash gmail todo` / `sync` / `search` / `thread` | 可选：学校邮箱的邮件待办 / 同步 / 离线搜索 / 读对话（[设置](#可选gmail-与考勤)） |
 | `monash attendance login` / `status` / `sync` / `overview` / `codes` | 可选：考勤登录 / 状态 / 读门户 / 已保存的班次 / 找签到码 |
 | `monash attendance renew` / `maintain` | 考勤登录过期时，用这台电脑上已有的浏览器登录状态试着恢复；要密码或 MFA 时会停下 |
+| `monash ontrack login` / `sync` / `courses` / `tasks` / `read` / `chats` | 可选：OnTrack / Doubtfire 登录 / 本地快照同步 / 课程 / 任务 / 任务书转 Markdown / 未读导师评论（[设置](#可选ontrack--doubtfire)） |
 | `monash update` | 更新到最新版 |
 
 加 `--json` 输出 JSON（输出被管道接走时自动是 JSON，`--text` 强制文本）
@@ -838,6 +859,7 @@ Ed 令牌没有吊销接口，要到 Ed 的令牌页面手动删
 
 新的在前，每一处改动都在[更新日志](CHANGELOG.md)里，各功能怎么用写在上面对应的章节
 
+- **1.18**：可选的纯 Python [OnTrack / Doubtfire](#可选ontrack--doubtfire) 整合（`monash ontrack`、MCP 工具及 `todo`/`semester` 缓存）
 - **1.17**：待办、lesson 进度和测验面板跟着 AI 软件的语言显示中文或英文
 - **1.16**：[选择下载哪些文件](#选择下载哪些文件)，可以设大小上限、整类不下，`monash skipped` 查看并补下跳过的文件
 - **1.15**：`monash uninstall` 会顺便吊销 Google 授权；1.11.2 之后第一次发到 PyPI
@@ -917,6 +939,7 @@ flowchart LR
 | `remote` | `monash remote`：可选的单用户远程 MCP，带配对码、OAuth 和 PKCE |
 | `doctor`、`doctor_deep`、`help_menu`、`update_check`、`claude_setup` | 体检和 `--deep` 对照核对、帮助和预设提示、新版本提示、接进 Claude |
 | `recordings`、`transcribe` | 可选：录播转带时间戳的字幕稿（`[media]`） |
+| `ontrack`、`cli_ontrack` | 可选：纯 Python OnTrack / Doubtfire 客户端、会话续期、任务书 PDF 阅读与本地快照缓存 |
 
 运行时依赖 `pypdf`，Windows 上另装轻量的 `tzdata` 时区数据；HTTP、SQLite、WebSocket、HTML 解析都用标准库
 
@@ -932,6 +955,7 @@ CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外�
 |---|---|---|---|
 | [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle 命令行工具，查截止日期、成绩、论坛 | 本项目 Moodle 的查询命令和它们的实现方式（浏览器会话、AJAX 接口加网页解析）基于它 | MIT |
 | [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed 命令行工具和 MCP，任何学校都能用 | 同类工具，本项目的 Ed 部分来自我之前自己做的 Ed 项目 | MIT |
+| [bunizao/ontrack-cli](https://github.com/bunizao/ontrack-cli) | OnTrack / Doubtfire 命令行工具，查课程、任务、任务书、评论和提交 | 本项目可选的纯 Python OnTrack / Doubtfire 集成（`monash ontrack`、接口客户端、会话续期和 MCP 工具）基于它实现 | MIT |
 
 感谢 bunizao 把这些项目开源出来
 
@@ -939,4 +963,4 @@ CI 在 macOS、Windows、Ubuntu 上用 Python 3.10 和 3.13 跑测试，另外�
 
 MIT
 
-这是学生自己做的工具，和 Monash University、Ed 或 Anthropic 没有关系
+这是学生自己做的工具，和 Monash University、Ed、OnTrack/Doubtfire 或 Anthropic 没有关系

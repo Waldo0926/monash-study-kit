@@ -22,7 +22,7 @@ from .paths import DATA_DIR, DEFAULTS, FILES_DIR, HOME, LOG_FILE, SECRETS_DIR, l
 OK, WARN, FAIL = "ok", "warn", "fail"
 MARK = {OK: "✓", WARN: "!", FAIL: "✗"}
 ERROR_LINE = re.compile(r"出错|失败|Traceback|Error", re.I)
-SECRET = re.compile(r"(authtoken=|sesskey=|MoodleSession[=:]\s*|Bearer\s+|token[=:]\s*)[^\s&\"',]+", re.I)
+SECRET = re.compile(r"(authtoken=|sesskey=|MoodleSession[=:]\s*|Auth-Token[=:]\s*|refresh_token[=:]\s*|auth_token[=:]\s*|Bearer\s+|token[=:]\s*)[^\s&\"',;]+", re.I)
 
 
 def _check(name: str, status: str, detail: str, fix: str = "") -> dict:
@@ -245,6 +245,28 @@ def check_attendance() -> dict | None:
     return _check("考勤", OK, detail)
 
 
+def check_ontrack() -> dict | None:
+    """开了 OnTrack 才查；不打印用户名、邮箱或令牌。"""
+    if not load_settings().get("ontrack_enabled"):
+        return None
+    from . import ontrack
+    st = ontrack.local_status()
+    if not st.get("base_url"):
+        return _check("OnTrack", FAIL, "未配置站点地址", "monash ontrack login --url https://<你的OnTrack域名>")
+    if not st.get("configured"):
+        return _check("OnTrack", FAIL, "还没登录 OnTrack", "monash ontrack login")
+    hours = _age(st.get("last_sync"))
+    detail = (
+        f"本地 {st['cached_units']} 门课、{st['cached_tasks']} 个任务"
+        + (f"，上次同步 {hours:.0f} 小时前" if hours is not None else "，还没同步")
+    )
+    if not st.get("access_token_valid") and not st.get("has_refresh_cookie"):
+        return _check("OnTrack", WARN, detail + "；访问令牌已过期且缺少刷新 Cookie", "monash ontrack login")
+    if hours is None or hours > 48:
+        return _check("OnTrack", WARN, detail, "monash ontrack sync")
+    return _check("OnTrack", OK, detail)
+
+
 def check_settings() -> dict:
     changed = {k: v for k, v in load_settings().items() if DEFAULTS.get(k) != v}
     files = f"课件在 {FILES_DIR}"
@@ -252,13 +274,13 @@ def check_settings() -> dict:
 
 
 CHECKS = [check_install, check_data_dir, check_browser, check_moodle, check_ed, check_courses, check_sync,
-          check_gmail, check_attendance, check_claude_desktop, check_claude_code, check_mcp_log, check_settings]
+          check_gmail, check_attendance, check_ontrack, check_claude_desktop, check_claude_code, check_mcp_log, check_settings]
 
 
 def run(skip: tuple = (), deep: bool = False) -> dict:
     results = []
     materials = load_settings().get("materials_only")
-    private = {"check_gmail", "check_attendance", "check_claude_desktop", "check_claude_code"}
+    private = {"check_gmail", "check_attendance", "check_ontrack", "check_claude_desktop", "check_claude_code"}
     for fn in CHECKS:
         if fn.__name__ in skip or materials and fn.__name__ in private:
             continue

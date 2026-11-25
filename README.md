@@ -40,7 +40,7 @@ All Moodle and Ed tools are **read-only**: they never submit assignments, attemp
 
 Built for Monash Malaysia (times are handled as UTC+8); Australian campuses work too, see the [FAQ](#faq).
 
-The Moodle query commands in this project (overview, due, grades, alerts, forums and others) are based on [moodle-cli](https://github.com/bunizao/moodle-cli) by [bunizao](https://github.com/bunizao). See [Acknowledgements](#acknowledgements).
+The Moodle query commands in this project (overview, due, grades, alerts, forums and others) are based on [moodle-cli](https://github.com/bunizao/moodle-cli), and the optional OnTrack / Doubtfire support is based on [ontrack-cli](https://github.com/bunizao/ontrack-cli), both by [bunizao](https://github.com/bunizao). See [Acknowledgements](#acknowledgements).
 
 **New here?** [Install](#installation) · [First-time setup](#first-time-setup-monash-setup) · [Everyday use](#everyday-use) · [FAQ](#faq)
 
@@ -305,6 +305,24 @@ Each part adds tool descriptions to every conversation: with both logged in it i
 
 Not verified yet: attendance submission, how long the attendance login lasts, and portals of campuses other than Malaysia.
 
+## Optional: OnTrack / Doubtfire
+
+New in 1.18.0. Off until you sign in, pure Python (no Node.js or extra packages required), and runs only on your own computer.
+
+- **Unified workflow.** Reuses Study Kit's dedicated login browser profile (`browser-profile`), so if Okta already remembers you from Moodle, signing in and silent renewal work without storing your password. Refresh cookies renew short-lived access tokens over plain HTTPS (`POST /api/auth/access-token`); `--paste` also accepts a Cookie header, cURL command, access-token JSON or bare `refresh_token`.
+- **What you can do.** List units, check task status/deadlines/grades (including flexible dates and special consideration days), read task sheet PDFs as Markdown via the built-in `pypdf` extractor (`monash ontrack read`), download unit/task resources, check unread tutor chat counts, and sync snapshots locally so `monash todo`, `monash semester`, `monash status` and `monash doctor` include your OnTrack tasks alongside Moodle and Ed.
+- **Safety boundaries.** By default, MCP exposes only read-only OnTrack tools (`ontrack_units`, `ontrack_tasks`, `ontrack_task_sheet`, `ontrack_chats`, none of which mark comments read). Enabling optional MCP writes (`monash config ontrack_write_enabled true` or `monash ontrack login --allow-write`) adds preview-and-confirm actions (`chat_read`, `chat_send`, `task_state`) via `ontrack_prepare_action` + `execute_student_action`, and never exposes file submission in MCP. In the terminal, mutating commands (`set`, `submit`, `chat-send`, and reading a task's chat history which marks comments read on OnTrack) show a preview and require confirmation (`--confirm` / `--yes`, or `--dry-run` to inspect first). With `monash remote serve`, `ontrack.read` defaults to ticked and `ontrack.write` to unticked on the pairing page.
+
+```bash
+monash ontrack login --url https://<your-ontrack-host>   # tick "Remember me" for refresh-cookie renewal
+monash ontrack sync                                      # cache active units/tasks for monash todo & semester
+monash ontrack tasks FIT2004
+monash ontrack read FIT2004 1.1P                         # task sheet PDF as Markdown
+monash ontrack chats FIT2004                             # unread tutor comment counts (read-only)
+```
+
+Not verified yet: live sign-in, task submission, and flexible-date edge cases against a real Monash OnTrack/Doubtfire deployment (tested offline against simulated OnTrack API contracts).
+
 ## Multiple accounts / course materials only
 
 A named profile is a separate account with its own login, files, database and browser session, kept in `profiles/<name>/` inside the data folder. It's useful if you have a second Monash account, or want a copy that only holds course materials. Running `monash` without `--profile` uses your normal account as before. Profile names use lowercase letters, numbers, `-` and `_`, and `default` is taken.
@@ -529,6 +547,7 @@ You can also query directly in the terminal without any AI:
 | `monash gmail todo` / `sync` / `search` / `thread` | Optional school Gmail: unread inbox mail / sync / offline search / read a thread ([setup](#optional-gmail-and-attendance)) |
 | `monash attendance login` / `status` / `sync` / `overview` / `codes` | Optional attendance: log in / status / read the portal / saved classes / find check-in codes |
 | `monash attendance renew` / `maintain` | Try to bring back an expired attendance login with the browser profile already on this computer; stops when a password or MFA is needed |
+| `monash ontrack login` / `sync` / `courses` / `tasks` / `read` / `chats` | Optional OnTrack / Doubtfire: sign in / sync local cache / units / tasks / task sheet PDF as Markdown / unread tutor chats ([setup](#optional-ontrack--doubtfire)) |
 | `monash update` | Update to the latest version |
 
 Add `--json` for JSON output (output is JSON automatically when piped; `--text` forces text). Every command has `--help`.
@@ -633,6 +652,7 @@ You probably deleted the token on Ed's token page. Create a new one there and ru
 
 Newest first. [CHANGELOG.md](CHANGELOG.md) has every change, and how to use each feature is in the sections above.
 
+- **1.18**: optional pure-Python [OnTrack / Doubtfire](#optional-ontrack--doubtfire) integration (`monash ontrack`, MCP tools, and `todo`/`semester` cache)
 - **1.17**: the to-do, lesson progress and quiz panels follow your AI app's language, English or Chinese
 - **1.16**: [choose what gets downloaded](#choose-what-gets-downloaded) with a size limit and kinds of files to leave out, plus `monash skipped` to see and get what was left out
 - **1.15**: `monash uninstall` also revokes Google access; first PyPI release since 1.11.2
@@ -702,6 +722,7 @@ flowchart LR
 | `remote` | `monash remote`: optional single-user remote MCP with pairing codes, OAuth and PKCE |
 | `doctor`, `doctor_deep`, `help_menu`, `update_check`, `claude_setup` | Health check and `--deep` cross-checks, help and preset prompts, new-version notice, adding the server to Claude |
 | `recordings`, `transcribe` | Optional: lecture recordings to timestamped transcripts (`[media]` extra) |
+| `ontrack`, `cli_ontrack` | Optional: pure-Python OnTrack / Doubtfire client, session renewal, task sheet PDF reader and local snapshot cache |
 
 Runtime dependencies are `pypdf` and, on Windows, `tzdata`; everything else (HTTP, SQLite, WebSocket, HTML parsing) uses the standard library.
 Tests run on macOS, Windows and Ubuntu with Python 3.10 and 3.13 in CI, and `ruff` checks for syntax errors, undefined names and unused imports.
@@ -716,9 +737,10 @@ Other open source projects for Monash students that this one relates to:
 |---|---|---|---|
 | [bunizao/moodle-cli](https://github.com/bunizao/moodle-cli) | Moodle CLI for deadlines, grades and forums | The Moodle query commands here, and the way they work through the browser session, Moodle's AJAX API and page parsing, are based on it | MIT |
 | [bunizao/edstem-cli](https://github.com/bunizao/edstem-cli) | Ed CLI and MCP server that works at any school | Similar tool. The Ed part here comes from my own earlier Ed project | MIT |
+| [bunizao/ontrack-cli](https://github.com/bunizao/ontrack-cli) | OnTrack / Doubtfire CLI for units, tasks, task sheets, chats and submissions | The optional pure-Python OnTrack / Doubtfire integration here (`monash ontrack`, API client, session renewal and MCP tools) is based on it | MIT |
 
 Thanks to bunizao for building these in the open.
 
 ## License
 
-MIT. This is an independent student-built tool, not affiliated with Monash University, Ed or Anthropic.
+MIT. This is an independent student-built tool, not affiliated with Monash University, Ed, OnTrack/Doubtfire or Anthropic.

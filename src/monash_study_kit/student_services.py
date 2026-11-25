@@ -174,6 +174,20 @@ def perform(kind, payload, scopes):
         from . import attendance
 
         return attendance.submit(payload)
+    if kind.startswith("ontrack."):
+        if "ontrack.write" not in scopes:
+            raise service_actions.Rejected("ontrack.write is required")
+        from . import ontrack
+
+        client = ontrack.OnTrackClient()
+        if client.base_url != payload["base_url"] or client.session["username"] != payload["account"]:
+            raise service_actions.Rejected("OnTrack account changed; prepare again")
+        if kind == "ontrack.chat_read":
+            return client.task_comments(payload["project_id"], payload["task_definition_id"])
+        if kind == "ontrack.chat_send":
+            return client.add_task_comment(payload["project_id"], payload["task_definition_id"], payload["message"])
+        if kind == "ontrack.task_state":
+            return client.update_task_state(payload["project_id"], payload["task_definition_id"], payload["state"])
     raise ValueError("Unsupported action")
 
 
@@ -204,6 +218,72 @@ def attendance_call(operation, a, ctx):
         payload = attendance.prepare(a["record_id"], a["code"], a.get("actually_attended"))
         return service_actions.prepare(ctx["owner"], "attendance.submit", payload)
     raise ValueError("Unknown attendance operation")
+
+
+def ontrack_call(operation, a, ctx):
+    from . import ontrack
+
+    client = ontrack.OnTrackClient()
+    if operation == "units":
+        return client.projects(include_inactive=bool(a.get("include_inactive", False)))
+    if operation == "tasks":
+        if a.get("task"):
+            return ontrack.task_detail(client, a["unit"], a["task"])
+        raw_statuses = a.get("statuses") or ""
+        statuses = [s.strip() for s in raw_statuses.split(",") if s.strip()] if raw_statuses else None
+        return ontrack.list_tasks(client, a["unit"], statuses)
+    if operation == "task_sheet":
+        res = ontrack.read_task_sheet_markdown(client, a["unit"], a["task"])
+        offset = max(0, int(a.get("offset", 0)))
+        max_chars = min(max(1, int(a.get("max_chars", 20000))), 100000)
+        text = res["markdown"]
+        part = text[offset:offset + max_chars]
+        if offset + max_chars < len(text):
+            part += f"\n\n[还有 {len(text) - offset - max_chars} 字符未显示，用 offset={offset + max_chars} 继续读]"
+        return {
+            "project_id": res["project_id"],
+            "unit_code": res["unit_code"],
+            "task_definition_id": res["task_definition_id"],
+            "task": res["task"],
+            "name": res["name"],
+            "filename": res["filename"],
+            "pages": res["pages"],
+            "markdown": part,
+        }
+    if operation == "chats":
+        return ontrack.list_chats(client, a["unit"])
+    if operation == "prepare":
+        op = a["operation"]
+        if op not in {"chat_read", "chat_send", "task_state"}:
+            raise ValueError("operation must be chat_read, chat_send or task_state")
+        snap = ontrack.project_snapshot(client, a["unit"])
+        row, td = ontrack.select_task(snap, a["task"])
+        payload = {
+            "base_url": client.base_url,
+            "account": client.session["username"],
+            "project_id": snap["project"]["id"],
+            "unit_code": snap["unit"]["code"],
+            "task_definition_id": td["id"],
+            "task": row["abbreviation"],
+            "task_name": row["name"],
+            "current_status": row["status"],
+        }
+        if op == "chat_read":
+            payload["side_effect"] = "Fetching OnTrack task comments marks non-discussion comments as read."
+        elif op == "chat_send":
+            msg = (a.get("message") or "").strip()
+            if not msg:
+                raise ValueError("message is required for chat_send")
+            if len(msg) > 4095:
+                raise ValueError("message must not exceed 4095 characters")
+            payload["message"] = msg
+        elif op == "task_state":
+            state = (a.get("state") or "").strip()
+            if state not in ontrack.WRITABLE_TASK_STATES:
+                raise ValueError(f"state must be one of: {', '.join(ontrack.WRITABLE_TASK_STATES)}")
+            payload["state"] = state
+        return service_actions.prepare(ctx["owner"], "ontrack." + op, payload)
+    raise ValueError("Unknown ontrack operation")
 
 
 S, I, B = "string", "integer", "boolean"
@@ -329,6 +409,41 @@ TOOLS = {
         "attendance.submit",
         True,
     ),
+    "ontrack_units": (
+        lambda a, c: ontrack_call("units", a, c),
+        "列出用户在 OnTrack / Doubtfire 的课程（项目）和项目 ID；include_inactive=true 包含往期课程。",
+        {"include_inactive": (B, False)},
+        "ontrack.read",
+        True,
+    ),
+    "ontrack_tasks": (
+        lambda a, c: ontrack_call("tasks", a, c),
+        "查看 OnTrack 一门课的任务进度、截止日期、等级和未读评论数；传入 task 时返回单个任务详情与提交要求。",
+        {"unit": (S, True), "task": (S, False), "statuses": (S, False)},
+        "ontrack.read",
+        True,
+    ),
+    "ontrack_task_sheet": (
+        lambda a, c: ontrack_call("task_sheet", a, c),
+        "读取 OnTrack 任务书 PDF 的 Markdown 正文（支持 offset/max_chars 分页）。",
+        {"unit": (S, True), "task": (S, True), "offset": (I, False), "max_chars": (I, False)},
+        "ontrack.read",
+        True,
+    ),
+    "ontrack_chats": (
+        lambda a, c: ontrack_call("chats", a, c),
+        "只读查看 OnTrack 一门课各任务的未读导师评论数（不会把评论标为已读）。",
+        {"unit": (S, True)},
+        "ontrack.read",
+        True,
+    ),
+    "ontrack_prepare_action": (
+        lambda a, c: ontrack_call("prepare", a, c),
+        "准备 OnTrack 写操作预览：operation=chat_read（读评论历史，OnTrack 会标已读）/chat_send（发评论）/task_state（改进度状态）。必须展示预览并获用户明确确认后再调 execute_student_action；不含提交作业。",
+        {"operation": (S, True), "unit": (S, True), "task": (S, True), "message": (S, False), "state": (S, False)},
+        "ontrack.write",
+        True,
+    ),
     "execute_student_action": (
         confirm,
         "执行已预览且用户明确确认的单次操作，user_confirmed 必须为 true；不得自行确认。",
@@ -344,7 +459,8 @@ def allowed(scope, scopes):
         scope in scopes
         or (scope == "gmail.read" and "gmail.manage" in scopes)
         or (scope == "attendance.read" and "attendance.submit" in scopes)
-        or (scope == "write" and bool({"gmail.manage", "attendance.submit"} & scopes))
+        or (scope == "ontrack.read" and "ontrack.write" in scopes)
+        or (scope == "write" and bool({"gmail.manage", "attendance.submit", "ontrack.write"} & scopes))
     )
 
 
@@ -352,11 +468,20 @@ def tool_list(scopes):
     out = []
     for name, (_, desc, params, scope, readonly) in TOOLS.items():
         if allowed(scope, scopes):
-            required_scope = (
-                ("gmail.manage" if "gmail.manage" in scopes else "attendance.submit") if scope == "write" else scope
-            )
+            if scope == "write":
+                required_scope = next(
+                    (s for s in ("gmail.manage", "attendance.submit", "ontrack.write") if s in scopes),
+                    "gmail.manage",
+                )
+            else:
+                required_scope = scope
             if required_scope not in scopes:
-                required_scope = "gmail.manage" if scope.startswith("gmail") else "attendance.submit"
+                if scope.startswith("gmail"):
+                    required_scope = "gmail.manage"
+                elif scope.startswith("ontrack"):
+                    required_scope = "ontrack.write"
+                else:
+                    required_scope = "attendance.submit"
             out.append(
                 {
                     "name": name,
